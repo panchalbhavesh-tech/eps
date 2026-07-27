@@ -1,0 +1,7 @@
+-- The Postgres Docker image automatically creates the database and user
+-- based on POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD env vars.
+-- CREATE DATABASE qeps_db;
+-- CREATE USER qeps_user WITH ENCRYPTED PASSWORD 'qeps_password';
+-- GRANT ALL PRIVILEGES ON DATABASE qeps_db TO qeps_user;
+-- \c qeps_db
+-- GRANT ALL ON SCHEMA public TO qeps_user;
