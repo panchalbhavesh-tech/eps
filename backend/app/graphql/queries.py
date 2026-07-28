@@ -48,7 +48,9 @@ class Query:
                 q3_profit=c.q3_profit,
                 q4_profit=c.q4_profit,
                 q0_profit=c.q0_profit,
-                historical_trend=c.historical_trend
+                historical_trend=c.historical_trend,
+                financial_health_score=c.financial_health_score,
+                financial_health_grade=c.financial_health_grade
             ) for c in companies
         ]
 
@@ -96,6 +98,8 @@ class Query:
             q4_profit=c.q4_profit,
             q0_profit=c.q0_profit,
             historical_trend=c.historical_trend,
+            financial_health_score=c.financial_health_score,
+            financial_health_grade=c.financial_health_grade,
             market_cap=c.market_cap,
             enterprise_value=c.enterprise_value,
             high_52w=c.high_52w,

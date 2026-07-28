@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
-import { Typography, Box, CircularProgress, Chip, IconButton, InputBase, Tooltip, Grid, Card, CardContent } from '@mui/material';
+import { Typography, Box, CircularProgress, Chip, IconButton, InputBase, Tooltip, Grid, Card, CardContent, Button } from '@mui/material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useNavigate } from 'react-router-dom';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import SearchIcon from '@mui/icons-material/Search';
+import AssessmentIcon from '@mui/icons-material/Assessment';
+import EventAvailableIcon from '@mui/icons-material/EventAvailable';
+import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 
 const GET_COMPANIES = gql`
   query GetCompanies {
@@ -37,6 +40,8 @@ const GET_COMPANIES = gql`
       q4Profit
       q0Profit
       historicalTrend
+      financialHealthScore
+      financialHealthGrade
     }
   }
 `;
@@ -48,8 +53,8 @@ const formatValCr = (val: number | null | undefined) => {
 };
 
 const renderCenteredCell = (text: React.ReactNode, color = '#e2e8f0', fontWeight = 500, fontSize = '0.78rem') => (
-  <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', minHeight: '130px', py: 1 }}>
-    <Typography sx={{ fontSize, fontWeight, color, noWrap: true }}>{text}</Typography>
+  <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', py: 0.5 }}>
+    <Typography noWrap sx={{ fontSize, fontWeight, color }}>{text}</Typography>
   </Box>
 );
 
@@ -61,7 +66,7 @@ const renderClubbedQuarterCell = (
 ) => {
   if (currRev == null && currProfit == null && currEps == null) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', minHeight: '130px', py: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', py: 0.5 }}>
         <Typography sx={{ fontSize: '0.75rem', color: '#64748b' }}>-</Typography>
       </Box>
     );
@@ -92,8 +97,8 @@ const renderClubbedQuarterCell = (
         alignItems: 'center', 
         justifyContent: 'space-between', 
         width: '100%', 
-        py: '5px', 
-        borderBottom: '1px solid rgba(255, 255, 255, 0.06)' 
+        py: '2px', 
+        borderBottom: '1px solid rgba(255, 255, 255, 0.05)' 
       }}>
         <Typography component="span" sx={{ fontSize: '0.72rem', color: '#94a3b8', width: '68px', fontWeight: 500, flexShrink: 0 }}>
           {label}:
@@ -137,7 +142,7 @@ const renderClubbedQuarterCell = (
       flexDirection: 'column', 
       justifyContent: 'center', 
       width: '100%', 
-      py: 1.5, 
+      py: 0.5, 
       px: 0.5 
     }}>
       {renderSubRow('Revenue', currRev, prevRev, true)}
@@ -181,11 +186,23 @@ const POPULATE_DATA = gql`
   }
 `;
 
+const MASS_CALCULATE_HEALTH = gql`
+  mutation MassCalculateHealth {
+    massCalculateFinancialHealth
+  }
+`;
+
 const Home: React.FC = () => {
   const { loading, error, data } = useQuery(GET_COMPANIES, { pollInterval: 15000, fetchPolicy: 'network-only' });
   const [populateData] = useMutation(POPULATE_DATA);
+  const [massCalculate] = useMutation(MASS_CALCULATE_HEALTH, {
+    onCompleted: () => {
+      alert("Mass financial health analysis queued for all stocks! Check Tasks page for progress and refresh to view scores.");
+    }
+  });
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const [filterMode, setFilterMode] = useState<'ALL' | 'RECENT_EVENTS' | 'HIGH_HEALTH'>('ALL');
 
   if (loading && !data) return <Box display="flex" justifyContent="center" mt={10}><CircularProgress sx={{color: '#7c4dff'}} /></Box>;
   if (error) return <Typography color="error" mt={5}>Error loading data.</Typography>;
@@ -194,13 +211,41 @@ const Home: React.FC = () => {
      populateData();
   };
 
-  const rows = data?.companies?.filter((c: any) => 
+  const baseRows = data?.companies?.filter((c: any) => 
      c.ticker.toLowerCase().includes(search.toLowerCase()) || 
      c.name.toLowerCase().includes(search.toLowerCase())
   ).map((c: any) => ({
      id: c.id,
      ...c
   })) || [];
+
+  const recentEventsCount = baseRows.filter((c: any) => {
+    if (!c.upcomingDate) return false;
+    const eventDate = new Date(c.upcomingDate);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    eventDate.setHours(0,0,0,0);
+    const diffDays = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && diffDays <= 3;
+  }).length;
+
+  const highHealthCount = baseRows.filter((c: any) => (c.financialHealthScore || 0) >= 70).length;
+
+  const rows = baseRows.filter((c: any) => {
+    if (filterMode === 'RECENT_EVENTS') {
+      if (!c.upcomingDate) return false;
+      const eventDate = new Date(c.upcomingDate);
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      eventDate.setHours(0,0,0,0);
+      const diffDays = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 && diffDays <= 3;
+    }
+    if (filterMode === 'HIGH_HEALTH') {
+      return (c.financialHealthScore || 0) >= 70;
+    }
+    return true;
+  });
 
   const sampleRow = data?.companies?.find((c: any) => c.q4Date && c.q3Date) || {};
   const getDateLabel = (dbDate: string | undefined, fallbackMonth: string) => {
@@ -225,11 +270,17 @@ const Home: React.FC = () => {
   };
 
   const columns: GridColDef[] = [
-    { field: 'ticker', headerName: 'TICKER', width: 115, type: 'string',
-      renderCell: (p) => renderCenteredCell(p.value, '#f8fafc', 700, '0.82rem')
-    },
-    { field: 'name', headerName: 'COMPANY NAME', width: 180, type: 'string',
-      renderCell: (p) => renderCenteredCell(p.value, '#94a3b8', 400, '0.75rem')
+    { field: 'name', headerName: 'COMPANY & TICKER', width: 230, type: 'string', sortable: true,
+      renderCell: (p) => (
+        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', py: 0.5 }}>
+          <Typography noWrap sx={{ fontSize: '0.82rem', fontWeight: 700, color: '#f8fafc', lineHeight: 1.25 }}>
+            {p.row?.name || '-'}
+          </Typography>
+          <Typography noWrap sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#a78bfa', mt: '3px', letterSpacing: '0.04em' }}>
+            {p.row?.ticker || '-'}
+          </Typography>
+        </Box>
+      )
     },
     { field: 'currentPrice', headerName: 'PRICE', width: 85, type: 'number', headerAlign: 'left', align: 'left',
       valueGetter: (_v: any, row: any) => row?.currentPrice != null && !isNaN(row.currentPrice) ? Number(row.currentPrice) : -Infinity,
@@ -238,6 +289,55 @@ const Home: React.FC = () => {
     { field: 'marketCap', headerName: 'MARKET CAP', width: 120, type: 'number', headerAlign: 'left', align: 'left',
       valueGetter: (_v: any, row: any) => row?.marketCap != null && !isNaN(row.marketCap) ? Number(row.marketCap) : -Infinity,
       renderCell: (p) => renderCenteredCell(formatValCr(p.row?.marketCap), '#a78bfa', 600, '0.78rem')
+    },
+    { field: 'financialHealthScore', headerName: 'FINANCIAL HEALTH', width: 180, type: 'number', headerAlign: 'left', align: 'left', sortable: true,
+      valueGetter: (_v: any, row: any) => row?.financialHealthScore != null && !isNaN(row.financialHealthScore) ? Number(row.financialHealthScore) : -Infinity,
+      renderCell: (p) => {
+        const score = p.row?.financialHealthScore;
+        const grade = p.row?.financialHealthGrade || '';
+        if (score == null || isNaN(score) || score <= 0) {
+          return renderCenteredCell('Not Calc', '#64748b', 400, '0.75rem');
+        }
+        let bgcolor = 'rgba(244, 63, 94, 0.18)';
+        let color = '#f43f5e';
+        let border = '1px solid rgba(244, 63, 94, 0.35)';
+        if (score >= 75) {
+          bgcolor = 'rgba(16, 185, 129, 0.18)';
+          color = '#10b981';
+          border = '1px solid rgba(16, 185, 129, 0.35)';
+        } else if (score >= 60) {
+          bgcolor = 'rgba(124, 77, 255, 0.2)';
+          color = '#a78bfa';
+          border = '1px solid rgba(124, 77, 255, 0.4)';
+        } else if (score >= 45) {
+          bgcolor = 'rgba(245, 158, 11, 0.18)';
+          color = '#f59e0b';
+          border = '1px solid rgba(245, 158, 11, 0.35)';
+        }
+        const shortGrade = grade.split('(')[0].replace(/Grade\s*/i, '').trim() || grade;
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', py: 0.5 }}>
+            <Box sx={{
+              px: '10px',
+              py: '5px',
+              borderRadius: '16px',
+              bgcolor,
+              color,
+              border,
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+              whiteSpace: 'nowrap'
+            }}>
+              <span style={{ fontSize: '0.6rem' }}>●</span>
+              {score.toFixed(1)} {shortGrade ? `(${shortGrade})` : ''}
+            </Box>
+          </Box>
+        );
+      }
     },
     { field: 'q1Clubbed', headerName: `${q1Prefix.trim()} (Q1)`, width: 240, type: 'number', headerAlign: 'left', align: 'left', sortable: true,
       valueGetter: (_v: any, row: any) => row?.q1Profit != null && !isNaN(row.q1Profit) ? Number(row.q1Profit) : (row?.q1Revenue != null ? Number(row.q1Revenue) : -Infinity),
@@ -286,37 +386,45 @@ const Home: React.FC = () => {
     }
   ];
 
-  const totalCompanies = rows.length;
-  
-  const eventsInNext7Days = rows.filter((c: any) => {
-    if (!c.upcomingDate) return false;
-    const eventDate = new Date(c.upcomingDate);
-    const today = new Date();
-    // Reset times to midnight for accurate day diff
-    today.setHours(0,0,0,0);
-    eventDate.setHours(0,0,0,0);
-    const diffTime = eventDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays >= 0 && diffDays <= 7;
-  }).length;
+  const totalCompanies = baseRows.length;
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#0a0b10', p: 4, fontFamily: 'Inter, sans-serif' }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4} flexWrap="wrap" gap={2}>
         <Box>
-          <Typography sx={{ color: '#e2e8f0', fontSize: '1.25rem', fontWeight: 600, mb: 0.5 }}>Dashboard</Typography>
-          <Typography sx={{ color: '#64748b', fontSize: '0.85rem' }}>NSE Incoming Earnings Fixtures</Typography>
+          <Typography sx={{ color: '#e2e8f0', fontSize: '1.25rem', fontWeight: 600, mb: 0.5 }}>Dashboard & Financial Health Analytics</Typography>
+          <Typography sx={{ color: '#64748b', fontSize: '0.85rem' }}>NSE Incoming Earnings Fixtures & Comprehensive Quantitative Health Grades</Typography>
         </Box>
-        <Box display="flex" gap={2}>
+        <Box display="flex" gap={2} alignItems="center">
            <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#13151a', border: '1px solid #1e293b', borderRadius: 1, px: 2, py: 0.5 }}>
               <SearchIcon sx={{ color: '#64748b', fontSize: '1rem', mr: 1 }} />
               <InputBase 
-                 placeholder="Search vessels..." 
+                 placeholder="Search stock ticker..." 
                  value={search}
                  onChange={(e) => setSearch(e.target.value)}
                  sx={{ color: '#e2e8f0', fontSize: '0.85rem', width: '200px' }} 
               />
            </Box>
+           <Tooltip title="Mass calculate financial health & generate AI analytics for all stocks in background">
+              <Button 
+                onClick={() => massCalculate()} 
+                startIcon={<AssessmentIcon />}
+                sx={{ 
+                  backgroundColor: '#7c4dff',
+                  color: '#f8fafc', 
+                  borderRadius: 1.5, 
+                  px: 2, 
+                  py: 0.8,
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  textTransform: 'none',
+                  boxShadow: '0 4px 14px rgba(124, 77, 255, 0.3)',
+                  '&:hover': { backgroundColor: '#651fff' } 
+                }}
+              >
+                Mass Calculate Health
+              </Button>
+           </Tooltip>
            <Tooltip title="Bulk download historical data from Yahoo Finance (Takes ~5 minutes)">
               <IconButton onClick={handlePopulate} sx={{ bgcolor: '#1e293b', color: '#e2e8f0', borderRadius: 1, '&:hover': {bgcolor: '#334155'} }}>
                  <CloudDownloadIcon fontSize="small" />
@@ -326,32 +434,115 @@ const Home: React.FC = () => {
       </Box>
 
       <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} md={6}>
-          <Card sx={{ bgcolor: '#13151a', border: '1px solid #1e293b', borderRadius: 2 }}>
+        <Grid item xs={12} sm={6} md={4}>
+          <Card 
+            onClick={() => setFilterMode('ALL')}
+            sx={{ 
+              bgcolor: filterMode === 'ALL' ? '#1c1f2e' : '#13151a', 
+              border: filterMode === 'ALL' ? '1px solid #7c4dff' : '1px solid #1e293b', 
+              borderRadius: 2, 
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              '&:hover': { borderColor: '#7c4dff', transform: 'translateY(-2px)' }
+            }}
+          >
             <CardContent sx={{ pb: '16px !important' }}>
-              <Typography color="#94a3b8" fontSize="0.85rem" fontWeight="600" textTransform="uppercase">Total Companies Tracked</Typography>
-              <Typography color="#e2e8f0" fontSize="2rem" fontWeight="bold" mt={1}>{totalCompanies}</Typography>
+              <Typography color="#94a3b8" fontSize="0.8rem" fontWeight="600" textTransform="uppercase">Total Companies Tracked</Typography>
+              <Typography color="#e2e8f0" fontSize="1.8rem" fontWeight="bold" mt={0.5}>{totalCompanies}</Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={6}>
-          <Card sx={{ bgcolor: '#13151a', border: '1px solid #1e293b', borderRadius: 2 }}>
+        <Grid item xs={12} sm={6} md={4}>
+          <Card 
+            onClick={() => setFilterMode(filterMode === 'RECENT_EVENTS' ? 'ALL' : 'RECENT_EVENTS')}
+            sx={{ 
+              bgcolor: filterMode === 'RECENT_EVENTS' ? '#064e3b' : '#13151a', 
+              border: filterMode === 'RECENT_EVENTS' ? '1px solid #10b981' : '1px solid #1e293b', 
+              borderRadius: 2,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              '&:hover': { borderColor: '#10b981', transform: 'translateY(-2px)' }
+            }}
+          >
             <CardContent sx={{ pb: '16px !important' }}>
-              <Typography color="#94a3b8" fontSize="0.85rem" fontWeight="600" textTransform="uppercase">Events in Next 7 Days</Typography>
-              <Typography color="#7c4dff" fontSize="2rem" fontWeight="bold" mt={1}>{eventsInNext7Days}</Typography>
+              <Typography color="#94a3b8" fontSize="0.8rem" fontWeight="600" textTransform="uppercase">Events in Next 2-3 Days</Typography>
+              <Typography color="#10b981" fontSize="1.8rem" fontWeight="bold" mt={0.5}>{recentEventsCount}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={12} md={4}>
+          <Card 
+            onClick={() => setFilterMode(filterMode === 'HIGH_HEALTH' ? 'ALL' : 'HIGH_HEALTH')}
+            sx={{ 
+              bgcolor: filterMode === 'HIGH_HEALTH' ? '#075985' : '#13151a', 
+              border: filterMode === 'HIGH_HEALTH' ? '1px solid #38bdf8' : '1px solid #1e293b', 
+              borderRadius: 2,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              '&:hover': { borderColor: '#38bdf8', transform: 'translateY(-2px)' }
+            }}
+          >
+            <CardContent sx={{ pb: '16px !important' }}>
+              <Typography color="#94a3b8" fontSize="0.8rem" fontWeight="600" textTransform="uppercase">High Health Score Stocks (&gt;70)</Typography>
+              <Typography color="#38bdf8" fontSize="1.8rem" fontWeight="bold" mt={0.5}>{highHealthCount}</Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      <Box sx={{ height: 'calc(100vh - 150px)', width: '100%', bgcolor: '#0f111a', borderRadius: 2, overflow: 'hidden', border: '1px solid #1e293b' }}>
+      <Box sx={{ display: 'flex', gap: 1.5, mb: 3, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Typography sx={{ fontSize: '0.8rem', color: '#94a3b8', mr: 1, fontWeight: 700, letterSpacing: '0.04em' }}>FILTER VIEW:</Typography>
+        <Chip 
+          label={`All Stocks (${baseRows.length})`} 
+          onClick={() => setFilterMode('ALL')} 
+          sx={{ 
+            bgcolor: filterMode === 'ALL' ? '#7c4dff' : '#13151a', 
+            color: '#f8fafc', 
+            border: '1px solid #1e293b',
+            fontWeight: 700,
+            cursor: 'pointer',
+            px: 0.5,
+            '&:hover': { bgcolor: filterMode === 'ALL' ? '#651fff' : '#1e293b' }
+          }} 
+        />
+        <Chip 
+          icon={<EventAvailableIcon sx={{ color: filterMode === 'RECENT_EVENTS' ? '#fff !important' : '#10b981 !important', fontSize: '1rem' }} />}
+          label={`Events in Next 2-3 Days (${recentEventsCount})`} 
+          onClick={() => setFilterMode(filterMode === 'RECENT_EVENTS' ? 'ALL' : 'RECENT_EVENTS')} 
+          sx={{ 
+            bgcolor: filterMode === 'RECENT_EVENTS' ? '#059669' : '#13151a', 
+            color: '#f8fafc', 
+            border: '1px solid #1e293b',
+            fontWeight: 700,
+            cursor: 'pointer',
+            px: 0.5,
+            '&:hover': { bgcolor: filterMode === 'RECENT_EVENTS' ? '#047857' : '#1e293b' }
+          }} 
+        />
+        <Chip 
+          icon={<HealthAndSafetyIcon sx={{ color: filterMode === 'HIGH_HEALTH' ? '#fff !important' : '#38bdf8 !important', fontSize: '1rem' }} />}
+          label={`High Financial Health (>70 Pts)`} 
+          onClick={() => setFilterMode(filterMode === 'HIGH_HEALTH' ? 'ALL' : 'HIGH_HEALTH')} 
+          sx={{ 
+            bgcolor: filterMode === 'HIGH_HEALTH' ? '#0284c7' : '#13151a', 
+            color: '#f8fafc', 
+            border: '1px solid #1e293b',
+            fontWeight: 700,
+            cursor: 'pointer',
+            px: 0.5,
+            '&:hover': { bgcolor: filterMode === 'HIGH_HEALTH' ? '#0369a1' : '#1e293b' }
+          }} 
+        />
+      </Box>
+
+      <Box sx={{ height: 'calc(100vh - 280px)', width: '100%', bgcolor: '#0f111a', borderRadius: 0, overflow: 'hidden', border: '1px solid #1e293b' }}>
         <DataGrid 
           rows={rows} 
           columns={columns} 
           disableRowSelectionOnClick
           getRowHeight={() => 'auto'}
-          getEstimatedRowHeight={() => 130}
-          headerHeight={46}
+          getEstimatedRowHeight={() => 60}
+          columnHeaderHeight={38}
           sx={{
              border: 0,
              color: '#e2e8f0',
@@ -362,7 +553,11 @@ const Home: React.FC = () => {
                fontSize: '0.7rem',
                fontWeight: 600,
                letterSpacing: '0.05em',
+               borderRadius: 0,
                borderBottom: '1px solid #1e293b'
+             },
+             '& .MuiDataGrid-columnHeader': {
+               borderRadius: 0,
              },
              '& .MuiDataGrid-cell': {
                borderBottom: '1px solid #1e293b',

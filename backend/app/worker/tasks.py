@@ -243,62 +243,112 @@ def generate_deep_research_report_task(company_id: str):
         
         quant = QuantService()
         df = quant.fetch_historical_ohlcv(company.ticker)
-        if df.empty: return "No OHLCV data"
         
-        # 0. Fetch Fundamental Snapshot
+        # 0. Fetch Fundamental Snapshot with BSE/NSE Fallbacks
         import yfinance as yf
-        yf_ticker = f"{company.ticker}.NS" if not company.ticker.endswith(".NS") else company.ticker
-        stock = yf.Ticker(yf_ticker)
+        symbols_to_try = []
+        if company.ticker.endswith(".NS") or company.ticker.endswith(".BO"):
+            symbols_to_try.append(company.ticker)
+        else:
+            symbols_to_try.extend([f"{company.ticker}.NS", f"{company.ticker}.BO", company.ticker])
+
+        info = {}
+        for yf_ticker in symbols_to_try:
+            try:
+                stock = yf.Ticker(yf_ticker)
+                temp_info = stock.info
+                if temp_info and (temp_info.get("marketCap") or temp_info.get("currentPrice") or temp_info.get("regularMarketPrice")):
+                    info = temp_info
+                    break
+            except Exception:
+                continue
+        
         try:
-            info = stock.info
-            company.market_cap = info.get("marketCap")
-            company.enterprise_value = info.get("enterpriseValue")
-            company.pe_ratio = info.get("trailingPE")
-            company.pb_ratio = info.get("priceToBook")
-            company.roe = info.get("returnOnEquity")
-            company.roce = info.get("returnOnAssets") # approximation
-            company.dividend_yield = info.get("dividendYield")
-            company.high_52w = info.get("fiftyTwoWeekHigh")
-            company.low_52w = info.get("fiftyTwoWeekLow")
+            if info:
+                company.current_price = info.get("currentPrice", info.get("regularMarketPrice", company.current_price))
+                company.market_cap = info.get("marketCap", company.market_cap)
+                company.enterprise_value = info.get("enterpriseValue", company.enterprise_value)
+                company.pe_ratio = info.get("trailingPE", info.get("forwardPE", company.pe_ratio))
+                company.pb_ratio = info.get("priceToBook", company.pb_ratio)
+                company.roe = info.get("returnOnEquity", company.roe)
+                company.roce = info.get("returnOnAssets", company.roce) # approximation
+                company.dividend_yield = info.get("dividendYield", company.dividend_yield)
+                company.high_52w = info.get("fiftyTwoWeekHigh", company.high_52w)
+                company.low_52w = info.get("fiftyTwoWeekLow", company.low_52w)
+                company.book_value = info.get("bookValue", company.book_value)
+                company.debt_to_equity = info.get("debtToEquity", company.debt_to_equity)
+                company.promoter_holding = info.get("heldPercentInsiders", company.promoter_holding)
+                company.fii_holding = info.get("heldPercentInstitutions", company.fii_holding)
         except Exception as e:
-            print(f"Failed to fetch info for {company.ticker}: {e}")
+            print(f"Failed to populate info fields for {company.ticker}: {e}")
         
         # 1. Technicals
-        techs = quant.calculate_technicals(df)
-        if techs:
-            # Delete old ones to save space (or keep history)
-            db.query(TechnicalSnapshot).filter(TechnicalSnapshot.company_id == company.id).delete()
-            tech_snap = TechnicalSnapshot(company_id=company.id, **techs)
-            db.add(tech_snap)
+        techs = {}
+        if not df.empty:
+            techs = quant.calculate_technicals(df)
+            if techs:
+                db.query(TechnicalSnapshot).filter(TechnicalSnapshot.company_id == company.id).delete()
+                tech_snap = TechnicalSnapshot(company_id=company.id, **techs)
+                db.add(tech_snap)
         
-        # 2. Event Study & Backtests (Using most recent upcoming_date as a proxy if no past earnings)
-        # Ideally we fetch past 16 quarters, but for MVP we run event study on a few dates
-        dates = [company.upcoming_date] if company.upcoming_date else []
-        for d in dates:
-            if d:
-                es = quant.calculate_event_study(df, d)
-                if es:
-                    db.query(EventStudyResult).filter(EventStudyResult.company_id == company.id).delete()
-                    es_db = EventStudyResult(
-                        company_id=company.id,
-                        report_date=pd.to_datetime(d),
-                        **es
-                    )
-                    db.add(es_db)
-                    
-        backtests = quant.run_strategy_backtests(df, company.ticker)
-        db.query(StrategyBacktest).filter(StrategyBacktest.company_id == company.id).delete()
-        for b in backtests:
-            db.add(StrategyBacktest(company_id=company.id, **b))
+        # 2. Event Study & Backtests
+        backtests = []
+        if not df.empty:
+            dates = [company.upcoming_date] if company.upcoming_date else []
+            for d in dates:
+                if d:
+                    es = quant.calculate_event_study(df, d)
+                    if es:
+                        db.query(EventStudyResult).filter(EventStudyResult.company_id == company.id).delete()
+                        es_db = EventStudyResult(
+                            company_id=company.id,
+                            report_date=pd.to_datetime(d),
+                            **es
+                        )
+                        db.add(es_db)
+                        
+            backtests = quant.run_strategy_backtests(df, company.ticker)
+            db.query(StrategyBacktest).filter(StrategyBacktest.company_id == company.id).delete()
+            for b in backtests:
+                db.add(StrategyBacktest(company_id=company.id, **b))
             
         # 3. AI Analyst Report
         ai = AIAnalystService()
-        q_data = {"ticker": company.ticker, "technicals": techs, "backtests": backtests}
+        q_data = {
+            "ticker": company.ticker,
+            "name": company.name,
+            "sector": company.sector,
+            "current_price": company.current_price,
+            "market_cap": company.market_cap,
+            "enterprise_value": company.enterprise_value,
+            "pe_ratio": company.pe_ratio,
+            "pb_ratio": company.pb_ratio,
+            "roe": company.roe,
+            "roce": company.roce,
+            "dividend_yield": company.dividend_yield,
+            "high_52w": company.high_52w,
+            "low_52w": company.low_52w,
+            "book_value": company.book_value,
+            "debt_to_equity": company.debt_to_equity,
+            "promoter_holding": company.promoter_holding,
+            "fii_holding": company.fii_holding,
+            "q1_eps": company.q1_eps,
+            "q1_revenue": company.q1_revenue,
+            "q1_profit": company.q1_profit,
+            "historical_trend": company.historical_trend,
+            "technicals": techs,
+            "backtests": backtests
+        }
         report_data = ai.generate_analysis_report(company.ticker, q_data)
         
         if report_data:
             db.query(AIAnalysisReport).filter(AIAnalysisReport.company_id == company.id).delete()
-            db.add(AIAnalysisReport(company_id=company.id, **report_data))
+            ai_data = {k: v for k, v in report_data.items() if k not in ("financial_health_score", "financial_health_grade")}
+            db.add(AIAnalysisReport(company_id=company.id, **ai_data))
+            if report_data.get("financial_health_score") is not None:
+                company.financial_health_score = report_data.get("financial_health_score")
+            if report_data.get("financial_health_grade") is not None:
+                company.financial_health_grade = report_data.get("financial_health_grade")
             
         db.commit()
         return f"Generated deep report for {company.ticker}"
@@ -307,3 +357,56 @@ def generate_deep_research_report_task(company_id: str):
         raise e
     finally:
         db.close()
+
+@shared_task
+def mass_calculate_financial_health_task():
+    db = SessionLocal()
+    try:
+        companies = db.query(Company).all()
+        ai = AIAnalystService()
+        updated = 0
+        for company in companies:
+            try:
+                q_data = {
+                    "ticker": company.ticker,
+                    "name": company.name,
+                    "sector": company.sector,
+                    "current_price": company.current_price,
+                    "market_cap": company.market_cap,
+                    "enterprise_value": company.enterprise_value,
+                    "pe_ratio": company.pe_ratio,
+                    "pb_ratio": company.pb_ratio,
+                    "roe": company.roe,
+                    "roce": company.roce,
+                    "dividend_yield": company.dividend_yield,
+                    "high_52w": company.high_52w,
+                    "low_52w": company.low_52w,
+                    "book_value": company.book_value,
+                    "debt_to_equity": company.debt_to_equity,
+                    "promoter_holding": company.promoter_holding,
+                    "fii_holding": company.fii_holding,
+                    "q1_eps": company.q1_eps,
+                    "q1_revenue": company.q1_revenue,
+                    "q1_profit": company.q1_profit,
+                    "historical_trend": company.historical_trend,
+                    "technicals": {},
+                    "backtests": []
+                }
+                report_data = ai.generate_analysis_report(company.ticker, q_data)
+                if report_data:
+                    ai_data = {k: v for k, v in report_data.items() if k not in ("financial_health_score", "financial_health_grade")}
+                    db.query(AIAnalysisReport).filter(AIAnalysisReport.company_id == company.id).delete()
+                    db.add(AIAnalysisReport(company_id=company.id, **ai_data))
+                    if report_data.get("financial_health_score") is not None:
+                        company.financial_health_score = report_data.get("financial_health_score")
+                    if report_data.get("financial_health_grade") is not None:
+                        company.financial_health_grade = report_data.get("financial_health_grade")
+                db.commit()
+                updated += 1
+            except Exception as ex:
+                print(f"Failed financial health mass calculation for {company.ticker}: {ex}")
+                db.rollback()
+        return f"Mass calculated financial health for {updated} stocks."
+    finally:
+        db.close()
+

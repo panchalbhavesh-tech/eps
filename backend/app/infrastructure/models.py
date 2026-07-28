@@ -45,6 +45,8 @@ class Company(Base):
     q4_profit = Column(Float, nullable=True)
     q0_profit = Column(Float, nullable=True)
     historical_trend = Column(String, nullable=True)
+    financial_health_score = Column(Float, nullable=True)
+    financial_health_grade = Column(String, nullable=True)
     
     # Fundamental Snapshot
     market_cap = Column(Float, nullable=True)

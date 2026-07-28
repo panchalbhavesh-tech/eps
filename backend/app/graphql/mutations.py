@@ -54,6 +54,13 @@ class Mutation:
         _log_queued_task(info.context.db, task.id, "app.worker.tasks.generate_deep_research_report_task")
         return f"Deep research analysis task {task.id} started in the background."
 
+    @strawberry.mutation
+    def mass_calculate_financial_health(self, info: Info[Context, None]) -> str:
+        from app.worker.tasks import mass_calculate_financial_health_task
+        task = mass_calculate_financial_health_task.delay()
+        _log_queued_task(info.context.db, task.id, "app.worker.tasks.mass_calculate_financial_health_task")
+        return f"Mass financial health calculation task {task.id} queued in background."
+
 def _log_queued_task(db, task_id: str, name: str):
     from app.infrastructure.models import BackgroundJob
     job = BackgroundJob(celery_task_id=task_id, task_name=name, status="QUEUED")

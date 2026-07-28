@@ -142,6 +142,8 @@ class CompanyType:
     q4_profit: Optional[float] = None
     q0_profit: Optional[float] = None
     historical_trend: Optional[str] = None
+    financial_health_score: Optional[float] = None
+    financial_health_grade: Optional[str] = None
     
     # Fundamental Snapshot
     market_cap: Optional[float] = None

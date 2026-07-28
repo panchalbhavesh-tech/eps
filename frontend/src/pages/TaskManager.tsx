@@ -118,7 +118,7 @@ const TaskManager: React.FC = () => {
           columns={columns} 
           disableRowSelectionOnClick
           rowHeight={45}
-          headerHeight={40}
+          columnHeaderHeight={40}
           sx={{
              border: 0,
              color: '#e2e8f0',

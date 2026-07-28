@@ -9,23 +9,26 @@ class QuantService:
         pass
 
     def fetch_historical_ohlcv(self, ticker: str, years: int = 5) -> pd.DataFrame:
-        yf_ticker = f"{ticker}.NS" if not ticker.endswith(".NS") else ticker
-        try:
-            df = yf.download(yf_ticker, period=f"{years}y", progress=False)
-            if df.empty:
-                return pd.DataFrame()
+        symbols_to_try = []
+        if ticker.endswith(".NS") or ticker.endswith(".BO"):
+            symbols_to_try.append(ticker)
+        else:
+            symbols_to_try.extend([f"{ticker}.NS", f"{ticker}.BO", ticker])
             
-            # yfinance download sometimes returns MultiIndex columns if not careful, flatten them
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-            
-            df = df.reset_index()
-            df['Date'] = pd.to_datetime(df['Date']).dt.tz_localize(None)
-            df.set_index('Date', inplace=True)
-            return df
-        except Exception as e:
-            print(f"Error fetching OHLCV for {ticker}: {e}")
-            return pd.DataFrame()
+        for yf_ticker in symbols_to_try:
+            try:
+                df = yf.download(yf_ticker, period=f"{years}y", progress=False)
+                if not df.empty and len(df) > 5:
+                    if isinstance(df.columns, pd.MultiIndex):
+                        df.columns = df.columns.get_level_values(0)
+                    df = df.reset_index()
+                    df['Date'] = pd.to_datetime(df['Date']).dt.tz_localize(None)
+                    df.set_index('Date', inplace=True)
+                    return df
+            except Exception as e:
+                print(f"Error fetching OHLCV for {yf_ticker}: {e}")
+                continue
+        return pd.DataFrame()
 
     def calculate_technicals(self, df: pd.DataFrame) -> Dict[str, Any]:
         if df.empty or len(df) < 200:

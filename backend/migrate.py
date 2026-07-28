@@ -36,6 +36,8 @@ def upgrade_db():
         ("companies", "historical_trend", "VARCHAR"),
         ("predictions", "current_price", "FLOAT"),
         ("predictions", "historical_trend", "VARCHAR"),
+        ("companies", "financial_health_score", "FLOAT"),
+        ("companies", "financial_health_grade", "VARCHAR"),
     ]
 
     for table, column, datatype in columns_to_add:
