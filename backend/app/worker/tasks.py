@@ -121,9 +121,114 @@ def generate_prediction_task(company_id: str):
     finally:
         db.close()
 
+def enrich_single_company(company, db):
+    from app.services.prediction_service import PredictionService
+    try:
+        pred_svc = PredictionService()
+        data = pred_svc.generate_prediction(company.ticker)
+        company.current_price = data.get("current_price")
+        company.historical_trend = data.get("historical_trend")
+    except Exception as e:
+        print(f"Prediction fallback for {company.ticker}: {e}")
+        
+    import yfinance as yf
+    import pandas as pd
+    yf_ticker = f"{company.ticker}.NS" if not company.ticker.endswith((".NS", ".BO", ".US", ".L")) else company.ticker
+    stock_data = yf.Ticker(yf_ticker)
+
+    # 1. Fetch Market Cap
+    try:
+        fast_info = getattr(stock_data, "fast_info", {})
+        mcap = getattr(fast_info, "market_cap", None)
+        if mcap is None and hasattr(fast_info, "get"):
+            mcap = fast_info.get("market_cap")
+        if mcap is None and hasattr(stock_data, "info"):
+            mcap = stock_data.info.get("marketCap")
+        if mcap is not None and mcap > 0:
+            company.market_cap = float(mcap)
+    except Exception as ex:
+        print(f"Error fetching market cap for {company.ticker}: {ex}")
+
+    # 2. Fetch Quarterly Financials & True Release Dates
+    inc = stock_data.quarterly_income_stmt
+    if inc is None or inc.empty:
+        inc = getattr(stock_data, "quarterly_financials", pd.DataFrame())
+    
+    release_dates = []
+    try:
+        ed = stock_data.earnings_dates
+        if ed is not None and not ed.empty:
+            release_dates = pd.to_datetime(ed.index).tz_localize(None).sort_values()
+    except Exception as ex:
+        print(f"Error fetching earnings_dates for {company.ticker}: {ex}")
+
+    def find_true_release_date(fiscal_val):
+        fallback = str(fiscal_val)[:10]
+        try:
+            ts = pd.to_datetime(fiscal_val)
+            fallback = ts.strftime("%Y-%m-%d")
+            if release_dates is not None and len(release_dates) > 0:
+                ts_naive = ts.tz_localize(None) if ts.tz is not None else ts
+                cands = [rd for rd in release_dates if (ts_naive - pd.Timedelta(days=7)) <= rd <= (ts_naive + pd.Timedelta(days=100))]
+                if cands:
+                    return cands[0].strftime("%Y-%m-%d")
+        except Exception:
+            pass
+        return fallback
+
+    if not inc.empty:
+        if len(inc.columns) >= 4:
+            company.q4_date = find_true_release_date(inc.columns[0])
+            company.q3_date = find_true_release_date(inc.columns[1])
+            company.q2_date = find_true_release_date(inc.columns[2])
+            company.q1_date = find_true_release_date(inc.columns[3])
+
+        def get_series(*row_names):
+            for name in row_names:
+                if name in inc.index:
+                    s = inc.loc[name].dropna()
+                    if not s.empty and len(s) >= 4:
+                        return s
+            return None
+
+        eps_series = get_series('Basic EPS', 'Diluted EPS')
+        if eps_series is not None and len(eps_series) >= 4:
+            company.q4_eps = float(eps_series.iloc[0])
+            company.q3_eps = float(eps_series.iloc[1])
+            company.q2_eps = float(eps_series.iloc[2])
+            company.q1_eps = float(eps_series.iloc[3])
+            if len(eps_series) >= 5:
+                company.q0_eps = float(eps_series.iloc[4])
+
+        rev_series = get_series('Total Revenue', 'Operating Revenue', 'Total Operating Income As Reported')
+        if rev_series is not None and len(rev_series) >= 4:
+            company.q4_revenue = float(rev_series.iloc[0])
+            company.q3_revenue = float(rev_series.iloc[1])
+            company.q2_revenue = float(rev_series.iloc[2])
+            company.q1_revenue = float(rev_series.iloc[3])
+            if len(rev_series) >= 5:
+                company.q0_revenue = float(rev_series.iloc[4])
+
+        prof_series = get_series('Net Income', 'Net Income Common Stockholders', 'Operating Income')
+        if prof_series is not None and len(prof_series) >= 4:
+            company.q4_profit = float(prof_series.iloc[0])
+            company.q3_profit = float(prof_series.iloc[1])
+            company.q2_profit = float(prof_series.iloc[2])
+            company.q1_profit = float(prof_series.iloc[3])
+            if len(prof_series) >= 5:
+                company.q0_profit = float(prof_series.iloc[4])
+    
+    if company.current_price in (0, 0.0, None):
+        try:
+            hist = stock_data.history(period="1d")
+            if not hist.empty:
+                company.current_price = round(float(hist['Close'].iloc[-1]), 2)
+        except Exception:
+            pass
+    return company
+
 @shared_task
 def populate_companies_data_task():
-    # Sync NSE dates and purposes first
     try:
         sync_nse_calendar_task()
     except Exception as e:
@@ -132,100 +237,15 @@ def populate_companies_data_task():
     db = SessionLocal()
     try:
         companies = db.query(Company).filter(Company.sector == "NSE").all()
-        pred_svc = PredictionService()
         updated = 0
         for company in companies:
             if company.current_price not in (0, 0.0, None) and company.market_cap not in (0, 0.0, None) and company.q4_revenue not in (0, 0.0, None) and company.q4_date is not None:
-                continue # Skip if already fetched to save time
-                
+                continue
             try:
-                data = pred_svc.generate_prediction(company.ticker)
-                company.current_price = data.get("current_price")
-                company.historical_trend = data.get("historical_trend")
-                
-                import yfinance as yf
-                import pandas as pd
-                yf_ticker = f"{company.ticker}.NS"
-                stock_data = yf.Ticker(yf_ticker)
-
-                # 1. Fetch Market Cap
-                try:
-                    fast_info = getattr(stock_data, "fast_info", {})
-                    mcap = getattr(fast_info, "market_cap", None)
-                    if mcap is None and hasattr(fast_info, "get"):
-                        mcap = fast_info.get("market_cap")
-                    if mcap is None and hasattr(stock_data, "info"):
-                        mcap = stock_data.info.get("marketCap")
-                    if mcap is not None and mcap > 0:
-                        company.market_cap = float(mcap)
-                except Exception as ex:
-                    print(f"Error fetching market cap for {company.ticker}: {ex}")
-
-                # 2. Fetch Quarterly Financials (EPS, Revenue, Profit, Dates)
-                inc = stock_data.quarterly_income_stmt
-                if inc is None or inc.empty:
-                    inc = getattr(stock_data, "quarterly_financials", pd.DataFrame())
-                
-                if not inc.empty:
-                    if len(inc.columns) >= 4:
-                        def fmt_dt(val):
-                            try:
-                                ts = pd.to_datetime(val)
-                                return ts.strftime("%b-%Y")
-                            except:
-                                return str(val)[:7]
-                        company.q4_date = fmt_dt(inc.columns[0])
-                        company.q3_date = fmt_dt(inc.columns[1])
-                        company.q2_date = fmt_dt(inc.columns[2])
-                        company.q1_date = fmt_dt(inc.columns[3])
-
-                    def get_series(*row_names):
-                        for name in row_names:
-                            if name in inc.index:
-                                s = inc.loc[name].dropna()
-                                if not s.empty and len(s) >= 4:
-                                    return s
-                        return None
-
-                    # EPS
-                    eps_series = get_series('Basic EPS', 'Diluted EPS')
-                    if eps_series is not None and len(eps_series) >= 4:
-                        company.q4_eps = float(eps_series.iloc[0])
-                        company.q3_eps = float(eps_series.iloc[1])
-                        company.q2_eps = float(eps_series.iloc[2])
-                        company.q1_eps = float(eps_series.iloc[3])
-                        if len(eps_series) >= 5:
-                            company.q0_eps = float(eps_series.iloc[4])
-
-                    # Revenue
-                    rev_series = get_series('Total Revenue', 'Operating Revenue', 'Total Operating Income As Reported')
-                    if rev_series is not None and len(rev_series) >= 4:
-                        company.q4_revenue = float(rev_series.iloc[0])
-                        company.q3_revenue = float(rev_series.iloc[1])
-                        company.q2_revenue = float(rev_series.iloc[2])
-                        company.q1_revenue = float(rev_series.iloc[3])
-                        if len(rev_series) >= 5:
-                            company.q0_revenue = float(rev_series.iloc[4])
-
-                    # Net Profit
-                    prof_series = get_series('Net Income', 'Net Income Common Stockholders', 'Operating Income')
-                    if prof_series is not None and len(prof_series) >= 4:
-                        company.q4_profit = float(prof_series.iloc[0])
-                        company.q3_profit = float(prof_series.iloc[1])
-                        company.q2_profit = float(prof_series.iloc[2])
-                        company.q1_profit = float(prof_series.iloc[3])
-                        if len(prof_series) >= 5:
-                            company.q0_profit = float(prof_series.iloc[4])
-                
-                # Fallback for current price if PredictionService returned 0
-                if company.current_price in (0, 0.0, None):
-                    hist = stock_data.history(period="1d")
-                    if not hist.empty:
-                        company.current_price = round(float(hist['Close'].iloc[-1]), 2)
-                        
+                enrich_single_company(company, db)
                 db.commit()
                 updated += 1
-                time.sleep(1.5) # Prevent yfinance rate limiting
+                time.sleep(1.5)
             except Exception as e:
                 print(f"Failed to populate data for {company.ticker}: {e}")
                 db.rollback()

@@ -1,7 +1,7 @@
 import strawberry
 from typing import List, Optional
 from strawberry.types import Info
-from app.graphql.types import CompanyType, UserType, BackgroundJobType
+from app.graphql.types import CompanyType, UserType, BackgroundJobType, HistoricalPriceType
 from app.services.company_service import CompanyService
 from app.graphql.context import Context
 
@@ -13,6 +13,68 @@ class Query:
         if not user:
             return None
         return UserType(id=str(user.id), email=user.email, is_active=user.is_active)
+
+    @strawberry.field
+    def historical_prices(self, info: Info[Context, None], ticker: str, years: int = 2) -> List[HistoricalPriceType]:
+        from app.services.quant_service import QuantService
+        import pandas as pd
+        
+        quant = QuantService()
+        df = quant.fetch_historical_ohlcv(ticker, years=years)
+        
+        if df.empty:
+            return []
+            
+        result = []
+        prev_close = None
+        
+        df = df.sort_index()
+        
+        for date_idx, row in df.iterrows():
+            try:
+                close_val = row['Close']
+                if isinstance(close_val, pd.Series):
+                    close_val = close_val.iloc[0]
+                close = float(close_val)
+
+                vol_val = row['Volume']
+                if isinstance(vol_val, pd.Series):
+                    vol_val = vol_val.iloc[0]
+                vol = float(vol_val)
+            except Exception:
+                continue
+                
+            if pd.isna(close) or close <= 0:
+                continue
+                
+            dt = pd.to_datetime(date_idx)
+            full_date = dt.strftime('%Y-%m-%d')
+            date_str = dt.strftime('%d %b')
+            
+            if vol >= 1_000_000_000:
+                vol_str = f"{vol / 1_000_000_000:.2f}B"
+            elif vol >= 1_000_000:
+                vol_str = f"{vol / 1_000_000:.2f}M"
+            elif vol >= 1_000:
+                vol_str = f"{vol / 1_000:.2f}K"
+            else:
+                vol_str = str(int(vol))
+                
+            chg_pct = None
+            if prev_close and prev_close > 0:
+                chg_pct = round(((close - prev_close) / prev_close) * 100, 2)
+                
+            result.append(HistoricalPriceType(
+                date_str=date_str,
+                full_date=full_date,
+                close_price=round(close, 2),
+                volume_str=vol_str,
+                chg_pct=chg_pct
+            ))
+            prev_close = close
+            
+        return result
+
 
     @strawberry.field
     def companies(self, info: Info[Context, None]) -> List[CompanyType]:
@@ -62,6 +124,42 @@ class Query:
         if not c:
             return None
             
+        # Automatically upgrade stored month-year dates to true historical announcement release dates
+        dates_to_check = [c.q1_date, c.q2_date, c.q3_date, c.q4_date]
+        needs_upgrade = any(d and len(d) <= 8 for d in dates_to_check) or any(d and d[:2].isalpha() for d in dates_to_check)
+        if needs_upgrade:
+            try:
+                import yfinance as yf
+                import pandas as pd
+                yf_ticker = f"{c.ticker}.NS" if not c.ticker.endswith((".NS", ".BO")) else c.ticker
+                stock = yf.Ticker(yf_ticker)
+                ed = stock.earnings_dates
+                if ed is not None and not ed.empty:
+                    release_dates = pd.to_datetime(ed.index).tz_localize(None).sort_values()
+                    
+                    def resolve_date(old_dt):
+                        if not old_dt: return old_dt
+                        try:
+                            if len(str(old_dt).split('-')) == 2 and not str(old_dt).startswith('20'):
+                                dt = pd.to_datetime(old_dt, format='%b-%Y') + pd.offsets.MonthEnd(1)
+                            else:
+                                dt = pd.to_datetime(old_dt)
+                            dt_naive = dt.tz_localize(None) if dt.tz is not None else dt
+                            cands = [rd for rd in release_dates if (dt_naive - pd.Timedelta(days=7)) <= rd <= (dt_naive + pd.Timedelta(days=100))]
+                            if cands:
+                                return cands[0].strftime("%Y-%m-%d")
+                        except Exception:
+                            pass
+                        return old_dt
+
+                    c.q4_date = resolve_date(c.q4_date)
+                    c.q3_date = resolve_date(c.q3_date)
+                    c.q2_date = resolve_date(c.q2_date)
+                    c.q1_date = resolve_date(c.q1_date)
+                    db.commit()
+            except Exception as e:
+                print(f"Error enriching release dates for {c.ticker}: {e}")
+
         from app.graphql.types import PredictionType, EarningsReportType, EventStudyResultType, StrategyBacktestType, TechnicalSnapshotType, AIAnalysisReportType
         predictions = [PredictionType(id=str(p.id), target_quarter=p.target_quarter, predicted_eps=p.predicted_eps, confidence_score=p.confidence_score or 0, created_at=str(p.created_at)) for p in c.predictions]
         earnings = [EarningsReportType(id=str(e.id), fiscal_quarter=e.fiscal_quarter, report_date=str(e.report_date)) for e in c.earnings_reports]

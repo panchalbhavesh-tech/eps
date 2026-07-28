@@ -429,13 +429,13 @@ const CompanyDetail: React.FC = () => {
           <Grid item xs={12} sm={6} md={3}>
             <Paper sx={{ p: 2, bgcolor: '#11131a', border: '1px solid #1e293b', borderRadius: 2 }}>
               <Typography color="#64748b" variant="caption" fontWeight={600} textTransform="uppercase">RSI (14 Momentum)</Typography>
-              <Typography variant="h6" color="#e2e8f0" fontWeight={700} mt={0.5}>{tech.rsi?.toFixed(2) || 'N/A'}</Typography>
+              <Typography variant="h6" color="#e2e8f0" fontWeight={700} mt={0.5}>{tech?.rsi != null && !isNaN(Number(tech.rsi)) ? Number(tech.rsi).toFixed(2) : 'N/A'}</Typography>
             </Paper>
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <Paper sx={{ p: 2, bgcolor: '#11131a', border: '1px solid #1e293b', borderRadius: 2 }}>
               <Typography color="#64748b" variant="caption" fontWeight={600} textTransform="uppercase">MACD</Typography>
-              <Typography variant="h6" color="#e2e8f0" fontWeight={700} mt={0.5}>{tech.macd?.toFixed(2) || 'N/A'}</Typography>
+              <Typography variant="h6" color="#e2e8f0" fontWeight={700} mt={0.5}>{tech?.macd != null && !isNaN(Number(tech.macd)) ? Number(tech.macd).toFixed(2) : 'N/A'}</Typography>
             </Paper>
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
@@ -499,7 +499,7 @@ const CompanyDetail: React.FC = () => {
                     </Tooltip>
                   </Box>
                   <Box display="flex" justifyContent="space-between" alignItems="center" mt={2} pt={1.5} borderTop="1px solid #1e293b">
-                    <Typography color="#94a3b8" variant="caption">Win Rate: <strong style={{ color: (b.winRate || 0) >= 50 ? '#75b798' : '#ea868f', fontSize: '0.9rem' }}>{(b.winRate || 0).toFixed(1)}%</strong></Typography>
+                    <Typography color="#94a3b8" variant="caption">Win Rate: <strong style={{ color: Number(b.winRate || 0) >= 50 ? '#75b798' : '#ea868f', fontSize: '0.9rem' }}>{b.winRate != null && !isNaN(Number(b.winRate)) ? Number(b.winRate).toFixed(1) : '0.0'}%</strong></Typography>
                     <Typography color="#94a3b8" variant="caption">Total Trades: <strong style={{ color: '#f8fafc', fontSize: '0.9rem' }}>{b.totalTrades || 0}</strong></Typography>
                   </Box>
                 </Paper>

@@ -193,8 +193,38 @@ const MASS_CALCULATE_HEALTH = gql`
   }
 `;
 
+const ANALYZE_CUSTOM_STOCK = gql`
+  mutation AnalyzeCustomStock($ticker: String!) {
+    analyzeCustomStock(ticker: $ticker)
+  }
+`;
+
 const Home: React.FC = () => {
-  const { loading, error, data } = useQuery(GET_COMPANIES, { pollInterval: 15000, fetchPolicy: 'network-only' });
+  const { loading, error, data, refetch } = useQuery(GET_COMPANIES, { pollInterval: 15000, fetchPolicy: 'network-only' });
+  const [customTicker, setCustomTicker] = useState('');
+  const [analyzeCustomStock, { loading: analyzingCustom }] = useMutation(ANALYZE_CUSTOM_STOCK, {
+    onCompleted: (res) => {
+      if (res.analyzeCustomStock) {
+        if (res.analyzeCustomStock.startsWith('ERROR:')) {
+          alert(res.analyzeCustomStock);
+        } else {
+          window.open(`/companies/${res.analyzeCustomStock}`, '_blank', 'noopener,noreferrer');
+          if (refetch) refetch();
+          setCustomTicker('');
+        }
+      }
+    },
+    onError: (err) => {
+      alert(`Error analyzing stock: ${err.message}`);
+    }
+  });
+
+  const handleCustomAnalyze = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!customTicker.trim()) return;
+    analyzeCustomStock({ variables: { ticker: customTicker.trim() } });
+  };
+
   const [populateData] = useMutation(POPULATE_DATA);
   const [massCalculate] = useMutation(MASS_CALCULATE_HEALTH, {
     onCompleted: () => {
@@ -274,7 +304,7 @@ const Home: React.FC = () => {
     { field: 'name', headerName: 'COMPANY & TICKER', width: 240, type: 'string', sortable: true,
       renderCell: (p) => (
         <Box 
-          onClick={() => navigate(`/companies/${p.row?.id}`)}
+          onClick={() => window.open(`/companies/${p.row?.id}`, '_blank', 'noopener,noreferrer')}
           sx={{ 
             display: 'flex', 
             flexDirection: 'column', 
@@ -433,6 +463,56 @@ const Home: React.FC = () => {
              </Tooltip>
           </Box>
         </Box>
+
+        {/* Custom Share Instant Analyzer Banner */}
+        <Card sx={{ bgcolor: '#111420', border: '1px solid rgba(124, 77, 255, 0.4)', borderRadius: 2, mb: 4, boxShadow: '0 8px 24px rgba(124, 77, 255, 0.12)' }}>
+          <CardContent sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, gap: 2, py: '18px !important', px: 3 }}>
+            <Box>
+              <Typography sx={{ color: '#ffffff', fontSize: '1.02rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <span>🔍 Instant Custom Share Lookup & Analysis</span>
+                <Chip label="Any NSE / BSE Stock" size="small" sx={{ bgcolor: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', fontWeight: 700, fontSize: '0.68rem', border: '1px solid #38bdf8' }} />
+              </Typography>
+              <Typography sx={{ color: '#94a3b8', fontSize: '0.82rem', mt: 0.5 }}>
+                Want to check a specific stock not scheduled in upcoming calendar fixtures? Enter its symbol below (e.g. <span style={{ color: '#a78bfa', fontWeight: 600 }}>RELIANCE</span>, <span style={{ color: '#a78bfa', fontWeight: 600 }}>TCS</span>, <span style={{ color: '#a78bfa', fontWeight: 600 }}>INFY</span>) to generate live analytics & open its dedicated page immediately.
+              </Typography>
+            </Box>
+            <Box component="form" onSubmit={handleCustomAnalyze} sx={{ display: 'flex', gap: 1.5, width: { xs: '100%', md: 'auto' }, alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#0b0c13', border: '1px solid #334155', borderRadius: 1.5, px: 2, py: 0.8, minWidth: '220px' }}>
+                <InputBase
+                  placeholder="Ticker (e.g. RELIANCE)..."
+                  value={customTicker}
+                  onChange={(e) => setCustomTicker(e.target.value)}
+                  sx={{ color: '#ffffff', fontSize: '0.9rem', width: '100%', fontWeight: 600 }}
+                  disabled={analyzingCustom}
+                />
+              </Box>
+              <Button
+                type="submit"
+                disabled={analyzingCustom || !customTicker.trim()}
+                sx={{
+                  bgcolor: '#3b82f6',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  px: 3,
+                  py: 1.1,
+                  borderRadius: 1.5,
+                  textTransform: 'none',
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 4px 14px rgba(59, 130, 246, 0.35)',
+                  '&:hover': { bgcolor: '#2563eb' },
+                  '&.Mui-disabled': { bgcolor: '#1e293b', color: '#64748b' }
+                }}
+              >
+                {analyzingCustom ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={16} sx={{ color: '#94a3b8' }} />
+                    <span>Analyzing...</span>
+                  </Box>
+                ) : 'Launch Share Page 🚀'}
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
 
         <Grid container spacing={3} mb={4}>
           <Grid item xs={12} sm={6} md={4}>

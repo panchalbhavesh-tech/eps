@@ -8,6 +8,15 @@ class UserType:
     is_active: bool
 
 @strawberry.type
+class HistoricalPriceType:
+    date_str: str
+    full_date: str
+    close_price: float
+    volume_str: str
+    chg_pct: Optional[float] = None
+
+
+@strawberry.type
 class PredictionType:
     id: str
     target_quarter: str

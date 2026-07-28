@@ -18,7 +18,7 @@ COPY backend/ .
 
 # Copy entrypoint
 COPY docker/backend/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1
