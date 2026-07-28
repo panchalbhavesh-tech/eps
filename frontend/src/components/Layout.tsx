@@ -94,7 +94,7 @@ const Layout: React.FC = () => {
           ))}
         </List>
       </Drawer>
-      <Box component="main" sx={{ flexGrow: 1, bgcolor: 'background.default', p: 3, pt: 10, transition: '0.2s', width: `calc(100% - ${drawerWidth}px)` }}>
+      <Box component="main" sx={{ flexGrow: 1, bgcolor: 'background.default', p: location.pathname === '/' ? 0 : 3, pt: location.pathname === '/' ? 8 : 10, transition: '0.2s', width: `calc(100% - ${drawerWidth}px)`, overflowX: 'hidden' }}>
         <Outlet />
       </Box>
     </Box>

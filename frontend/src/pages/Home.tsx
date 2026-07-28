@@ -3,7 +3,6 @@ import { useQuery, useMutation, gql } from '@apollo/client';
 import { Typography, Box, CircularProgress, Chip, IconButton, InputBase, Tooltip, Grid, Card, CardContent, Button } from '@mui/material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useNavigate } from 'react-router-dom';
-import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import SearchIcon from '@mui/icons-material/Search';
 import AssessmentIcon from '@mui/icons-material/Assessment';
@@ -100,11 +99,11 @@ const renderClubbedQuarterCell = (
         py: '2px', 
         borderBottom: '1px solid rgba(255, 255, 255, 0.05)' 
       }}>
-        <Typography component="span" sx={{ fontSize: '0.72rem', color: '#94a3b8', width: '68px', fontWeight: 500, flexShrink: 0 }}>
+        <Typography component="span" sx={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 500, flexShrink: 0 }}>
           {label}:
         </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexGrow: 1 }}>
-          <Typography component="span" sx={{ fontSize: '0.75rem', color: '#f8fafc', fontWeight: 600, whiteSpace: 'nowrap' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', ml: 1, overflow: 'hidden' }}>
+          <Typography component="span" noWrap sx={{ fontSize: '0.78rem', color: '#f8fafc', fontWeight: 700 }}>
             {valText}
           </Typography>
           {pctEl}
@@ -113,20 +112,22 @@ const renderClubbedQuarterCell = (
     );
   };
 
-  let isUp = true;
+  let isUp = false;
+  let trendLabel = 'N/A';
   let pctText = '';
   let hasPct = false;
+
   if (currEps != null && prevEps != null && !isNaN(currEps) && !isNaN(prevEps) && prevEps !== 0) {
     const pct = ((currEps - prevEps) / Math.abs(prevEps)) * 100;
     if (!isNaN(pct) && isFinite(pct)) {
       hasPct = true;
       isUp = pct >= 0;
       pctText = `${isUp ? '+' : ''}${pct.toFixed(1)}%`;
+      trendLabel = isUp ? 'UP' : 'DOWN';
     }
   }
 
-  let trendLabel = isUp ? 'UP' : 'DOWN';
-  if (trendOverride && trendOverride !== 'N/A' && !hasPct) {
+  if (!hasPct && trendOverride && trendOverride !== 'N/A') {
     trendLabel = trendOverride;
     isUp = trendOverride === 'UP';
   }
@@ -219,7 +220,7 @@ const Home: React.FC = () => {
      ...c
   })) || [];
 
-  const recentEventsCount = baseRows.filter((c: any) => {
+  const recentEventsCount = data?.companies?.filter((c: any) => {
     if (!c.upcomingDate) return false;
     const eventDate = new Date(c.upcomingDate);
     const today = new Date();
@@ -227,9 +228,9 @@ const Home: React.FC = () => {
     eventDate.setHours(0,0,0,0);
     const diffDays = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     return diffDays >= 0 && diffDays <= 3;
-  }).length;
+  }).length || 0;
 
-  const highHealthCount = baseRows.filter((c: any) => (c.financialHealthScore || 0) >= 70).length;
+  const highHealthCount = data?.companies?.filter((c: any) => (c.financialHealthScore || 0) >= 70).length || 0;
 
   const rows = baseRows.filter((c: any) => {
     if (filterMode === 'RECENT_EVENTS') {
@@ -270,13 +271,28 @@ const Home: React.FC = () => {
   };
 
   const columns: GridColDef[] = [
-    { field: 'name', headerName: 'COMPANY & TICKER', width: 230, type: 'string', sortable: true,
+    { field: 'name', headerName: 'COMPANY & TICKER', width: 240, type: 'string', sortable: true,
       renderCell: (p) => (
-        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', py: 0.5 }}>
-          <Typography noWrap sx={{ fontSize: '0.82rem', fontWeight: 700, color: '#f8fafc', lineHeight: 1.25 }}>
+        <Box 
+          onClick={() => navigate(`/companies/${p.row?.id}`)}
+          sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            justifyContent: 'center', 
+            height: '100%', 
+            py: 0.5,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+            '&:hover': {
+              '& .company-name-text': { color: '#7c4dff', textDecoration: 'underline' },
+              '& .company-ticker-text': { color: '#c4b5fd' }
+            }
+          }}
+        >
+          <Typography className="company-name-text" noWrap sx={{ fontSize: '0.84rem', fontWeight: 700, color: '#f8fafc', lineHeight: 1.25, transition: 'color 0.15s' }}>
             {p.row?.name || '-'}
           </Typography>
-          <Typography noWrap sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#a78bfa', mt: '3px', letterSpacing: '0.04em' }}>
+          <Typography className="company-ticker-text" noWrap sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#a78bfa', mt: '3px', letterSpacing: '0.04em', transition: 'color 0.15s' }}>
             {p.row?.ticker || '-'}
           </Typography>
         </Box>
@@ -364,218 +380,217 @@ const Home: React.FC = () => {
         return renderClubbedQuarterCell(p.row?.q4Revenue, p.row?.q3Revenue, p.row?.q4Profit, p.row?.q3Profit, p.row?.q4Eps, p.row?.q3Eps, trends[2] || 'UP');
       }
     },
-    { field: 'upcomingDate', headerName: 'REPORT DATE', width: 125, sortComparator: dateSortComparator,
-      renderCell: (p) => renderCenteredCell(p.value, '#94a3b8', 400, '0.75rem')
-    },
-    {
-      field: 'action',
-      headerName: '',
-      width: 50,
-      sortable: false,
-      renderCell: (params: GridRenderCellParams) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', minHeight: '130px' }}>
-          <IconButton 
-            size="small"
-            onClick={() => navigate(`/companies/${params.row?.id}`)}
-            sx={{ color: '#64748b', '&:hover': { color: '#e2e8f0' } }}
-          >
-            <MoreHorizIcon fontSize="small" />
-          </IconButton>
-        </Box>
-      )
+    { field: 'upcomingDate', headerName: 'REPORT DATE', width: 130, sortComparator: dateSortComparator,
+      renderCell: (p) => renderCenteredCell(p.value, '#94a3b8', 500, '0.78rem')
     }
   ];
 
   const totalCompanies = baseRows.length;
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#0a0b10', p: 4, fontFamily: 'Inter, sans-serif' }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4} flexWrap="wrap" gap={2}>
-        <Box>
-          <Typography sx={{ color: '#e2e8f0', fontSize: '1.25rem', fontWeight: 600, mb: 0.5 }}>Dashboard & Financial Health Analytics</Typography>
-          <Typography sx={{ color: '#64748b', fontSize: '0.85rem' }}>NSE Incoming Earnings Fixtures & Comprehensive Quantitative Health Grades</Typography>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#0a0b10', pb: 4, fontFamily: 'Inter, sans-serif', width: '100%', overflowX: 'hidden' }}>
+      {/* Top Controls Container with Padding */}
+      <Box sx={{ px: { xs: 2, md: 3.5 }, pt: 3 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={4} flexWrap="wrap" gap={2}>
+          <Box>
+            <Typography sx={{ color: '#e2e8f0', fontSize: '1.25rem', fontWeight: 600, mb: 0.5 }}>Dashboard & Financial Health Analytics</Typography>
+            <Typography sx={{ color: '#64748b', fontSize: '0.85rem' }}>NSE Incoming Earnings Fixtures & Comprehensive Quantitative Health Grades</Typography>
+          </Box>
+          <Box display="flex" gap={2} alignItems="center">
+             <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#13151a', border: '1px solid #1e293b', borderRadius: 1, px: 2, py: 0.5 }}>
+                <SearchIcon sx={{ color: '#64748b', fontSize: '1rem', mr: 1 }} />
+                <InputBase 
+                   placeholder="Search stock ticker..." 
+                   value={search}
+                   onChange={(e) => setSearch(e.target.value)}
+                   sx={{ color: '#e2e8f0', fontSize: '0.85rem', width: '200px' }} 
+                />
+             </Box>
+             <Tooltip title="Mass calculate financial health & generate AI analytics for all stocks in background">
+                <Button 
+                  onClick={() => massCalculate()} 
+                  startIcon={<AssessmentIcon />}
+                  sx={{ 
+                    backgroundColor: '#7c4dff',
+                    color: '#f8fafc', 
+                    borderRadius: 1.5, 
+                    px: 2, 
+                    py: 0.8,
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
+                    textTransform: 'none',
+                    boxShadow: '0 4px 14px rgba(124, 77, 255, 0.3)',
+                    '&:hover': { backgroundColor: '#651fff' } 
+                  }}
+                >
+                  Mass Calculate Health
+                </Button>
+             </Tooltip>
+             <Tooltip title="Bulk download historical data from Yahoo Finance (Takes ~5 minutes)">
+                <IconButton onClick={handlePopulate} sx={{ bgcolor: '#1e293b', color: '#e2e8f0', borderRadius: 1, '&:hover': {bgcolor: '#334155'} }}>
+                   <CloudDownloadIcon fontSize="small" />
+                </IconButton>
+             </Tooltip>
+          </Box>
         </Box>
-        <Box display="flex" gap={2} alignItems="center">
-           <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#13151a', border: '1px solid #1e293b', borderRadius: 1, px: 2, py: 0.5 }}>
-              <SearchIcon sx={{ color: '#64748b', fontSize: '1rem', mr: 1 }} />
-              <InputBase 
-                 placeholder="Search stock ticker..." 
-                 value={search}
-                 onChange={(e) => setSearch(e.target.value)}
-                 sx={{ color: '#e2e8f0', fontSize: '0.85rem', width: '200px' }} 
-              />
-           </Box>
-           <Tooltip title="Mass calculate financial health & generate AI analytics for all stocks in background">
-              <Button 
-                onClick={() => massCalculate()} 
-                startIcon={<AssessmentIcon />}
-                sx={{ 
-                  backgroundColor: '#7c4dff',
-                  color: '#f8fafc', 
-                  borderRadius: 1.5, 
-                  px: 2, 
-                  py: 0.8,
-                  fontWeight: 700,
-                  fontSize: '0.82rem',
-                  textTransform: 'none',
-                  boxShadow: '0 4px 14px rgba(124, 77, 255, 0.3)',
-                  '&:hover': { backgroundColor: '#651fff' } 
-                }}
-              >
-                Mass Calculate Health
-              </Button>
-           </Tooltip>
-           <Tooltip title="Bulk download historical data from Yahoo Finance (Takes ~5 minutes)">
-              <IconButton onClick={handlePopulate} sx={{ bgcolor: '#1e293b', color: '#e2e8f0', borderRadius: 1, '&:hover': {bgcolor: '#334155'} }}>
-                 <CloudDownloadIcon fontSize="small" />
-              </IconButton>
-           </Tooltip>
+
+        <Grid container spacing={3} mb={4}>
+          <Grid item xs={12} sm={6} md={4}>
+            <Card 
+              onClick={() => setFilterMode('ALL')}
+              sx={{ 
+                bgcolor: filterMode === 'ALL' ? '#1c1f2e' : '#13151a', 
+                border: filterMode === 'ALL' ? '1px solid #7c4dff' : '1px solid #1e293b', 
+                borderRadius: 2, 
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                '&:hover': { borderColor: '#7c4dff', transform: 'translateY(-2px)' }
+              }}
+            >
+              <CardContent sx={{ pb: '16px !important' }}>
+                <Typography color="#94a3b8" fontSize="0.8rem" fontWeight="600" textTransform="uppercase">Total Companies Tracked</Typography>
+                <Typography color="#e2e8f0" fontSize="1.8rem" fontWeight="bold" mt={0.5}>{totalCompanies}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={4}>
+            <Card 
+              onClick={() => setFilterMode(filterMode === 'RECENT_EVENTS' ? 'ALL' : 'RECENT_EVENTS')}
+              sx={{ 
+                bgcolor: filterMode === 'RECENT_EVENTS' ? '#064e3b' : '#13151a', 
+                border: filterMode === 'RECENT_EVENTS' ? '1px solid #10b981' : '1px solid #1e293b', 
+                borderRadius: 2,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                '&:hover': { borderColor: '#10b981', transform: 'translateY(-2px)' }
+              }}
+            >
+              <CardContent sx={{ pb: '16px !important' }}>
+                <Typography color="#94a3b8" fontSize="0.8rem" fontWeight="600" textTransform="uppercase">Events in Next 2-3 Days</Typography>
+                <Typography color="#10b981" fontSize="1.8rem" fontWeight="bold" mt={0.5}>{recentEventsCount}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={12} md={4}>
+            <Card 
+              onClick={() => setFilterMode(filterMode === 'HIGH_HEALTH' ? 'ALL' : 'HIGH_HEALTH')}
+              sx={{ 
+                bgcolor: filterMode === 'HIGH_HEALTH' ? '#075985' : '#13151a', 
+                border: filterMode === 'HIGH_HEALTH' ? '1px solid #38bdf8' : '1px solid #1e293b', 
+                borderRadius: 2,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                '&:hover': { borderColor: '#38bdf8', transform: 'translateY(-2px)' }
+              }}
+            >
+              <CardContent sx={{ pb: '16px !important' }}>
+                <Typography color="#94a3b8" fontSize="0.8rem" fontWeight="600" textTransform="uppercase">High Health Score Stocks (&gt;70)</Typography>
+                <Typography color="#38bdf8" fontSize="1.8rem" fontWeight="bold" mt={0.5}>{highHealthCount}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        <Box sx={{ display: 'flex', gap: 1.5, mb: 3, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Typography sx={{ fontSize: '0.8rem', color: '#94a3b8', mr: 1, fontWeight: 700, letterSpacing: '0.04em' }}>FILTER VIEW:</Typography>
+          <Chip 
+            label={`All Stocks (${baseRows.length})`} 
+            onClick={() => setFilterMode('ALL')} 
+            sx={{ 
+              bgcolor: filterMode === 'ALL' ? '#7c4dff' : '#13151a', 
+              color: '#f8fafc', 
+              border: '1px solid #1e293b',
+              fontWeight: 700,
+              cursor: 'pointer',
+              px: 0.5,
+              '&:hover': { bgcolor: filterMode === 'ALL' ? '#651fff' : '#1e293b' }
+            }} 
+          />
+          <Chip 
+            icon={<EventAvailableIcon sx={{ color: filterMode === 'RECENT_EVENTS' ? '#fff !important' : '#10b981 !important', fontSize: '1rem' }} />}
+            label={`Events in Next 2-3 Days (${recentEventsCount})`} 
+            onClick={() => setFilterMode(filterMode === 'RECENT_EVENTS' ? 'ALL' : 'RECENT_EVENTS')} 
+            sx={{ 
+              bgcolor: filterMode === 'RECENT_EVENTS' ? '#059669' : '#13151a', 
+              color: '#f8fafc', 
+              border: '1px solid #1e293b',
+              fontWeight: 700,
+              cursor: 'pointer',
+              px: 0.5,
+              '&:hover': { bgcolor: filterMode === 'RECENT_EVENTS' ? '#047857' : '#1e293b' }
+            }} 
+          />
+          <Chip 
+            icon={<HealthAndSafetyIcon sx={{ color: filterMode === 'HIGH_HEALTH' ? '#fff !important' : '#38bdf8 !important', fontSize: '1rem' }} />}
+            label={`High Financial Health (>70 Pts)`} 
+            onClick={() => setFilterMode(filterMode === 'HIGH_HEALTH' ? 'ALL' : 'HIGH_HEALTH')} 
+            sx={{ 
+              bgcolor: filterMode === 'HIGH_HEALTH' ? '#0284c7' : '#13151a', 
+              color: '#f8fafc', 
+              border: '1px solid #1e293b',
+              fontWeight: 700,
+              cursor: 'pointer',
+              px: 0.5,
+              '&:hover': { bgcolor: filterMode === 'HIGH_HEALTH' ? '#0369a1' : '#1e293b' }
+            }} 
+          />
         </Box>
       </Box>
 
-      <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} sm={6} md={4}>
-          <Card 
-            onClick={() => setFilterMode('ALL')}
-            sx={{ 
-              bgcolor: filterMode === 'ALL' ? '#1c1f2e' : '#13151a', 
-              border: filterMode === 'ALL' ? '1px solid #7c4dff' : '1px solid #1e293b', 
-              borderRadius: 2, 
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              '&:hover': { borderColor: '#7c4dff', transform: 'translateY(-2px)' }
-            }}
-          >
-            <CardContent sx={{ pb: '16px !important' }}>
-              <Typography color="#94a3b8" fontSize="0.8rem" fontWeight="600" textTransform="uppercase">Total Companies Tracked</Typography>
-              <Typography color="#e2e8f0" fontSize="1.8rem" fontWeight="bold" mt={0.5}>{totalCompanies}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
-          <Card 
-            onClick={() => setFilterMode(filterMode === 'RECENT_EVENTS' ? 'ALL' : 'RECENT_EVENTS')}
-            sx={{ 
-              bgcolor: filterMode === 'RECENT_EVENTS' ? '#064e3b' : '#13151a', 
-              border: filterMode === 'RECENT_EVENTS' ? '1px solid #10b981' : '1px solid #1e293b', 
-              borderRadius: 2,
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              '&:hover': { borderColor: '#10b981', transform: 'translateY(-2px)' }
-            }}
-          >
-            <CardContent sx={{ pb: '16px !important' }}>
-              <Typography color="#94a3b8" fontSize="0.8rem" fontWeight="600" textTransform="uppercase">Events in Next 2-3 Days</Typography>
-              <Typography color="#10b981" fontSize="1.8rem" fontWeight="bold" mt={0.5}>{recentEventsCount}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={12} md={4}>
-          <Card 
-            onClick={() => setFilterMode(filterMode === 'HIGH_HEALTH' ? 'ALL' : 'HIGH_HEALTH')}
-            sx={{ 
-              bgcolor: filterMode === 'HIGH_HEALTH' ? '#075985' : '#13151a', 
-              border: filterMode === 'HIGH_HEALTH' ? '1px solid #38bdf8' : '1px solid #1e293b', 
-              borderRadius: 2,
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              '&:hover': { borderColor: '#38bdf8', transform: 'translateY(-2px)' }
-            }}
-          >
-            <CardContent sx={{ pb: '16px !important' }}>
-              <Typography color="#94a3b8" fontSize="0.8rem" fontWeight="600" textTransform="uppercase">High Health Score Stocks (&gt;70)</Typography>
-              <Typography color="#38bdf8" fontSize="1.8rem" fontWeight="bold" mt={0.5}>{highHealthCount}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      <Box sx={{ display: 'flex', gap: 1.5, mb: 3, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Typography sx={{ fontSize: '0.8rem', color: '#94a3b8', mr: 1, fontWeight: 700, letterSpacing: '0.04em' }}>FILTER VIEW:</Typography>
-        <Chip 
-          label={`All Stocks (${baseRows.length})`} 
-          onClick={() => setFilterMode('ALL')} 
-          sx={{ 
-            bgcolor: filterMode === 'ALL' ? '#7c4dff' : '#13151a', 
-            color: '#f8fafc', 
-            border: '1px solid #1e293b',
-            fontWeight: 700,
-            cursor: 'pointer',
-            px: 0.5,
-            '&:hover': { bgcolor: filterMode === 'ALL' ? '#651fff' : '#1e293b' }
-          }} 
-        />
-        <Chip 
-          icon={<EventAvailableIcon sx={{ color: filterMode === 'RECENT_EVENTS' ? '#fff !important' : '#10b981 !important', fontSize: '1rem' }} />}
-          label={`Events in Next 2-3 Days (${recentEventsCount})`} 
-          onClick={() => setFilterMode(filterMode === 'RECENT_EVENTS' ? 'ALL' : 'RECENT_EVENTS')} 
-          sx={{ 
-            bgcolor: filterMode === 'RECENT_EVENTS' ? '#059669' : '#13151a', 
-            color: '#f8fafc', 
-            border: '1px solid #1e293b',
-            fontWeight: 700,
-            cursor: 'pointer',
-            px: 0.5,
-            '&:hover': { bgcolor: filterMode === 'RECENT_EVENTS' ? '#047857' : '#1e293b' }
-          }} 
-        />
-        <Chip 
-          icon={<HealthAndSafetyIcon sx={{ color: filterMode === 'HIGH_HEALTH' ? '#fff !important' : '#38bdf8 !important', fontSize: '1rem' }} />}
-          label={`High Financial Health (>70 Pts)`} 
-          onClick={() => setFilterMode(filterMode === 'HIGH_HEALTH' ? 'ALL' : 'HIGH_HEALTH')} 
-          sx={{ 
-            bgcolor: filterMode === 'HIGH_HEALTH' ? '#0284c7' : '#13151a', 
-            color: '#f8fafc', 
-            border: '1px solid #1e293b',
-            fontWeight: 700,
-            cursor: 'pointer',
-            px: 0.5,
-            '&:hover': { bgcolor: filterMode === 'HIGH_HEALTH' ? '#0369a1' : '#1e293b' }
-          }} 
-        />
-      </Box>
-
-      <Box sx={{ height: 'calc(100vh - 280px)', width: '100%', bgcolor: '#0f111a', borderRadius: 0, overflow: 'hidden', border: '1px solid #1e293b' }}>
+      {/* Edge-to-Edge Borderless DataGrid */}
+      <Box sx={{ height: 'calc(100vh - 280px)', width: '100%', bgcolor: '#0a0b10', border: 0, overflow: 'hidden' }}>
         <DataGrid 
           rows={rows} 
           columns={columns} 
           disableRowSelectionOnClick
           getRowHeight={() => 'auto'}
           getEstimatedRowHeight={() => 60}
-          columnHeaderHeight={38}
+          columnHeaderHeight={40}
           sx={{
              border: 0,
+             borderRadius: 0,
              color: '#e2e8f0',
              '& .MuiDataGrid-columnHeaders': {
                bgcolor: '#13151a',
                color: '#64748b',
                textTransform: 'uppercase',
                fontSize: '0.7rem',
-               fontWeight: 600,
+               fontWeight: 700,
                letterSpacing: '0.05em',
                borderRadius: 0,
-               borderBottom: '1px solid #1e293b'
+               borderBottom: '1px solid #1e293b',
+               borderTop: '1px solid #1e293b'
              },
              '& .MuiDataGrid-columnHeader': {
                borderRadius: 0,
+               '&:first-of-type': { pl: { xs: 2, md: 3.5 } },
+               '&:last-of-type': { pr: { xs: 2, md: 3.5 } }
              },
              '& .MuiDataGrid-cell': {
                borderBottom: '1px solid #1e293b',
                py: '4px',
+               '&:first-of-type': { pl: { xs: 2, md: 3.5 } },
+               '&:last-of-type': { pr: { xs: 2, md: 3.5 } }
              },
              '& .MuiDataGrid-row': {
                bgcolor: '#0a0b10',
                '&:hover': { bgcolor: '#13151a' }
              },
              '& .MuiDataGrid-row:nth-of-type(even)': {
-               bgcolor: '#0f111a',
+               bgcolor: '#0e1017',
              },
              '& .MuiDataGrid-footerContainer': {
                borderTop: '1px solid #1e293b',
                bgcolor: '#13151a',
-               color: '#64748b'
+               color: '#64748b',
+               px: { xs: 2, md: 3.5 }
              },
-             '& .MuiTablePagination-root': { color: '#64748b' }
+             '& .MuiTablePagination-root': { color: '#64748b' },
+             '& .MuiDataGrid-virtualScroller': {
+               '&::-webkit-scrollbar': { width: '6px', height: '6px' },
+               '&::-webkit-scrollbar-track': { bgcolor: '#0a0b10' },
+               '&::-webkit-scrollbar-thumb': { bgcolor: '#282f45', borderRadius: '3px', '&:hover': { bgcolor: '#475569' } }
+             }
           }}
         />
       </Box>

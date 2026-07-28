@@ -1,100 +1,168 @@
-# QEPS - NSE Earnings Prediction & Analytics Dashboard
+# QEPS - Quantitative Earnings Prediction & Analytics Dashboard
 
 ## 1. Project Overview
 
-QEPS (Quantitative Earnings Prediction System) is a full-stack, containerized web application designed to track and analyze upcoming earnings fixtures for companies listed on the National Stock Exchange of India (NSE). The platform scrapes earnings calendars, fetches historical financial data from Yahoo Finance, performs deep quantitative event studies and strategy backtesting via `pandas`, and integrates with the Google Gemini AI to generate comprehensive 11-section analyst reports. All insights are visualized on a premium, dark-themed dashboard.
+QEPS (Quantitative Earnings Prediction System) is a full-stack, containerized enterprise quantitative finance application designed to track, model, and evaluate upcoming earnings fixtures for companies listed on the National Stock Exchange of India (NSE). The platform ingests earnings calendars, fetches multi-year historical financial statement metrics via Yahoo Finance, executes deep event studies and strategy backtesting using Python quantitative libraries, and integrates with Google Gemini AI to assemble comprehensive 11-section institutional equity research reports. 
 
-## 2. Architecture & Infrastructure
+All analytics are delivered via a high-density, low-latency React dashboard featuring custom financial visualizers, continuous timeline number lines, and transparent scorecards.
 
-The project is built using a microservices-inspired architecture, orchestrated completely via **Docker Compose**. It consists of 7 interconnected services:
+---
 
-- **frontend**: The Vite/React client application.
-- **backend**: The FastAPI application serving the GraphQL API.
-- **worker**: The Celery background worker for heavy tasks (data scraping, EPS population).
-- **scheduler**: The Celery Beat scheduler for recurring tasks (e.g., daily NSE calendar sync).
-- **nginx**: A reverse proxy that routes traffic to the frontend and backend.
-- **postgres**: The PostgreSQL database.
-- **redis**: The Redis instance used as a Celery message broker and result backend.
-- **pgadmin**: A web interface for managing the PostgreSQL database.
+## 2. System Architecture & Docker Infrastructure
 
-## 3. Technology Stack
+The platform implements a containerized microservices-inspired architecture orchestrated entirely via **Docker Compose**. It brings together 8 interconnected services:
 
-### Frontend (Client-Side)
-- **Framework**: React 19 + TypeScript
-- **Build Tool**: Vite
-- **API Client**: Apollo GraphQL Client (`@apollo/client`)
-- **Styling & UI**: Material UI (MUI v5) and `@mui/x-data-grid`
-- **Routing**: React Router DOM
-- **Aesthetic**: Custom sleek dark mode with premium color palettes, glassmorphism hints, and custom chips for data visualization.
+```
++-----------------------------------------------------------------------+
+|                              NGINX PROXY                              |
+|                              (Port 80/8080)                           |
++-----------------------------------+-----------------------------------+
+                                    |
+            +-----------------------+-----------------------+
+            | (HTTP / Frontend Traffic)                     | (/graphql & /api)
+            v                                               v
++-----------------------+                       +-----------------------+
+|  Vite / React Client  |                       | FastAPI (Uvicorn)     |
+|  (Frontend Service)   |                       | (Backend Service)     |
++-----------------------+                       +-----------+-----------+
+                                                            |
+            +-----------------------------------------------+-----------+
+            | (Async Dispatch via Celery)                               | (SQLAlchemy ORM)
+            v                                                           v
++-----------------------+       +-----------------------+   +-----------------------+
+|  Redis Broker / Cache | <---> | Celery Workers        |   | PostgreSQL Database   |
+|  (Port 6379)          |       | (qeps_worker & Beat)  |   | (Port 5432 & PgAdmin) |
++-----------------------+       +-----------------------+   +-----------------------+
+```
 
-### Backend (Server-Side)
-- **Framework**: FastAPI (Python 3.12)
-- **Server**: Uvicorn
-- **API Standard**: GraphQL via **Strawberry** (`strawberry-graphql`)
-- **Database ORM**: SQLAlchemy 2.0 with Alembic for migrations
-- **Background Tasks**: Celery + Redis
-- **Quantitative Engine**: `pandas` and `pandas-ta` for technical analysis, strategy backtesting, and forward-return event studies.
-- **Data Scraping/Finance API**: `yfinance` (Yahoo Finance), custom NSE scrapers (`PredictionService`).
-- **AI Integration**: Google Gemini API via `AIAnalystService`.
-- **Authentication**: JWT-based auth with `python-jose` and `bcrypt`.
+### Services Breakdown:
+- **frontend**: React 19 + TypeScript single-page application bundled with Vite.
+- **backend**: Python 3.12 FastAPI application hosting a Strawberry GraphQL API layer and REST health endpoints.
+- **worker (`qeps_worker`)**: Asynchronous Celery execution engine dedicated to intensive scraping, mass financial data population, quantitative modeling, and LLM communication.
+- **scheduler (`qeps_scheduler`)**: Celery Beat cron daemon for routine scheduled data synchronization (e.g., automated daily NSE calendar pulling).
+- **nginx**: Alpine-based Nginx reverse proxy managing client requests and upstream route distribution.
+- **postgres**: Relational PostgreSQL DBMS storing historical fundamental snapshots, user credentials, and event backtest logs.
+- **redis**: In-memory data broker facilitating Celery task queueing and result buffering.
+- **pgadmin**: Web-based graphical Postgres administration interface accessible on port `5050`.
 
-## 4. Key Features & Workflows
+---
 
-### 4.1 Automated NSE Calendar Sync
-The Celery Scheduler (`qeps_scheduler`) routinely triggers the `sync_nse_calendar_task`. This task scrapes upcoming earnings dates for NSE companies and saves the report dates and purposes into the database.
+## 3. Core Technology Stack
 
-### 4.2 Bulk Historical Data Population
-Because fetching 4-quarter historical EPS data for 400+ companies is time-consuming, the system utilizes an asynchronous Celery worker (`qeps_worker`).
-- When the user clicks the "Cloud Download" button on the UI, a GraphQL mutation (`populateCompaniesData`) fires.
-- This mutation dispatches a Celery task that iterativly pulls the `quarterly_income_stmt` from `yfinance` for each company (appending `.NS` to the ticker).
-- It extracts `Q1 EPS`, `Q2 EPS`, `Q3 EPS`, `Q4 EPS`, the current stock price, and calculates the `historicalTrend`.
-- The database is updated incrementally.
+### Frontend (Client Tier)
+- **Framework & Language**: React 19, TypeScript, Vite
+- **State & Data Layer**: Apollo GraphQL Client (`@apollo/client`) configured with real-time polling and explicit cache hydration policies (`network-only` where live worker streaming is active).
+- **Component Design System**: Material UI (MUI v5), customized `@mui/x-data-grid` for ultra-dense quantitative tables, and Google Fonts (`Inter`, monospace code presentation).
+- **Specialized Visualizations**: Custom zero-dependency horizontal SVG/DOM number line trackers, radial gauge equivalents, and click-triggered interactive tooltips.
 
-### 4.3 GraphQL Data Fetching
-The frontend polls the GraphQL API (using Apollo Client's `network-only` fetch policy to bypass strict caching) every 15 seconds to stream the background worker's progress to the DataGrid in real-time.
+### Backend & Quantitative Engine
+- **Web Framework**: FastAPI, Uvicorn asynchronous ASGI server.
+- **API Interface**: Strawberry GraphQL (`strawberry-graphql`) exposing structured Types, Queries, and Mutations.
+- **Database & Migrations**: SQLAlchemy 2.0 Core/ORM paired with PostgreSQL and Alembic database migrations.
+- **Task Orchestration**: Celery distributed task queue connected to Redis and Postgres result backend.
+- **Data Engineering & Finance**: `pandas`, `pandas-ta`, `numpy`, `yfinance` (Yahoo Finance extraction engine), custom NSE website web scrapers (`NSEService`).
+- **Artificial Intelligence**: Google Gemini API via `AIAnalystService` structured prompting for equity institutional evaluation.
+- **Security & Authentication**: JSON Web Tokens (JWT) via `python-jose` and cryptographic hashing with `bcrypt`.
 
-### 4.4 Data Model Core Entities
-- **User**: Authentication models.
-- **Company**: Stores company metadata (Ticker, Name, Sector), upcoming report dates, exact recent prices, historical Q1-Q4 EPS, and fundamental snapshots (Market Cap, P/E, Holdings, etc.).
-- **EarningsReport**: Historical earnings fixtures.
-- **Prediction**: Stores basic trend and confidence scores.
-- **EventStudyResult**: Stores deep quantitative event study metrics (Pre/Post gap %, intraday %, forward returns for 1, 3, 5, 10, 20, 30 days).
-- **StrategyBacktest**: Stores win-rates, total trades, and expected values for proprietary trading strategies.
-- **TechnicalSnapshot**: Stores latest technical indicators (MACD, RSI, DMAs, ADX, Support/Resistance).
-- **AIAnalysisReport**: Stores the LLM-generated qualitative Markdown report containing risk assessments and trading plans.
+---
 
-### 4.5 Deep Quantitative Event Study & AI Analyst
-Users can click on a specific company in the dashboard to view a comprehensive 11-section Deep Research Report.
-- Generating this report triggers a heavy Celery background task (`generate_deep_research_report_task`).
-- The `QuantService` fetches 5 years of daily OHLCV data using `yfinance` and calculates complex technicals, event studies, and strategy backtests using `pandas` and `pandas-ta`.
-- The `AIAnalystService` securely passes this processed quantitative data to the **Google Gemini API**, which acts as a Senior Quantitative Analyst to generate qualitative risk assessments, pattern recognition, and trading plans.
-- The UI elegantly renders this massive dataset using Material UI metric cards and `react-markdown` for the AI text.
+## 4. Architectural Feature Modules
 
-## 5. Development Guide
+### 4.1 High-Density Stock Screening Grid (`Home.tsx`)
+The primary screener presents real-time data across hundreds of listed stocks with optimized ergonomic density:
+- **Unified Company / Ticker Columns**: Combines the full corporate name and ticker symbol into a single streamlined column to maximize horizontal screening room.
+- **Condensed Row Geometry**: Eliminated redundant table radii and compressed padding to create an institutional Bloomberg-style tabular interface.
+- **Dynamic Financial Sub-Rows & QoQ Trends**: Inline percentage evaluation badges (`▲ +X%`, `▼ -Y%`) compare real-time Quarterly Revenue, Net Profit, and Diluted EPS against prior-quarter baselines.
+- **Interactive Cloud Operations**: Features one-click triggers for **Cloud Download** (scraping quarterly statements) and **Mass Calc Health** (bulk numerical score normalization).
 
-### Running Locally
-1. Ensure Docker Desktop is running.
-2. In the root directory, start the infrastructure:
-   ```bash
-   docker compose up -d
-   ```
-3. To rebuild containers after installing new dependencies (e.g., modifying `requirements.txt` or `package.json`):
-   ```bash
-   docker compose up --build -d
-   ```
+### 4.2 Transparent Financial Health Scorecard (`FinancialHealthScorecard.tsx`)
+When reviewing a specific stock, the application builds an interactive normalized scorecard evaluation:
+- **7 Evaluation Sectors**: Scores Profitability & Returns, Debt & Solvency, Cash Flow Efficiency, Growth Expansion, Valuation Multiples, Price Stability, and Ownership Quality on an aggregate 100-point scale.
+- **Click-Only Interactive Formula Tooltips**: To preserve sleek, compact aesthetic dimensions without cluttering visual cards, the explicit normalization math formulas are concealed by default. Each metric card houses an info icon (`i`) in its top-right header; **clicking the icon** reveals an interactive dark glassmorphic tooltip detailing the exact mathematical formula (e.g., `clamp((ROE - 0.0%) / (20.0% - 0.0%), 0, 1) * 25.0`).
+- **Governance Penalty & Transparency Logs**: An explicit footer tracks institutional governance deductions (such as Promoter Pledges exceeding nominal thresholds), ensuring reproducible point adjustments.
 
-### Ports & Endpoints
-- **Web App**: `http://localhost` (via Nginx)
-- **GraphQL API / Docs**: `http://localhost:8000/graphql`
-- **PgAdmin**: `http://localhost:5050`
-- **Database**: `localhost:5432`
+### 4.3 Unified Quarterly Earnings Market Impact (`QuarterlyMarketImpact.tsx`)
+A dedicated visualization module designed to perform event studies around official quarterly financial release dates:
+- **Continuous Single-Line Timeline**: Unlike fragmented tabular layouts, trading intervals are rendered as a scrollable horizontal number line that unites pre-event days (`T-7` through `T-1`) with post-event reaction days (`T+1` through `T+7`) without interruption.
+- **Central Earnings Pivot Node (`T-0 PIVOT`)**: Directly in the center of the timeline sits an amber-glowing `T-0 PIVOT` coordinate representing the exact earnings release event date, displaying the baseline price entering the report.
+- **Dynamic Colored Rail Transition**: To the left of the pivot node, the connecting horizontal rail is a muted slate grey representing **Pre-Event Drift**. As it passes through `T-0 PIVOT`, it transforms into a luminous purple gradient rail connecting `T+1` (where announcement volume surge occurs) through subsequent reaction days.
+- **Responsive Window Switcher**: Low-profile tab selectors allow users to switch seamlessly between a compact **7 Days Window** (15 total nodes fitting cleanly without horizontal scrolling) and an extended **1 Month Window** (up to 45 nodes across an interactive timeline).
+- **Inline Financial Statement Summaries**: Pairs every quarterly timeline (Q1-Q4) with condensed Total Revenue, Net Profit, and Diluted EPS comparison cards (`vs ₹... prior`).
 
-### Modifying the Database Schema
-1. Modify the SQLAlchemy models in `backend/app/infrastructure/models.py`.
-2. Ensure you add corresponding fields to `CompanyType` (or relevant types) in `backend/app/graphql/types.py`.
-3. Update the GraphQL resolvers in `backend/app/graphql/queries.py` to map the DB model attributes to the GraphQL type attributes.
-4. Execute raw SQL migrations or use `alembic` to update the actual Postgres schema.
+---
 
-### Troubleshooting Caching
-- **Nginx DNS Cache**: If the backend container receives a new internal Docker IP, Nginx will throw a `502 Bad Gateway` until restarted. Run `docker restart qeps_nginx`.
-- **Apollo Client Cache**: If a new field is added to the GraphQL schema, Apollo might cache the old schema and drop new fields on the frontend. Utilizing `fetchPolicy: 'network-only'` in the `useQuery` hook resolves this issue for dynamic development environments.
+## 5. Backend Task Workflow & Processing Pipelines
+
+### 5.1 Automated NSE Calendar Sync (`sync_nse_calendar_task`)
+Executed daily by `qeps_scheduler`, this background worker interfaces with official NSE endpoints, parsing the upcoming Corporate Results calendar. It automatically populates or updates `Company` database instances with upcoming dates and formal agenda purposes.
+
+### 5.2 Bulk Data Population (`populate_companies_data_task`)
+Triggered via the `populateCompaniesData` GraphQL mutation when an admin initiates a cloud download:
+- Iteratively extracts quarterly balance sheets and income statements via `yfinance` (appending `.NS` to national identifiers).
+- Captures Q1 through Q4 Revenue, Profit, Diluted EPS, current market closing pricing, and evaluates directional multi-quarter `historicalTrend` strings (e.g., `UP,UP,DOWN,UP`).
+
+### 5.3 Bulk Financial Health Normalization (`mass_calculate_financial_health_task`)
+Triggered via the `massCalculateFinancialHealth` GraphQL mutation:
+- Iterates across all stored tickers in the system, passing their historical fundamental profiles into the evaluation engine.
+- Computes efficiency percentages across all 7 categorical pillars, registers any governance penalties, and updates the permanent overall quantitative health score stored within PostgreSQL.
+
+### 5.4 Deep Quantitative Research AI Synthesis (`generate_deep_research_report_task`)
+Dispatched when a user requests an comprehensive individual stock audit:
+- **Quantitative Engine (`QuantService`)**: Ingests 5 years of daily OHLCV trading logs. Calculates advanced momentum vectors (MACD, RSI, ADX), moving average convergence, support/resistance levels, intraday price gaps, and forward cumulative return expectations across 1, 3, 5, 10, 20, and 30-day horizons.
+- **Qualitative LLM Synthesis (`AIAnalystService`)**: Passes the processed algorithmic metrics into **Google Gemini**, prompting it as an Institutional Senior Quant Analyst to generate an authoritative 11-section markdown research document complete with explicit risk warnings and execution strategies.
+
+---
+
+## 6. Database Schema Core Entities
+
+- `User`: Manages analyst identities, encrypted passwords, and session authentication.
+- `Company`: Primary entity storing stock metadata (Ticker, Name, Purpose, Upcoming Date), immediate closing pricing, 4-quarter fundamental snapshots, and normalized health grades.
+- `EarningsReport`: Historical ledger of past quarterly earnings events.
+- `Prediction`: Directional confidence scoring and statistical probability estimates.
+- `EventStudyResult`: Holds empirical backtested performance metrics (Pre-announcement drift %, announcement gap %, post-announcement return trajectories).
+- `StrategyBacktest`: Logs algorithmic trading simulations, win-rate expectancy, drawdown profiles, and total trades executed.
+- `TechnicalSnapshot`: Point-in-time snapshot of technical trading indicator oscillators.
+- `AIAnalysisReport`: Persisted storage for LLM-generated qualitative analytical narratives and markdown commentary.
+
+---
+
+## 7. Developer Reference & Operation Guide
+
+### 7.1 Local Container Execution
+To boot the full multi-container deployment locally:
+```bash
+# Start all containers in detached mode
+docker compose up -d
+
+# Rebuild images after updating requirements.txt or package.json
+docker compose up --build -d
+```
+
+### 7.2 Port Mapping Reference
+- **Frontend Dashboard**: `http://localhost` (proxied via Nginx)
+- **GraphQL Interactive Console (GraphiQL)**: `http://localhost:8000/graphql`
+- **PgAdmin Database Manager**: `http://localhost:5050`
+- **PostgreSQL Port (Host access)**: `localhost:5432`
+- **Redis Broker Port**: `localhost:6379`
+
+### 7.3 Critical Celery & Worker Reload Rules
+> [!IMPORTANT]
+> Celery background worker processes (`qeps_worker`) do **NOT** automatically hot-reload when modifications are made to Python source code in `backend/app/worker/tasks.py` or associated analytical services.
+> 
+> Whenever you define a new `@shared_task` (such as `mass_calculate_financial_health_task`), modify quantitative formulas, or update AI prompt schemas, you **MUST** manually restart the worker container:
+```bash
+docker compose restart qeps_worker
+```
+
+### 7.4 Modifying Database Schema & GraphQL Types
+When extending backend models or adding new analytical fields:
+1. Update the SQLAlchemy model class definitions in `backend/app/infrastructure/models.py`.
+2. Generate and run Alembic database migrations (or execute DDL schema modifications against Postgres).
+3. Expose the new attributes within the corresponding Strawberry GraphQL schema definition in `backend/app/graphql/types.py`.
+4. Update resolver functions in `backend/app/graphql/queries.py` or mutation handlers in `backend/app/graphql/mutations.py`.
+5. On the frontend, update your Apollo Client query definitions in `frontend/src/pages/Home.tsx` or `CompanyDetail.tsx`, ensuring `fetchPolicy: 'network-only'` is utilized when pulling real-time background worker tasks.
+
+---
+
+## 8. Git Maintenance & Branch Status
+The local repository is connected to the upstream remote `origin` (`main` branch). All UI/UX density refinements, interactive click-only tooltip behaviors, unified earnings pivot number lines, and Celery task optimizations have been validated against the containerized test suite and incorporated into the active deployment branch.
