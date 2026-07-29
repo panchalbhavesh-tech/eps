@@ -131,6 +131,12 @@ class Mutation:
             
         return str(new_company.id)
 
+    @strawberry.mutation
+    def trigger_momentum_scan(self, info: Info[Context, None]) -> str:
+        task = celery_app.send_task("app.worker.tasks.run_nse_momentum_scan_task")
+        _log_queued_task(info.context.db, task.id, "app.worker.tasks.run_nse_momentum_scan_task")
+        return f"Momentum scanner task {task.id} started in the background."
+
 def _log_queued_task(db, task_id: str, name: str):
     from app.infrastructure.models import BackgroundJob
     job = BackgroundJob(celery_task_id=task_id, task_name=name, status="QUEUED")

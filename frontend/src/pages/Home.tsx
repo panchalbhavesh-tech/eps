@@ -41,6 +41,8 @@ const GET_COMPANIES = gql`
       historicalTrend
       financialHealthScore
       financialHealthGrade
+      momentumProbability
+      avgPostEarningsMomentum
     }
   }
 `;
@@ -200,6 +202,7 @@ const ANALYZE_CUSTOM_STOCK = gql`
 `;
 
 const Home: React.FC = () => {
+  const [expandQuarters, setExpandQuarters] = useState<boolean>(false);
   const { loading, error, data, refetch } = useQuery(GET_COMPANIES, { pollInterval: 15000, fetchPolicy: 'network-only' });
   const [customTicker, setCustomTicker] = useState('');
   const [analyzeCustomStock, { loading: analyzingCustom }] = useMutation(ANALYZE_CUSTOM_STOCK, {
@@ -385,33 +388,195 @@ const Home: React.FC = () => {
         );
       }
     },
-    { field: 'q1Clubbed', headerName: `${q1Prefix.trim()} (Q1)`, width: 240, type: 'number', headerAlign: 'left', align: 'left', sortable: true,
-      valueGetter: (_v: any, row: any) => row?.q1Profit != null && !isNaN(row.q1Profit) ? Number(row.q1Profit) : (row?.q1Revenue != null ? Number(row.q1Revenue) : -Infinity),
-      renderCell: (p) => renderClubbedQuarterCell(p.row?.q1Revenue, p.row?.q0Revenue, p.row?.q1Profit, p.row?.q0Profit, p.row?.q1Eps, p.row?.q0Eps)
-    },
-    { field: 'q2Clubbed', headerName: `${q2Prefix.trim()} (Q2)`, width: 240, type: 'number', headerAlign: 'left', align: 'left', sortable: true,
-      valueGetter: (_v: any, row: any) => row?.q2Profit != null && !isNaN(row.q2Profit) ? Number(row.q2Profit) : (row?.q2Revenue != null ? Number(row.q2Revenue) : -Infinity),
+    { field: 'momentumProbability', headerName: 'POST-RELEASE MOMENTUM PROB', width: 230, type: 'number', headerAlign: 'left', align: 'left', sortable: true,
+      valueGetter: (_v: any, row: any) => row?.momentumProbability != null && !isNaN(row.momentumProbability) ? Number(row.momentumProbability) : -Infinity,
       renderCell: (p) => {
-        const trends = p.row?.historicalTrend && p.row.historicalTrend !== 'N/A' ? p.row.historicalTrend.split(',') : [];
-        return renderClubbedQuarterCell(p.row?.q2Revenue, p.row?.q1Revenue, p.row?.q2Profit, p.row?.q1Profit, p.row?.q2Eps, p.row?.q1Eps, trends[0] || 'UP');
+        const prob = p.row?.momentumProbability;
+        if (prob == null || isNaN(prob) || prob < 0) {
+          return renderCenteredCell('Not Calc', '#64748b', 400, '0.75rem');
+        }
+        let bgcolor = 'rgba(244, 63, 94, 0.18)';
+        let color = '#f43f5e';
+        let border = '1px solid rgba(244, 63, 94, 0.35)';
+        let fractionText = '0/4 Qtrs';
+        if (prob >= 100) {
+          bgcolor = 'rgba(16, 185, 129, 0.2)';
+          color = '#10b981';
+          border = '1px solid rgba(16, 185, 129, 0.4)';
+          fractionText = '4/4 Qtrs';
+        } else if (prob >= 75) {
+          bgcolor = 'rgba(56, 189, 248, 0.2)';
+          color = '#38bdf8';
+          border = '1px solid rgba(56, 189, 248, 0.4)';
+          fractionText = '3/4 Qtrs';
+        } else if (prob >= 50) {
+          bgcolor = 'rgba(245, 158, 11, 0.2)';
+          color = '#f59e0b';
+          border = '1px solid rgba(245, 158, 11, 0.4)';
+          fractionText = '2/4 Qtrs';
+        } else if (prob >= 25) {
+          bgcolor = 'rgba(249, 115, 22, 0.18)';
+          color = '#fb923c';
+          border = '1px solid rgba(249, 115, 22, 0.35)';
+          fractionText = '1/4 Qtr';
+        }
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', py: 0.5 }}>
+            <Box sx={{
+              px: '10px',
+              py: '4px',
+              borderRadius: '14px',
+              bgcolor,
+              color,
+              border,
+              fontWeight: 800,
+              fontSize: '0.75rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
+            }}>
+              <span>🎯 {prob.toFixed(0)}%</span>
+              <span style={{ fontSize: '0.68rem', opacity: 0.9 }}>({fractionText})</span>
+            </Box>
+          </Box>
+        );
       }
     },
-    { field: 'q3Clubbed', headerName: `${q3Prefix.trim()} (Q3)`, width: 240, type: 'number', headerAlign: 'left', align: 'left', sortable: true,
-      valueGetter: (_v: any, row: any) => row?.q3Profit != null && !isNaN(row.q3Profit) ? Number(row.q3Profit) : (row?.q3Revenue != null ? Number(row.q3Revenue) : -Infinity),
+    { field: 'avgPostEarningsMomentum', headerName: 'AVG MOMENTUM / BUY INDICATOR', width: 260, type: 'number', headerAlign: 'left', align: 'left', sortable: true,
+      valueGetter: (_v: any, row: any) => row?.avgPostEarningsMomentum != null && !isNaN(row.avgPostEarningsMomentum) ? Number(row.avgPostEarningsMomentum) : -Infinity,
       renderCell: (p) => {
-        const trends = p.row?.historicalTrend && p.row.historicalTrend !== 'N/A' ? p.row.historicalTrend.split(',') : [];
-        return renderClubbedQuarterCell(p.row?.q3Revenue, p.row?.q2Revenue, p.row?.q3Profit, p.row?.q2Profit, p.row?.q3Eps, p.row?.q2Eps, trends[1] || 'UP');
+        const avgMom = p.row?.avgPostEarningsMomentum;
+        const prob = p.row?.momentumProbability ?? 0;
+        if (avgMom == null || isNaN(avgMom)) {
+          return renderCenteredCell('Not Calc', '#64748b', 400, '0.75rem');
+        }
+        const isPos = avgMom >= 0;
+        const momColor = isPos ? '#4ade80' : '#f87171';
+        const momArrow = isPos ? '▲' : '▼';
+        const momText = `${isPos ? '+' : ''}${avgMom.toFixed(1)}%`;
+
+        let signalLabel = 'NEUTRAL / HOLD';
+        let signalBg = 'rgba(100, 116, 139, 0.2)';
+        let signalColor = '#cbd5e1';
+        let signalBorder = '1px solid #64748b';
+        let signalIcon = '⚠️';
+
+        if ((prob >= 75 && avgMom > 0) || (prob >= 50 && avgMom >= 2.0)) {
+          signalLabel = 'BUY PRE-RELEASE';
+          signalBg = 'rgba(20, 83, 45, 0.45)';
+          signalColor = '#4ade80';
+          signalBorder = '1px solid #16a34a';
+          signalIcon = '🟢';
+        } else if (prob < 50 || avgMom < 0) {
+          signalLabel = 'AVOID PRE-RELEASE';
+          signalBg = 'rgba(127, 29, 29, 0.45)';
+          signalColor = '#f87171';
+          signalBorder = '1px solid #dc2626';
+          signalIcon = '🔴';
+        }
+
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', py: 0.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.3 }}>
+              <Typography sx={{ fontSize: '0.78rem', fontWeight: 800, color: momColor }}>
+                Avg Reaction: {momArrow} {momText}
+              </Typography>
+            </Box>
+            <Box sx={{
+              px: '7px',
+              py: '2px',
+              borderRadius: '6px',
+              bgcolor: signalBg,
+              color: signalColor,
+              border: signalBorder,
+              fontWeight: 700,
+              fontSize: '0.66rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              width: 'fit-content'
+            }}>
+              <span>{signalIcon}</span>
+              <span>{signalLabel}</span>
+            </Box>
+          </Box>
+        );
       }
     },
-    { field: 'q4Clubbed', headerName: `${q4Prefix.trim()} (Q4 - LATEST)`, width: 250, type: 'number', headerAlign: 'left', align: 'left', sortable: true,
-      valueGetter: (_v: any, row: any) => row?.q4Profit != null && !isNaN(row.q4Profit) ? Number(row.q4Profit) : (row?.q4Revenue != null ? Number(row.q4Revenue) : -Infinity),
-      renderCell: (p) => {
-        const trends = p.row?.historicalTrend && p.row.historicalTrend !== 'N/A' ? p.row.historicalTrend.split(',') : [];
-        return renderClubbedQuarterCell(p.row?.q4Revenue, p.row?.q3Revenue, p.row?.q4Profit, p.row?.q3Profit, p.row?.q4Eps, p.row?.q3Eps, trends[2] || 'UP');
+    ...(expandQuarters ? [
+      { field: 'q1Clubbed', headerName: `${q1Prefix.trim()} (Q1)`, width: 240, type: 'number' as const, headerAlign: 'left' as const, align: 'left' as const, sortable: true,
+        valueGetter: (_v: any, row: any) => row?.q1Profit != null && !isNaN(row.q1Profit) ? Number(row.q1Profit) : (row?.q1Revenue != null ? Number(row.q1Revenue) : -Infinity),
+        renderCell: (p: GridRenderCellParams) => renderClubbedQuarterCell(p.row?.q1Revenue, p.row?.q0Revenue, p.row?.q1Profit, p.row?.q0Profit, p.row?.q1Eps, p.row?.q0Eps)
+      },
+      { field: 'q2Clubbed', headerName: `${q2Prefix.trim()} (Q2)`, width: 240, type: 'number' as const, headerAlign: 'left' as const, align: 'left' as const, sortable: true,
+        valueGetter: (_v: any, row: any) => row?.q2Profit != null && !isNaN(row.q2Profit) ? Number(row.q2Profit) : (row?.q2Revenue != null ? Number(row.q2Revenue) : -Infinity),
+        renderCell: (p: GridRenderCellParams) => {
+          const trends = p.row?.historicalTrend && p.row.historicalTrend !== 'N/A' ? p.row.historicalTrend.split(',') : [];
+          return renderClubbedQuarterCell(p.row?.q2Revenue, p.row?.q1Revenue, p.row?.q2Profit, p.row?.q1Profit, p.row?.q2Eps, p.row?.q1Eps, trends[0] || 'UP');
+        }
+      },
+      { field: 'q3Clubbed', headerName: `${q3Prefix.trim()} (Q3)`, width: 240, type: 'number' as const, headerAlign: 'left' as const, align: 'left' as const, sortable: true,
+        valueGetter: (_v: any, row: any) => row?.q3Profit != null && !isNaN(row.q3Profit) ? Number(row.q3Profit) : (row?.q3Revenue != null ? Number(row.q3Revenue) : -Infinity),
+        renderCell: (p: GridRenderCellParams) => {
+          const trends = p.row?.historicalTrend && p.row.historicalTrend !== 'N/A' ? p.row.historicalTrend.split(',') : [];
+          return renderClubbedQuarterCell(p.row?.q3Revenue, p.row?.q2Revenue, p.row?.q3Profit, p.row?.q2Profit, p.row?.q3Eps, p.row?.q2Eps, trends[1] || 'UP');
+        }
+      },
+      { field: 'q4Clubbed', headerName: `${q4Prefix.trim()} (Q4 - LATEST)`, width: 260, type: 'number' as const, headerAlign: 'left' as const, align: 'left' as const, sortable: true,
+        valueGetter: (_v: any, row: any) => row?.q4Profit != null && !isNaN(row.q4Profit) ? Number(row.q4Profit) : (row?.q4Revenue != null ? Number(row.q4Revenue) : -Infinity),
+        renderHeader: () => (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', pr: 1 }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700 }}>{q4Prefix.trim()} (Q4 - LATEST)</span>
+            <Chip 
+              label="COLLAPSE ◄" 
+              onClick={(e) => { e.stopPropagation(); setExpandQuarters(false); }} 
+              size="small" 
+              sx={{ bgcolor: 'rgba(248, 113, 113, 0.25)', color: '#f87171', fontSize: '0.62rem', fontWeight: 800, height: '20px', cursor: 'pointer', '&:hover': { bgcolor: 'rgba(248, 113, 113, 0.4)' } }} 
+            />
+          </Box>
+        ),
+        renderCell: (p: GridRenderCellParams) => {
+          const trends = p.row?.historicalTrend && p.row.historicalTrend !== 'N/A' ? p.row.historicalTrend.split(',') : [];
+          return renderClubbedQuarterCell(p.row?.q4Revenue, p.row?.q3Revenue, p.row?.q4Profit, p.row?.q3Profit, p.row?.q4Eps, p.row?.q3Eps, trends[2] || 'UP');
+        }
       }
-    },
+    ] : [
+      { field: 'quarterlySummary', headerName: 'QUARTERLY RESULTS (CLICK TO EXPAND)', width: 270, sortable: false, headerAlign: 'left' as const, align: 'left' as const,
+        renderHeader: () => (
+          <Box 
+            onClick={() => setExpandQuarters(true)} 
+            sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer', width: '100%', color: '#38bdf8', '&:hover': { color: '#7dd3fc' } }}
+          >
+            <span style={{ fontWeight: 700, fontSize: '0.72rem' }}>QUARTERLY RESULTS (Q1-Q4)</span>
+            <Chip label="CLICK TO EXPAND ►" size="small" sx={{ bgcolor: 'rgba(56, 189, 248, 0.22)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.4)', fontSize: '0.62rem', fontWeight: 800, height: '20px', cursor: 'pointer' }} />
+          </Box>
+        ),
+        renderCell: (p: GridRenderCellParams) => {
+          const rev = p.row?.q4Revenue;
+          const prof = p.row?.q4Profit;
+          const eps = p.row?.q4Eps;
+          return (
+            <Box 
+              onClick={() => setExpandQuarters(true)}
+              sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', cursor: 'pointer', py: 0.5, '&:hover': { opacity: 0.85 } }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#f8fafc' }}>
+                  Q4 EPS: {eps != null && !isNaN(eps) ? `₹${eps}` : '-'}
+                </Typography>
+                <Chip label="Expand 4 Qtrs ⛶" size="small" sx={{ height: '18px', fontSize: '0.62rem', bgcolor: '#1e293b', color: '#94a3b8', fontWeight: 600, cursor: 'pointer' }} />
+              </Box>
+              <Typography sx={{ fontSize: '0.72rem', color: '#64748b', mt: '3px' }}>
+                Latest Rev: {formatValCr(rev)} | Profit: {formatValCr(prof)}
+              </Typography>
+            </Box>
+          );
+        }
+      }
+    ]),
     { field: 'upcomingDate', headerName: 'REPORT DATE', width: 130, sortComparator: dateSortComparator,
-      renderCell: (p) => renderCenteredCell(p.value, '#94a3b8', 500, '0.78rem')
+      renderCell: (p: GridRenderCellParams) => renderCenteredCell(p.value, '#94a3b8', 500, '0.78rem')
     }
   ];
 

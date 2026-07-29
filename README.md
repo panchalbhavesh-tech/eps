@@ -2,6 +2,11 @@
 
 **QEPS** is an enterprise-grade quantitative analytics and institutional research platform for stocks listed on the National Stock Exchange of India (NSE). It features real-time historical financial statement extraction, quantitative event study modeling around earnings announcement dates, continuous number line timeline tracking with central release pivots, interactive normalized scorecard evaluations, and automated LLM analyst research report generation via Google Gemini.
 
+### ✨ New Institutional Analytics & Quantitative Features
+- **Multi-Factor Momentum & Attention Scanner (Phases 1–5)**: Evaluates NSE equities across 5 orthogonal factors (Fundamental Quality, Technical Breakouts, Market Regime Alignment via `^NSEI`, Smart Money Accumulation, and Derivatives Volatility). Automatically flags anomalous volume surges, volatility expansions, and imminent earnings catalysts for analyst attention.
+- **Machine Learning & AI Catalyst Pipelines**: Incorporates LightGBM/XGBoost for calibrated 5-day directional gain probability prediction ($P(\text{gain, 5d})$), SHAP attribution, PSI drift tracking, PCA sequence embeddings, and Gemini LLM qualitative news sentiment analysis.
+- **Intensive Strategy & Momentum Backtesting Engine**: Executes precision multi-year historical walk-forward backtests on real NSE data, applying an automated **0.20% round-trip Indian transaction cost reduction** (STT, Stamp Duty, Brokerage, GST, and Slippage). Reports accurate Expected Value (EV), Profit Factor, Sharpe/Sortino Ratios, and Nifty 50 Benchmark Alpha directly on an interactive UI dashboard modal and via automated Docker batch suites.
+
 ---
 
 ## 🚀 Universal Setup Guide (Windows, macOS, Linux, WSL)
@@ -95,6 +100,16 @@ If you install new packages in `requirements.txt` (Python) or `package.json` (No
 docker compose up --build -d
 ```
 
+### Running the Intensive Historical Backtest Suite in Docker
+To run batch quantitative strategy simulations and measure Sharpe ratios, win rates, and Nifty 50 alphas net of real-world Indian trading costs across your stock list:
+```bash
+# Execute a 3-year evaluation across up to 50 equities
+docker compose exec -T backend python run_backtest_suite.py --limit 50 --years 3
+
+# Export detailed simulation results to a JSON research report
+docker compose exec -T backend python run_backtest_suite.py --limit 100 --years 5 --export-json /app/reports/nifty_backtest_summary.json
+```
+
 ### Shutting Down the Project
 To stop all running services without deleting your database records:
 ```bash
@@ -109,5 +124,5 @@ docker compose down -v
 
 ## 📚 Further Architecture Documentation
 
-For deep dives into internal data structures, financial scorecard normalization algorithms, interactive click-only formulas, unified earnings pivot timelines, and Strawberry GraphQL schema designs, refer to our primary system specification:
+For deep dives into internal data structures, multi-factor momentum scoring models, ML gain calibration, financial scorecard normalization algorithms, interactive click-only formulas, unified earnings pivot timelines, and Strawberry GraphQL schema designs, refer to our primary system specification:
 📖 **[project.md](project.md)**

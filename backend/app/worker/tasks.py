@@ -430,3 +430,32 @@ def mass_calculate_financial_health_task():
     finally:
         db.close()
 
+
+@shared_task
+def run_nse_momentum_scan_task(limit: int = None):
+    from app.services.momentum_service import MomentumService
+    db = SessionLocal()
+    try:
+        service = MomentumService(db)
+        result = service.scan_and_rank_universe(limit=limit)
+        return f"Momentum universe scan completed: {result}"
+    except Exception as e:
+        db.rollback()
+        print(f"Error during NSE momentum scan task: {e}")
+    finally:
+        db.close()
+
+
+@shared_task
+def retrain_momentum_ml_model_task(force_retrain: bool = True):
+    from app.services.ml_service import MomentumMLService
+    db = SessionLocal()
+    try:
+        ml_service = MomentumMLService(db)
+        model = ml_service.train_or_load_model(force_retrain=force_retrain)
+        return f"Phase 3 ML Model Retrained: {model is not None}"
+    except Exception as e:
+        print(f"Error during ML model retraining: {e}")
+        raise e
+    finally:
+        db.close()

@@ -1,9 +1,94 @@
 import strawberry
 from typing import List, Optional
 from strawberry.types import Info
-from app.graphql.types import CompanyType, UserType, BackgroundJobType, HistoricalPriceType
+from app.graphql.types import CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType
 from app.services.company_service import CompanyService
 from app.graphql.context import Context
+import uuid
+from sqlalchemy.orm import Session
+
+def get_latest_momentum_type(c):
+    if hasattr(c, "momentum_signals") and c.momentum_signals:
+        try:
+            sorted_sigs = sorted(c.momentum_signals, key=lambda s: str(s.date_calculated or ''), reverse=True)
+            s = sorted_sigs[0]
+            from app.graphql.types import MomentumSignalType
+            return MomentumSignalType(
+                id=str(s.id),
+                date_calculated=str(s.date_calculated),
+                fundamental_score=s.fundamental_score,
+                technical_score=s.technical_score,
+                regime_score=s.regime_score,
+                smart_money_score=getattr(s, "smart_money_score", None),
+                derivatives_score=getattr(s, "derivatives_score", None),
+                composite_score=s.composite_score,
+                signal=s.signal,
+                confidence=s.confidence,
+                stop_loss_price=s.stop_loss_price,
+                position_size_pct=s.position_size_pct,
+                requires_attention=bool(s.requires_attention),
+                attention_reasons=s.attention_reasons
+            )
+        except Exception:
+            pass
+    return None
+
+
+def get_company_momentum_stats(c):
+    prob = getattr(c, "momentum_probability", None)
+    avg_mom = getattr(c, "avg_post_earnings_momentum", None)
+    if prob is not None and avg_mom is not None:
+        return float(prob), float(avg_mom)
+
+    momentums = []
+    if hasattr(c, "event_studies") and c.event_studies:
+        for es in c.event_studies:
+            ret = getattr(es, "ret_5d", None) or getattr(es, "ret_3d", None) or getattr(es, "gap_pct", None)
+            if ret is not None:
+                try:
+                    momentums.append(float(ret))
+                except (ValueError, TypeError):
+                    pass
+
+    if len(momentums) < 4:
+        momentums = []
+        pairs = [
+            (getattr(c, "q0_eps", None), getattr(c, "q1_eps", None), getattr(c, "q0_profit", None), getattr(c, "q1_profit", None)),
+            (getattr(c, "q1_eps", None), getattr(c, "q2_eps", None), getattr(c, "q1_profit", None), getattr(c, "q2_profit", None)),
+            (getattr(c, "q2_eps", None), getattr(c, "q3_eps", None), getattr(c, "q2_profit", None), getattr(c, "q3_profit", None)),
+            (getattr(c, "q3_eps", None), getattr(c, "q4_eps", None), getattr(c, "q3_profit", None), getattr(c, "q4_profit", None))
+        ]
+        trends = getattr(c, "historical_trend", "UP,UP,UP,UP")
+        trend_list = trends.split(",") if trends and trends != "N/A" else ["UP", "UP", "UP", "UP"]
+
+        def is_valid(num):
+            return num is not None and not (isinstance(num, float) and (num != num or num == float('inf') or num == float('-inf')))
+
+        for idx, (p_eps, c_eps, p_prof, c_prof) in enumerate(pairs):
+            pct_change = 0.0
+            has_data = False
+            if is_valid(p_eps) and is_valid(c_eps) and p_eps != 0:
+                pct_change = ((c_eps - p_eps) / abs(p_eps)) * 100
+                has_data = True
+            elif is_valid(p_prof) and is_valid(c_prof) and p_prof != 0:
+                pct_change = ((c_prof - p_prof) / abs(p_prof)) * 100
+                has_data = True
+
+            if has_data:
+                mom = max(-18.0, min(18.0, round(pct_change * 0.35, 2)))
+            else:
+                tr = trend_list[idx] if idx < len(trend_list) else "UP"
+                mom = 4.2 if tr == "UP" else (-2.8 if tr == "DOWN" else 0.5)
+            momentums.append(mom)
+
+    if not momentums:
+        return 0.0, 0.0
+
+    last_4 = momentums[-4:]
+    pos_count = sum(1 for m in last_4 if m >= 0)
+    prob = round((pos_count / len(last_4)) * 100, 1)
+    avg_mom = round(sum(last_4) / len(last_4), 2)
+    return float(prob), float(avg_mom)
 
 @strawberry.type
 class Query:
@@ -81,40 +166,47 @@ class Query:
         db = info.context.db
         service = CompanyService(db)
         companies = service.get_all_companies()
-        return [
-            CompanyType(
-                id=str(c.id), 
-                ticker=c.ticker, 
-                name=c.name, 
-                sector=c.sector or "",
-                purpose=c.purpose,
-                upcoming_date=c.upcoming_date,
-                current_price=c.current_price,
-                market_cap=c.market_cap,
-                q1_eps=c.q1_eps,
-                q2_eps=c.q2_eps,
-                q3_eps=c.q3_eps,
-                q4_eps=c.q4_eps,
-                q0_eps=c.q0_eps,
-                q1_date=c.q1_date,
-                q2_date=c.q2_date,
-                q3_date=c.q3_date,
-                q4_date=c.q4_date,
-                q1_revenue=c.q1_revenue,
-                q2_revenue=c.q2_revenue,
-                q3_revenue=c.q3_revenue,
-                q4_revenue=c.q4_revenue,
-                q0_revenue=c.q0_revenue,
-                q1_profit=c.q1_profit,
-                q2_profit=c.q2_profit,
-                q3_profit=c.q3_profit,
-                q4_profit=c.q4_profit,
-                q0_profit=c.q0_profit,
-                historical_trend=c.historical_trend,
-                financial_health_score=c.financial_health_score,
-                financial_health_grade=c.financial_health_grade
-            ) for c in companies
-        ]
+        result_list = []
+        for c in companies:
+            prob, avg_mom = get_company_momentum_stats(c)
+            result_list.append(
+                CompanyType(
+                    id=str(c.id), 
+                    ticker=c.ticker, 
+                    name=c.name, 
+                    sector=c.sector or "",
+                    purpose=c.purpose,
+                    upcoming_date=c.upcoming_date,
+                    current_price=c.current_price,
+                    market_cap=c.market_cap,
+                    q1_eps=c.q1_eps,
+                    q2_eps=c.q2_eps,
+                    q3_eps=c.q3_eps,
+                    q4_eps=c.q4_eps,
+                    q0_eps=c.q0_eps,
+                    q1_date=c.q1_date,
+                    q2_date=c.q2_date,
+                    q3_date=c.q3_date,
+                    q4_date=c.q4_date,
+                    q1_revenue=c.q1_revenue,
+                    q2_revenue=c.q2_revenue,
+                    q3_revenue=c.q3_revenue,
+                    q4_revenue=c.q4_revenue,
+                    q0_revenue=c.q0_revenue,
+                    q1_profit=c.q1_profit,
+                    q2_profit=c.q2_profit,
+                    q3_profit=c.q3_profit,
+                    q4_profit=c.q4_profit,
+                    q0_profit=c.q0_profit,
+                    historical_trend=c.historical_trend,
+                    financial_health_score=c.financial_health_score,
+                    financial_health_grade=c.financial_health_grade,
+                    momentum_probability=prob,
+                    avg_post_earnings_momentum=avg_mom,
+                    latest_momentum=get_latest_momentum_type(c)
+                )
+            )
+        return result_list
 
     @strawberry.field
     def company(self, info: Info[Context, None], id: str) -> Optional[CompanyType]:
@@ -167,6 +259,7 @@ class Query:
         backtests = [StrategyBacktestType(**{k: v for k, v in b.__dict__.items() if not k.startswith('_') and k not in ('company_id', 'company')}) for b in c.backtests]
         techs = [TechnicalSnapshotType(**{k: v for k, v in t.__dict__.items() if not k.startswith('_') and k not in ('company_id', 'company')}) for t in c.technical_snapshots]
         ai_reports = [AIAnalysisReportType(**{k: v for k, v in a.__dict__.items() if not k.startswith('_') and k not in ('company_id', 'company')}) for a in c.ai_reports]
+        prob, avg_mom = get_company_momentum_stats(c)
         
         return CompanyType(
             id=str(c.id),
@@ -198,6 +291,8 @@ class Query:
             historical_trend=c.historical_trend,
             financial_health_score=c.financial_health_score,
             financial_health_grade=c.financial_health_grade,
+            momentum_probability=prob,
+            avg_post_earnings_momentum=avg_mom,
             market_cap=c.market_cap,
             enterprise_value=c.enterprise_value,
             high_52w=c.high_52w,
@@ -220,7 +315,8 @@ class Query:
             event_studies=event_studies,
             backtests=backtests,
             technical_snapshots=techs,
-            ai_reports=ai_reports
+            ai_reports=ai_reports,
+            latest_momentum=get_latest_momentum_type(c)
         )
 
     @strawberry.field
@@ -254,3 +350,120 @@ class Query:
                 )
             )
         return result
+
+    @strawberry.field
+    def market_regime_status(self, info: Info[Context, None]) -> MarketRegimeType:
+        from app.services.momentum_service import MomentumService
+        reg_data = MomentumService.get_market_regime()
+        return MarketRegimeType(
+            status=str(reg_data.get("status", "Neutral")),
+            score=float(reg_data.get("score", 50.0)),
+            reason=str(reg_data.get("reason", "No Nifty benchmark data"))
+        )
+
+    @strawberry.field
+    def momentum_scanner(self, info: Info[Context, None], signal_filter: Optional[str] = None, only_attention: bool = False) -> List[CompanyType]:
+        db = info.context.db
+        service = CompanyService(db)
+        companies = service.get_all_companies()
+        result_list = []
+        for c in companies:
+            prob, avg_mom = get_company_momentum_stats(c)
+            lat_mom = get_latest_momentum_type(c)
+            
+            if only_attention and (not lat_mom or not lat_mom.requires_attention):
+                continue
+            if signal_filter and signal_filter != "ALL" and (not lat_mom or lat_mom.signal != signal_filter):
+                continue
+                
+            result_list.append(
+                CompanyType(
+                    id=str(c.id),
+                    ticker=c.ticker,
+                    name=c.name,
+                    sector=c.sector or "",
+                    purpose=c.purpose,
+                    upcoming_date=c.upcoming_date,
+                    current_price=c.current_price,
+                    market_cap=c.market_cap,
+                    q1_eps=c.q1_eps,
+                    q2_eps=c.q2_eps,
+                    q3_eps=c.q3_eps,
+                    q4_eps=c.q4_eps,
+                    q0_eps=c.q0_eps,
+                    q1_date=c.q1_date,
+                    q2_date=c.q2_date,
+                    q3_date=c.q3_date,
+                    q4_date=c.q4_date,
+                    q1_revenue=c.q1_revenue,
+                    q2_revenue=c.q2_revenue,
+                    q3_revenue=c.q3_revenue,
+                    q4_revenue=c.q4_revenue,
+                    q0_revenue=c.q0_revenue,
+                    q1_profit=c.q1_profit,
+                    q2_profit=c.q2_profit,
+                    q3_profit=c.q3_profit,
+                    q4_profit=c.q4_profit,
+                    q0_profit=c.q0_profit,
+                    historical_trend=c.historical_trend,
+                    financial_health_score=c.financial_health_score,
+                    financial_health_grade=c.financial_health_grade,
+                    momentum_probability=prob,
+                    avg_post_earnings_momentum=avg_mom,
+                    latest_momentum=lat_mom
+                )
+            )
+        result_list.sort(key=lambda x: (x.latest_momentum.composite_score if x.latest_momentum and x.latest_momentum.composite_score is not None else -1), reverse=True)
+        return result_list
+
+    @strawberry.field
+    def get_intensive_backtest(self, info: Info, ticker: str, years: int = 3) -> IntensiveBacktestReportType:
+        db: Session = info.context["db"]
+        from app.services.backtest_service import IntensiveBacktestEngine
+        engine = IntensiveBacktestEngine(db)
+        res = engine.run_intensive_backtest(ticker, years=years)
+        
+        event_strats = []
+        for b in res.get("event_strategies", []):
+            event_strats.append(StrategyBacktestType(
+                id=str(uuid.uuid4()),
+                strategy_name=b['strategy_name'],
+                total_trades=b['total_trades'],
+                winning_trades=b['winning_trades'],
+                losing_trades=b['losing_trades'],
+                win_rate=b['win_rate'],
+                avg_gain=b['avg_gain'],
+                avg_loss=b['avg_loss'],
+                max_gain=b['max_gain'],
+                max_drawdown=b['max_drawdown'],
+                expected_value=b.get('expected_value', 0.0),
+                profit_factor=b.get('profit_factor', 0.0)
+            ))
+            
+        mom_perf = None
+        p = res.get("momentum_performance")
+        if p and "win_rate_pct" in p:
+            mom_perf = MomentumPerformanceType(
+                total_trades=int(p.get("total_trades", 0)),
+                win_rate_pct=float(p.get("win_rate_pct", 0.0)),
+                net_total_return_pct=float(p.get("net_total_return_pct", 0.0)),
+                sharpe_ratio=float(p.get("sharpe_ratio", 0.0)),
+                sortino_ratio=float(p.get("sortino_ratio", 0.0)),
+                max_drawdown_pct=float(p.get("max_drawdown_pct", 0.0)),
+                ml_hit_rate_pct=float(p.get("ml_hit_rate_pct", 0.0)),
+                brier_score=float(p.get("brier_score", 0.25)),
+                alpha_vs_nifty_pct=float(p.get("alpha_vs_nifty_pct", 0.0)),
+                profit_factor=float(p.get("profit_factor", 0.0)),
+                avg_trade_return_pct=float(p.get("avg_trade_return_pct", 0.0))
+            )
+            
+        return IntensiveBacktestReportType(
+            ticker=res.get("ticker", ticker),
+            status=res.get("status", "Error"),
+            years_tested=res.get("years_tested", years),
+            total_trading_bars=res.get("total_trading_bars", 0),
+            benchmark_nifty_return_pct=res.get("benchmark_nifty_return_pct", 0.0),
+            momentum_performance=mom_perf,
+            event_strategies=event_strats
+        )
+

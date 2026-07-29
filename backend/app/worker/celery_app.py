@@ -21,6 +21,14 @@ celery_app.conf.update(
             'task': 'app.worker.tasks.sync_nse_calendar_task',
             'schedule': 86400.0, # Every 24 hours
         },
+        'scan-nse-momentum-daily': {
+            'task': 'app.worker.tasks.run_nse_momentum_scan_task',
+            'schedule': 86400.0, # Every 24 hours post-market
+        },
+        'retrain-momentum-ml-model-weekly': {
+            'task': 'app.worker.tasks.retrain_momentum_ml_model_task',
+            'schedule': 604800.0, # Weekly scheduled walk-forward model retraining
+        },
     }
 )
 

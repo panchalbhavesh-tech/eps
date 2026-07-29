@@ -47,6 +47,8 @@ class Company(Base):
     historical_trend = Column(String, nullable=True)
     financial_health_score = Column(Float, nullable=True)
     financial_health_grade = Column(String, nullable=True)
+    momentum_probability = Column(Float, nullable=True)
+    avg_post_earnings_momentum = Column(Float, nullable=True)
     
     # Fundamental Snapshot
     market_cap = Column(Float, nullable=True)
@@ -73,6 +75,7 @@ class Company(Base):
     backtests = relationship("StrategyBacktest", back_populates="company", cascade="all, delete-orphan")
     technical_snapshots = relationship("TechnicalSnapshot", back_populates="company", cascade="all, delete-orphan")
     ai_reports = relationship("AIAnalysisReport", back_populates="company", cascade="all, delete-orphan")
+    momentum_signals = relationship("MomentumSignal", back_populates="company", cascade="all, delete-orphan")
 
 class EarningsReport(Base):
     __tablename__ = "earnings_reports"
@@ -195,4 +198,23 @@ class BackgroundJob(Base):
     finished_at = Column(DateTime, nullable=True)
     result = Column(String, nullable=True)
     error_message = Column(String, nullable=True)
+
+class MomentumSignal(Base):
+    __tablename__ = "momentum_signals"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
+    date_calculated = Column(DateTime, default=datetime.utcnow)
+    fundamental_score = Column(Float, nullable=True)
+    technical_score = Column(Float, nullable=True)
+    regime_score = Column(Float, nullable=True)
+    smart_money_score = Column(Float, nullable=True)
+    derivatives_score = Column(Float, nullable=True)
+    composite_score = Column(Float, nullable=True)
+    signal = Column(String, nullable=True)
+    confidence = Column(Float, nullable=True)
+    stop_loss_price = Column(Float, nullable=True)
+    position_size_pct = Column(Float, nullable=True)
+    requires_attention = Column(Boolean, default=False)
+    attention_reasons = Column(String, nullable=True)
+    company = relationship("Company", back_populates="momentum_signals")
 

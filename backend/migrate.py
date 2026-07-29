@@ -38,6 +38,8 @@ def upgrade_db():
         ("predictions", "historical_trend", "VARCHAR"),
         ("companies", "financial_health_score", "FLOAT"),
         ("companies", "financial_health_grade", "VARCHAR"),
+        ("companies", "momentum_probability", "FLOAT"),
+        ("companies", "avg_post_earnings_momentum", "FLOAT"),
     ]
 
     for table, column, datatype in columns_to_add:
@@ -48,6 +50,42 @@ def upgrade_db():
             print(f"Column {column} already exists in {table}, skipping.")
         except Exception as e:
             print(f"Error adding {column} to {table}: {e}")
+
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS momentum_signals (
+                id UUID PRIMARY KEY,
+                company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+                date_calculated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                fundamental_score FLOAT,
+                technical_score FLOAT,
+                regime_score FLOAT,
+                smart_money_score FLOAT,
+                derivatives_score FLOAT,
+                composite_score FLOAT,
+                signal VARCHAR(50),
+                confidence FLOAT,
+                stop_loss_price FLOAT,
+                position_size_pct FLOAT,
+                requires_attention BOOLEAN DEFAULT FALSE,
+                attention_reasons VARCHAR(1000)
+            );
+        """)
+        print("Ensured momentum_signals table exists.")
+    except Exception as e:
+        print(f"Error creating momentum_signals table: {e}")
+
+    # Ensure Phase 2 columns exist on momentum_signals
+    for col_name, col_type in [("smart_money_score", "FLOAT"), ("derivatives_score", "FLOAT")]:
+        try:
+            cursor.execute(f"ALTER TABLE momentum_signals ADD COLUMN {col_name} {col_type};")
+            print(f"Added {col_name} to momentum_signals.")
+        except psycopg2.errors.DuplicateColumn:
+            conn.rollback()
+            print(f"Column {col_name} already exists in momentum_signals, skipping.")
+        except Exception as e:
+            conn.rollback()
+            print(f"Error adding {col_name} to momentum_signals: {e}")
 
     cursor.close()
     conn.close()

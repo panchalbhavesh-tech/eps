@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Box, Drawer, AppBar, Toolbar, List, Typography, Divider, ListItem, ListItemButton, ListItemIcon, ListItemText, IconButton, Tooltip } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
-import BusinessIcon from '@mui/icons-material/Business';
 import ManageHistoryIcon from '@mui/icons-material/ManageHistory';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
@@ -23,6 +23,7 @@ const Layout: React.FC = () => {
 
   const menuItems = [
     { text: 'Home', icon: <DashboardIcon />, path: '/' },
+    { text: 'Momentum & Attention', icon: <TrendingUpIcon />, path: '/momentum' },
     { text: 'Processes', icon: <ManageHistoryIcon />, path: '/tasks' },
   ];
 

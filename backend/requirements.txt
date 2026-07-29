@@ -19,3 +19,7 @@ requests
 python-dateutil
 yfinance
 lxml
+scikit-learn
+lightgbm
+xgboost
+shap

@@ -123,6 +123,29 @@ class AIAnalysisReportType:
     overall_rating: Optional[str] = None
     
 @strawberry.type
+class MomentumSignalType:
+    id: str
+    date_calculated: str
+    fundamental_score: Optional[float] = None
+    technical_score: Optional[float] = None
+    regime_score: Optional[float] = None
+    smart_money_score: Optional[float] = None
+    derivatives_score: Optional[float] = None
+    composite_score: Optional[float] = None
+    signal: Optional[str] = None
+    confidence: Optional[float] = None
+    stop_loss_price: Optional[float] = None
+    position_size_pct: Optional[float] = None
+    requires_attention: bool = False
+    attention_reasons: Optional[str] = None
+
+@strawberry.type
+class MarketRegimeType:
+    status: str
+    score: float
+    reason: str
+
+@strawberry.type
 class CompanyType:
     id: str
     ticker: str
@@ -153,6 +176,8 @@ class CompanyType:
     historical_trend: Optional[str] = None
     financial_health_score: Optional[float] = None
     financial_health_grade: Optional[str] = None
+    momentum_probability: Optional[float] = None
+    avg_post_earnings_momentum: Optional[float] = None
     
     # Fundamental Snapshot
     market_cap: Optional[float] = None
@@ -179,9 +204,34 @@ class CompanyType:
     backtests: Optional[List[StrategyBacktestType]] = None
     technical_snapshots: Optional[List[TechnicalSnapshotType]] = None
     ai_reports: Optional[List[AIAnalysisReportType]] = None
+    latest_momentum: Optional[MomentumSignalType] = None
 
 @strawberry.type
 class AuthPayload:
     access_token: str
     token_type: str
     user: UserType
+
+@strawberry.type
+class MomentumPerformanceType:
+    total_trades: int
+    win_rate_pct: float
+    net_total_return_pct: float
+    sharpe_ratio: float
+    sortino_ratio: float
+    max_drawdown_pct: float
+    ml_hit_rate_pct: float
+    brier_score: float
+    alpha_vs_nifty_pct: float
+    profit_factor: float
+    avg_trade_return_pct: Optional[float] = 0.0
+
+@strawberry.type
+class IntensiveBacktestReportType:
+    ticker: str
+    status: str
+    years_tested: int
+    total_trading_bars: int
+    benchmark_nifty_return_pct: float
+    momentum_performance: Optional[MomentumPerformanceType] = None
+    event_strategies: Optional[List[StrategyBacktestType]] = None

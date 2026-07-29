@@ -10,7 +10,7 @@ class QuantService:
 
     def fetch_historical_ohlcv(self, ticker: str, years: int = 5) -> pd.DataFrame:
         symbols_to_try = []
-        if ticker.endswith(".NS") or ticker.endswith(".BO"):
+        if ticker.startswith("^") or ticker.endswith(".NS") or ticker.endswith(".BO"):
             symbols_to_try.append(ticker)
         else:
             symbols_to_try.extend([f"{ticker}.NS", f"{ticker}.BO", ticker])
@@ -196,8 +196,8 @@ class QuantService:
             if gap_pct > 2:
                 if iloc_idx + 20 < len(df):
                     entry = e_day['Close']
-                    exit = df.iloc[iloc_idx + 20]['Close']
-                    ret = ((exit - entry) / entry) * 100
+                    exit_val = df.iloc[iloc_idx + 20]['Close']
+                    ret = (((exit_val - entry) / entry) * 100.0) - 0.20 # Net of 0.20% Indian STT/brokerage friction
                     strategies['A']['trades'].append(ret)
                     if ret > 0: strategies['A']['win'] += 1
                     else: strategies['A']['loss'] += 1
@@ -206,8 +206,8 @@ class QuantService:
             if gap_pct > 5:
                 if iloc_idx + 3 < len(df):
                     entry = e_day['Close']
-                    exit = df.iloc[iloc_idx + 3]['Close']
-                    ret = ((entry - exit) / entry) * 100 # Short position
+                    exit_val = df.iloc[iloc_idx + 3]['Close']
+                    ret = (((entry - exit_val) / entry) * 100.0) - 0.20 # Short position net of friction
                     strategies['B']['trades'].append(ret)
                     if ret > 0: strategies['B']['win'] += 1
                     else: strategies['B']['loss'] += 1
@@ -216,8 +216,8 @@ class QuantService:
             if e_day['Volume'] > (e_day['Vol_20d_avg'] * 2):
                 if iloc_idx + 10 < len(df):
                     entry = e_day['Close']
-                    exit = df.iloc[iloc_idx + 10]['Close']
-                    ret = ((exit - entry) / entry) * 100
+                    exit_val = df.iloc[iloc_idx + 10]['Close']
+                    ret = (((exit_val - entry) / entry) * 100.0) - 0.20
                     strategies['C']['trades'].append(ret)
                     if ret > 0: strategies['C']['win'] += 1
                     else: strategies['C']['loss'] += 1
@@ -230,8 +230,8 @@ class QuantService:
                     if iloc_idx + 6 < len(df): # next day + 5 days
                         next_day = df.iloc[iloc_idx + 1]
                         entry = next_day['Open']
-                        exit = df.iloc[iloc_idx + 6]['Close']
-                        ret = ((exit - entry) / entry) * 100
+                        exit_val = df.iloc[iloc_idx + 6]['Close']
+                        ret = (((exit_val - entry) / entry) * 100.0) - 0.20
                         strategies['D']['trades'].append(ret)
                         if ret > 0: strategies['D']['win'] += 1
                         else: strategies['D']['loss'] += 1
@@ -240,8 +240,8 @@ class QuantService:
             if iloc_idx >= 10:
                 entry_day = df.iloc[iloc_idx - 10]
                 entry = entry_day['Close']
-                exit = prev_day['Close']
-                ret = ((exit - entry) / entry) * 100
+                exit_val = prev_day['Close']
+                ret = (((exit_val - entry) / entry) * 100.0) - 0.20
                 strategies['E']['trades'].append(ret)
                 if ret > 0: strategies['E']['win'] += 1
                 else: strategies['E']['loss'] += 1
@@ -250,40 +250,48 @@ class QuantService:
             if gap_pct < -2 and e_day['Close'] > e_day['Open']:
                 if iloc_idx + 5 < len(df):
                     entry = e_day['Close']
-                    exit = df.iloc[iloc_idx + 5]['Close']
-                    ret = ((exit - entry) / entry) * 100
+                    exit_val = df.iloc[iloc_idx + 5]['Close']
+                    ret = (((exit_val - entry) / entry) * 100.0) - 0.20
                     strategies['F']['trades'].append(ret)
                     if ret > 0: strategies['F']['win'] += 1
                     else: strategies['F']['loss'] += 1
 
-        # Format results
+        # Format results with precision financial metrics
         results = []
         for s_name, data in strategies.items():
             total_trades = len(data['trades'])
             if total_trades == 0:
                 continue
                 
-            win_rate = (data['win'] / total_trades) * 100
+            win_rate = (data['win'] / total_trades) * 100.0
             winning_trades = [r for r in data['trades'] if r > 0]
             losing_trades = [r for r in data['trades'] if r <= 0]
             
-            avg_gain = sum(winning_trades) / len(winning_trades) if winning_trades else 0
-            avg_loss = sum(losing_trades) / len(losing_trades) if losing_trades else 0
-            max_gain = max(data['trades']) if data['trades'] else 0
-            max_drawdown = min(data['trades']) if data['trades'] else 0
+            avg_gain = sum(winning_trades) / len(winning_trades) if winning_trades else 0.0
+            avg_loss = sum(losing_trades) / len(losing_trades) if losing_trades else 0.0
+            max_gain = max(data['trades']) if data['trades'] else 0.0
+            max_drawdown = min(data['trades']) if data['trades'] else 0.0
+            
+            # Expected Value (EV) per trade in %
+            ev = ((win_rate / 100.0) * avg_gain) + ((1.0 - (win_rate / 100.0)) * avg_loss)
+            
+            # Profit Factor (Total Gains / Total Losses)
+            sum_win = sum(winning_trades)
+            sum_loss = abs(sum(losing_trades))
+            pf = sum_win / sum_loss if sum_loss > 0.0001 else (99.0 if sum_win > 0 else 0.0)
             
             results.append({
                 "strategy_name": s_name,
                 "total_trades": total_trades,
                 "winning_trades": data['win'],
                 "losing_trades": data['loss'],
-                "win_rate": float(win_rate),
-                "avg_gain": float(avg_gain),
-                "avg_loss": float(avg_loss),
-                "max_gain": float(max_gain),
-                "max_drawdown": float(max_drawdown),
-                "expected_value": 0.0,
-                "profit_factor": 0.0
+                "win_rate": round(float(win_rate), 2),
+                "avg_gain": round(float(avg_gain), 2),
+                "avg_loss": round(float(avg_loss), 2),
+                "max_gain": round(float(max_gain), 2),
+                "max_drawdown": round(float(max_drawdown), 2),
+                "expected_value": round(float(ev), 2),
+                "profit_factor": round(float(pf), 2)
             })
             
         return results

@@ -61,7 +61,8 @@ The platform implements a containerized microservices-inspired architecture orch
 - **Database & Migrations**: SQLAlchemy 2.0 Core/ORM paired with PostgreSQL and Alembic database migrations.
 - **Task Orchestration**: Celery distributed task queue connected to Redis and Postgres result backend.
 - **Data Engineering & Finance**: `pandas`, `pandas-ta`, `numpy`, `yfinance` (Yahoo Finance extraction engine), custom NSE website web scrapers (`NSEService`).
-- **Artificial Intelligence**: Google Gemini API via `AIAnalystService` structured prompting for equity institutional evaluation.
+- **Machine Learning & Predictive Modeling**: `lightgbm`, `xgboost`, `scikit-learn`, `shap` (SHapley Additive exPlanations) for probability calibration, feature attribution, Purged Walk-Forward Cross-Validation, and PCA trajectory compression.
+- **Artificial Intelligence**: Google Gemini API via `AIAnalystService` structured prompting for institutional evaluation and catalyst sentiment scoring.
 - **Security & Authentication**: JSON Web Tokens (JWT) via `python-jose` and cryptographic hashing with `bcrypt`.
 
 ---
@@ -89,6 +90,17 @@ A dedicated visualization module designed to perform event studies around offici
 - **Responsive Window Switcher**: Low-profile tab selectors allow users to switch seamlessly between a compact **7 Days Window** (15 total nodes fitting cleanly without horizontal scrolling) and an extended **1 Month Window** (up to 45 nodes across an interactive timeline).
 - **Inline Financial Statement Summaries**: Pairs every quarterly timeline (Q1-Q4) with condensed Total Revenue, Net Profit, and Diluted EPS comparison cards (`vs ₹... prior`).
 
+### 4.4 Multi-Factor Momentum & Attention Scanner (`MomentumTracker.tsx`)
+A real-time institutional quantitative scanner engineered to rank the entire NSE equities universe across five orthogonal alpha dimensions:
+- **Five-Pillar Composite Score (T / F / SM / D / Regime)**: Normalizes and blends **Technical Strength** (breakout velocity vs SMA200/DMA50), **Fundamental Quality** (ROE & debt efficiency), **Smart Money Accumulation** (relative volume expansion and block order flows), **Derivatives Structure** (volatility dynamics), and **Market Regime Alignment** (`^NSEI` index structural health) into a continuous 100-point index.
+- **Automated Anomaly Attention Trigger**: Immediately flags equities for urgent analyst intervention when anomaly criteria are satisfied (e.g., daily volume exceeding $2\times$ the 20-day average, sudden volatility expansion, imminent earnings fixture within $\le 7$ days, or trend divergence).
+- **Embedded ML Probability & AI Sentiment (Phases 3–5)**: Incorporates calibrated 5-day directional gain probabilities ($P(\text{gain, 5d})$) from our LightGBM/XGBoost engine, SHAP feature attribution logs, and real-time news catalyst sentiment scores via Google Gemini LLM synthesis.
+
+### 4.5 Intensive Strategy & Momentum Backtesting Engine (`IntensiveBacktestEngine`)
+An interactive quantitative simulation module directly accessible from the momentum grid via a dark glassmorphic report modal:
+- **Net-of-Friction Accuracy Calculation**: Automatically subtracts a **0.20% round-trip transaction friction deduction** (accounting for Indian Securities Transaction Tax, Stamp Duty, GST, brokerage fees, and execution impact cost) from every simulated trade return, guaranteeing realistic edge reporting.
+- **Executive Portfolio Analytics**: Computes strict **Net Win Rates**, **Expected Value (EV)** per trade ($\text{EV} = (\text{Win Rate} \times \text{Avg Gain}) + (\text{Loss Rate} \times \text{Avg Loss})$), **Profit Factor** ($\frac{\sum \text{Winning Gains}}{|\sum \text{Losing Losses}|}$), **Sharpe/Sortino Ratios**, and **Nifty 50 Alpha (%)** across customizable 1-Year, 3-Year, and 5-Year historical windows.
+
 ---
 
 ## 5. Backend Task Workflow & Processing Pipelines
@@ -111,6 +123,16 @@ Dispatched when a user requests an comprehensive individual stock audit:
 - **Quantitative Engine (`QuantService`)**: Ingests 5 years of daily OHLCV trading logs. Calculates advanced momentum vectors (MACD, RSI, ADX), moving average convergence, support/resistance levels, intraday price gaps, and forward cumulative return expectations across 1, 3, 5, 10, 20, and 30-day horizons.
 - **Qualitative LLM Synthesis (`AIAnalystService`)**: Passes the processed algorithmic metrics into **Google Gemini**, prompting it as an Institutional Senior Quant Analyst to generate an authoritative 11-section markdown research document complete with explicit risk warnings and execution strategies.
 
+### 5.5 Automated Weekly ML Retraining & Calibration (`retrain_momentum_ml_model`)
+Executed as a weekly background cron job by Celery Beat:
+- Re-fits our LightGBM gradient booster across trailing historical OHLCV features using Purged Walk-Forward Cross-Validation.
+- Tracks Population Stability Index (PSI) drift across data distributions and updates model hyperparameters and PCA sequence trajectory compression weights.
+
+### 5.6 Intensive Historical Backtest CLI Suite (`run_backtest_suite.py`)
+A containerized batch simulation script designed for large-scale multi-year historical accuracy sweeps across NSE constituents:
+- Invokable inside Docker via `docker compose exec -T backend python run_backtest_suite.py --limit 50 --years 3`.
+- Outputs an executive ASCII table directly to the console detailing trade counts, win rates, Sharpe ratios, profit factors, and benchmark Nifty 50 alpha, while exporting detailed JSON research logs to disk.
+
 ---
 
 ## 6. Database Schema Core Entities
@@ -120,9 +142,10 @@ Dispatched when a user requests an comprehensive individual stock audit:
 - `EarningsReport`: Historical ledger of past quarterly earnings events.
 - `Prediction`: Directional confidence scoring and statistical probability estimates.
 - `EventStudyResult`: Holds empirical backtested performance metrics (Pre-announcement drift %, announcement gap %, post-announcement return trajectories).
-- `StrategyBacktest`: Logs algorithmic trading simulations, win-rate expectancy, drawdown profiles, and total trades executed.
+- `StrategyBacktest`: Logs quantitative event strategies (A–F) and rolling momentum simulations, recording exact win rates, expected values, profit factors, drawdown profiles, and total net trades executed.
+- `MomentumSignal`: Persists multi-factor composite ranks (Technical, Fundamental, Smart Money, Derivatives, Regime), ML gain probability calibrations ($P(\text{gain, 5d})$), volatility stop losses, and attention anomaly flags.
 - `TechnicalSnapshot`: Point-in-time snapshot of technical trading indicator oscillators.
-- `AIAnalysisReport`: Persisted storage for LLM-generated qualitative analytical narratives and markdown commentary.
+- `AIAnalysisReport`: Persisted storage for LLM-generated qualitative analytical narratives, news catalyst sentiments, and markdown commentary.
 
 ---
 
@@ -165,4 +188,4 @@ When extending backend models or adding new analytical fields:
 ---
 
 ## 8. Git Maintenance & Branch Status
-The local repository is connected to the upstream remote `origin` (`main` branch). All UI/UX density refinements, interactive click-only tooltip behaviors, unified earnings pivot number lines, and Celery task optimizations have been validated against the containerized test suite and incorporated into the active deployment branch.
+The local repository is connected to the upstream remote `origin` (`main` branch). All UI/UX density refinements, interactive click-only tooltip behaviors, unified earnings pivot number lines, Multi-Factor Momentum & Attention Scanners (Phases 1–5), ML gain calibration pipelines, and the Intensive Net-of-Costs Strategy Backtesting Suite have been validated against the containerized test suite and incorporated into the active deployment branch.

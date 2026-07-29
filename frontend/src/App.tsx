@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import Home from './pages/Home'
 import CompanyDetail from './pages/CompanyDetail'
 import TaskManager from './pages/TaskManager'
+import MomentumTracker from './pages/MomentumTracker'
 
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
   const { user, loading } = useAuth();
@@ -25,6 +26,7 @@ function App() {
           </ProtectedRoute>
         }>
           <Route index element={<Home />} />
+          <Route path="momentum" element={<MomentumTracker />} />
           <Route path="companies/:id" element={<CompanyDetail />} />
           <Route path="tasks" element={<TaskManager />} />
         </Route>
