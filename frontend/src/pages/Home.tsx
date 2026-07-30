@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import { Typography, Box, CircularProgress, Chip, IconButton, InputBase, Tooltip, Grid, Card, CardContent, Button } from '@mui/material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
-import { useNavigate } from 'react-router-dom';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import SearchIcon from '@mui/icons-material/Search';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
+import { MetricCard, FilterChipGroup } from '../components/common';
+import { saasTokens } from '../theme/theme';
 
 const GET_COMPANIES = gql`
   query GetCompanies {
@@ -53,7 +54,7 @@ const formatValCr = (val: number | null | undefined) => {
   return `${inCr < 0 ? '-' : ''}₹${Math.abs(inCr).toFixed(1)} Cr`;
 };
 
-const renderCenteredCell = (text: React.ReactNode, color = '#e2e8f0', fontWeight = 500, fontSize = '0.78rem') => (
+const renderCenteredCell = (text: React.ReactNode, color = saasTokens.text.primary, fontWeight = 500, fontSize = '0.78rem') => (
   <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', py: 0.5 }}>
     <Typography noWrap sx={{ fontSize, fontWeight, color }}>{text}</Typography>
   </Box>
@@ -68,7 +69,7 @@ const renderClubbedQuarterCell = (
   if (currRev == null && currProfit == null && currEps == null) {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', py: 0.5 }}>
-        <Typography sx={{ fontSize: '0.75rem', color: '#64748b' }}>-</Typography>
+        <Typography sx={{ fontSize: '0.75rem', color: saasTokens.text.secondary }}>-</Typography>
       </Box>
     );
   }
@@ -82,7 +83,7 @@ const renderClubbedQuarterCell = (
       if (!isNaN(pct) && isFinite(pct)) {
         const isPositive = pct >= 0;
         const arrow = isPositive ? '▲' : '▼';
-        const color = isPositive ? '#4ade80' : '#f87171';
+        const color = isPositive ? '#059669' : '#e11d48';
         pctEl = (
           <Box component="span" sx={{ color, fontWeight: 700, fontSize: '0.7rem', display: 'inline-flex', alignItems: 'center', ml: '6px', whiteSpace: 'nowrap' }}>
             <span style={{ fontSize: '0.55rem', marginRight: '2px' }}>{arrow}</span>
@@ -99,13 +100,13 @@ const renderClubbedQuarterCell = (
         justifyContent: 'space-between', 
         width: '100%', 
         py: '2px', 
-        borderBottom: '1px solid rgba(255, 255, 255, 0.05)' 
+        borderBottom: `1px solid ${saasTokens.border.main}` 
       }}>
-        <Typography component="span" sx={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 500, flexShrink: 0 }}>
+        <Typography component="span" sx={{ fontSize: '0.72rem', color: saasTokens.text.secondary, fontWeight: 500, flexShrink: 0 }}>
           {label}:
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', ml: 1, overflow: 'hidden' }}>
-          <Typography component="span" noWrap sx={{ fontSize: '0.78rem', color: '#f8fafc', fontWeight: 700 }}>
+          <Typography component="span" noWrap sx={{ fontSize: '0.78rem', color: saasTokens.text.primary, fontWeight: 700 }}>
             {valText}
           </Typography>
           {pctEl}
@@ -134,9 +135,9 @@ const renderClubbedQuarterCell = (
     isUp = trendOverride === 'UP';
   }
 
-  const badgeBg = isUp ? 'rgba(20, 83, 45, 0.45)' : 'rgba(127, 29, 29, 0.45)';
-  const badgeColor = isUp ? '#4ade80' : '#f87171';
-  const badgeBorder = isUp ? '1px solid #16a34a' : '1px solid #dc2626';
+  const badgeBg = isUp ? '#ecfdf5' : '#fff1f2';
+  const badgeColor = isUp ? '#059669' : '#e11d48';
+  const badgeBorder = isUp ? '1px solid #6ee7b7' : '1px solid #fda4af';
   const arrow = isUp ? '▲' : '▼';
 
   return (
@@ -152,7 +153,7 @@ const renderClubbedQuarterCell = (
       {renderSubRow('Profit', currProfit, prevProfit, true)}
       {renderSubRow('EPS', currEps, prevEps, false)}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', pt: '7px' }}>
-        <Typography component="span" sx={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 500, flexShrink: 0 }}>
+        <Typography component="span" sx={{ fontSize: '0.72rem', color: saasTokens.text.secondary, fontWeight: 500, flexShrink: 0 }}>
           EPS Trend:
         </Typography>
         {(hasPct || (trendOverride && trendOverride !== 'N/A')) ? (
@@ -170,14 +171,14 @@ const renderClubbedQuarterCell = (
             fontWeight: 700,
             lineHeight: 1,
             letterSpacing: '0.03em',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+            boxShadow: 'none',
             whiteSpace: 'nowrap'
           }}>
             <span>{trendLabel}</span>
             <span style={{ fontSize: '0.55rem' }}>{arrow}</span>
             {hasPct && <span>{pctText}</span>}
           </Box>
-        ) : <Typography component="span" sx={{ fontSize: '0.72rem', color: '#64748b' }}>-</Typography>}
+        ) : <Typography component="span" sx={{ fontSize: '0.72rem', color: saasTokens.text.secondary }}>-</Typography>}
       </Box>
     </Box>
   );
@@ -234,11 +235,10 @@ const Home: React.FC = () => {
       alert("Mass financial health analysis queued for all stocks! Check Tasks page for progress and refresh to view scores.");
     }
   });
-  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filterMode, setFilterMode] = useState<'ALL' | 'RECENT_EVENTS' | 'HIGH_HEALTH'>('ALL');
 
-  if (loading && !data) return <Box display="flex" justifyContent="center" mt={10}><CircularProgress sx={{color: '#7c4dff'}} /></Box>;
+  if (loading && !data) return <Box display="flex" justifyContent="center" mt={10}><CircularProgress sx={{color: saasTokens.primary.main}} /></Box>;
   if (error) return <Typography color="error" mt={5}>Error loading data.</Typography>;
 
   const handlePopulate = () => {
@@ -317,15 +317,15 @@ const Home: React.FC = () => {
             cursor: 'pointer',
             transition: 'all 0.15s ease',
             '&:hover': {
-              '& .company-name-text': { color: '#7c4dff', textDecoration: 'underline' },
-              '& .company-ticker-text': { color: '#c4b5fd' }
+              '& .company-name-text': { color: '#6366f1', textDecoration: 'underline' },
+              '& .company-ticker-text': { color: '#0f172a' }
             }
           }}
         >
-          <Typography className="company-name-text" noWrap sx={{ fontSize: '0.84rem', fontWeight: 700, color: '#f8fafc', lineHeight: 1.25, transition: 'color 0.15s' }}>
+          <Typography className="company-name-text" noWrap sx={{ fontSize: '0.84rem', fontWeight: 700, color: saasTokens.text.primary, lineHeight: 1.25, transition: 'color 0.15s' }}>
             {p.row?.name || '-'}
           </Typography>
-          <Typography className="company-ticker-text" noWrap sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#a78bfa', mt: '3px', letterSpacing: '0.04em', transition: 'color 0.15s' }}>
+          <Typography className="company-ticker-text" noWrap sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#6366f1', mt: '3px', letterSpacing: '0.04em', transition: 'color 0.15s' }}>
             {p.row?.ticker || '-'}
           </Typography>
         </Box>
@@ -333,11 +333,11 @@ const Home: React.FC = () => {
     },
     { field: 'currentPrice', headerName: 'PRICE', width: 85, type: 'number', headerAlign: 'left', align: 'left',
       valueGetter: (_v: any, row: any) => row?.currentPrice != null && !isNaN(row.currentPrice) ? Number(row.currentPrice) : -Infinity,
-      renderCell: (p) => renderCenteredCell(p.row?.currentPrice != null ? `₹${p.row.currentPrice}` : '-', '#e2e8f0', 600, '0.78rem')
+      renderCell: (p) => renderCenteredCell(p.row?.currentPrice != null ? `₹${p.row.currentPrice}` : '-', saasTokens.text.primary, 600, '0.78rem')
     },
     { field: 'marketCap', headerName: 'MARKET CAP', width: 120, type: 'number', headerAlign: 'left', align: 'left',
       valueGetter: (_v: any, row: any) => row?.marketCap != null && !isNaN(row.marketCap) ? Number(row.marketCap) : -Infinity,
-      renderCell: (p) => renderCenteredCell(formatValCr(p.row?.marketCap), '#a78bfa', 600, '0.78rem')
+      renderCell: (p) => renderCenteredCell(formatValCr(p.row?.marketCap), '#0f172a', 600, '0.78rem')
     },
     { field: 'financialHealthScore', headerName: 'FINANCIAL HEALTH', width: 180, type: 'number', headerAlign: 'left', align: 'left', sortable: true,
       valueGetter: (_v: any, row: any) => row?.financialHealthScore != null && !isNaN(row.financialHealthScore) ? Number(row.financialHealthScore) : -Infinity,
@@ -345,23 +345,23 @@ const Home: React.FC = () => {
         const score = p.row?.financialHealthScore;
         const grade = p.row?.financialHealthGrade || '';
         if (score == null || isNaN(score) || score <= 0) {
-          return renderCenteredCell('Not Calc', '#64748b', 400, '0.75rem');
+          return renderCenteredCell('Not Calc', saasTokens.text.secondary, 400, '0.75rem');
         }
-        let bgcolor = 'rgba(244, 63, 94, 0.18)';
-        let color = '#f43f5e';
-        let border = '1px solid rgba(244, 63, 94, 0.35)';
+        let bgcolor = '#fff1f2';
+        let color = '#e11d48';
+        let border = '1px solid #fda4af';
         if (score >= 75) {
-          bgcolor = 'rgba(16, 185, 129, 0.18)';
-          color = '#10b981';
-          border = '1px solid rgba(16, 185, 129, 0.35)';
+          bgcolor = '#ecfdf5';
+          color = '#059669';
+          border = '1px solid #6ee7b7';
         } else if (score >= 60) {
-          bgcolor = 'rgba(124, 77, 255, 0.2)';
-          color = '#a78bfa';
-          border = '1px solid rgba(124, 77, 255, 0.4)';
+          bgcolor = '#f1f5f9';
+          color = '#0f172a';
+          border = '1px solid #cbd5e1';
         } else if (score >= 45) {
-          bgcolor = 'rgba(245, 158, 11, 0.18)';
-          color = '#f59e0b';
-          border = '1px solid rgba(245, 158, 11, 0.35)';
+          bgcolor = '#fffbeb';
+          color = '#d97706';
+          border = '1px solid #fcd34d';
         }
         const shortGrade = grade.split('(')[0].replace(/Grade\s*/i, '').trim() || grade;
         return (
@@ -378,7 +378,7 @@ const Home: React.FC = () => {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '5px',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+              boxShadow: 'none',
               whiteSpace: 'nowrap'
             }}>
               <span style={{ fontSize: '0.6rem' }}>●</span>
@@ -393,31 +393,31 @@ const Home: React.FC = () => {
       renderCell: (p) => {
         const prob = p.row?.momentumProbability;
         if (prob == null || isNaN(prob) || prob < 0) {
-          return renderCenteredCell('Not Calc', '#64748b', 400, '0.75rem');
+          return renderCenteredCell('Not Calc', saasTokens.text.secondary, 400, '0.75rem');
         }
-        let bgcolor = 'rgba(244, 63, 94, 0.18)';
-        let color = '#f43f5e';
-        let border = '1px solid rgba(244, 63, 94, 0.35)';
+        let bgcolor = '#fff1f2';
+        let color = '#e11d48';
+        let border = '1px solid #fda4af';
         let fractionText = '0/4 Qtrs';
         if (prob >= 100) {
-          bgcolor = 'rgba(16, 185, 129, 0.2)';
-          color = '#10b981';
-          border = '1px solid rgba(16, 185, 129, 0.4)';
+          bgcolor = '#ecfdf5';
+          color = '#059669';
+          border = '1px solid #6ee7b7';
           fractionText = '4/4 Qtrs';
         } else if (prob >= 75) {
-          bgcolor = 'rgba(56, 189, 248, 0.2)';
-          color = '#38bdf8';
-          border = '1px solid rgba(56, 189, 248, 0.4)';
+          bgcolor = '#eff6ff';
+          color = '#2563eb';
+          border = '1px solid #93c5fd';
           fractionText = '3/4 Qtrs';
         } else if (prob >= 50) {
-          bgcolor = 'rgba(245, 158, 11, 0.2)';
-          color = '#f59e0b';
-          border = '1px solid rgba(245, 158, 11, 0.4)';
+          bgcolor = '#fffbeb';
+          color = '#d97706';
+          border = '1px solid #fcd34d';
           fractionText = '2/4 Qtrs';
         } else if (prob >= 25) {
-          bgcolor = 'rgba(249, 115, 22, 0.18)';
-          color = '#fb923c';
-          border = '1px solid rgba(249, 115, 22, 0.35)';
+          bgcolor = '#fff7ed';
+          color = '#ea580c';
+          border = '1px solid #fdba74';
           fractionText = '1/4 Qtr';
         }
         return (
@@ -429,12 +429,12 @@ const Home: React.FC = () => {
               bgcolor,
               color,
               border,
-              fontWeight: 800,
+              fontWeight: 700,
               fontSize: '0.75rem',
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
+              boxShadow: 'none'
             }}>
               <span>🎯 {prob.toFixed(0)}%</span>
               <span style={{ fontSize: '0.68rem', opacity: 0.9 }}>({fractionText})</span>
@@ -449,30 +449,30 @@ const Home: React.FC = () => {
         const avgMom = p.row?.avgPostEarningsMomentum;
         const prob = p.row?.momentumProbability ?? 0;
         if (avgMom == null || isNaN(avgMom)) {
-          return renderCenteredCell('Not Calc', '#64748b', 400, '0.75rem');
+          return renderCenteredCell('Not Calc', saasTokens.text.secondary, 400, '0.75rem');
         }
         const isPos = avgMom >= 0;
-        const momColor = isPos ? '#4ade80' : '#f87171';
+        const momColor = isPos ? '#059669' : '#e11d48';
         const momArrow = isPos ? '▲' : '▼';
         const momText = `${isPos ? '+' : ''}${avgMom.toFixed(1)}%`;
 
         let signalLabel = 'NEUTRAL / HOLD';
-        let signalBg = 'rgba(100, 116, 139, 0.2)';
-        let signalColor = '#cbd5e1';
-        let signalBorder = '1px solid #64748b';
+        let signalBg = '#f8fafc';
+        let signalColor = '#475569';
+        let signalBorder = '1px solid #cbd5e1';
         let signalIcon = '⚠️';
 
         if ((prob >= 75 && avgMom > 0) || (prob >= 50 && avgMom >= 2.0)) {
           signalLabel = 'BUY PRE-RELEASE';
-          signalBg = 'rgba(20, 83, 45, 0.45)';
-          signalColor = '#4ade80';
-          signalBorder = '1px solid #16a34a';
+          signalBg = '#ecfdf5';
+          signalColor = '#059669';
+          signalBorder = '1px solid #6ee7b7';
           signalIcon = '🟢';
         } else if (prob < 50 || avgMom < 0) {
           signalLabel = 'AVOID PRE-RELEASE';
-          signalBg = 'rgba(127, 29, 29, 0.45)';
-          signalColor = '#f87171';
-          signalBorder = '1px solid #dc2626';
+          signalBg = '#fff1f2';
+          signalColor = '#e11d48';
+          signalBorder = '1px solid #fda4af';
           signalIcon = '🔴';
         }
 
@@ -532,7 +532,7 @@ const Home: React.FC = () => {
               label="COLLAPSE ◄" 
               onClick={(e) => { e.stopPropagation(); setExpandQuarters(false); }} 
               size="small" 
-              sx={{ bgcolor: 'rgba(248, 113, 113, 0.25)', color: '#f87171', fontSize: '0.62rem', fontWeight: 800, height: '20px', cursor: 'pointer', '&:hover': { bgcolor: 'rgba(248, 113, 113, 0.4)' } }} 
+              sx={{ bgcolor: '#fff1f2', color: '#e11d48', border: '1px solid #fda4af', fontSize: '0.62rem', fontWeight: 800, height: '20px', cursor: 'pointer', '&:hover': { bgcolor: '#ffe4e6' } }} 
             />
           </Box>
         ),
@@ -546,10 +546,10 @@ const Home: React.FC = () => {
         renderHeader: () => (
           <Box 
             onClick={() => setExpandQuarters(true)} 
-            sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer', width: '100%', color: '#38bdf8', '&:hover': { color: '#7dd3fc' } }}
+            sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer', width: '100%', color: '#6366f1', '&:hover': { color: '#4f46e5' } }}
           >
             <span style={{ fontWeight: 700, fontSize: '0.72rem' }}>QUARTERLY RESULTS (Q1-Q4)</span>
-            <Chip label="CLICK TO EXPAND ►" size="small" sx={{ bgcolor: 'rgba(56, 189, 248, 0.22)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.4)', fontSize: '0.62rem', fontWeight: 800, height: '20px', cursor: 'pointer' }} />
+            <Chip label="CLICK TO EXPAND ►" size="small" sx={{ bgcolor: '#eff6ff', color: '#2563eb', border: '1px solid #93c5fd', fontSize: '0.62rem', fontWeight: 800, height: '20px', cursor: 'pointer' }} />
           </Box>
         ),
         renderCell: (p: GridRenderCellParams) => {
@@ -562,12 +562,12 @@ const Home: React.FC = () => {
               sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', cursor: 'pointer', py: 0.5, '&:hover': { opacity: 0.85 } }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#f8fafc' }}>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: saasTokens.text.primary }}>
                   Q4 EPS: {eps != null && !isNaN(eps) ? `₹${eps}` : '-'}
                 </Typography>
-                <Chip label="Expand 4 Qtrs ⛶" size="small" sx={{ height: '18px', fontSize: '0.62rem', bgcolor: '#1e293b', color: '#94a3b8', fontWeight: 600, cursor: 'pointer' }} />
+                <Chip label="Expand 4 Qtrs ⛶" size="small" sx={{ height: '18px', fontSize: '0.62rem', bgcolor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', fontWeight: 600, cursor: 'pointer' }} />
               </Box>
-              <Typography sx={{ fontSize: '0.72rem', color: '#64748b', mt: '3px' }}>
+              <Typography sx={{ fontSize: '0.72rem', color: saasTokens.text.secondary, mt: '3px' }}>
                 Latest Rev: {formatValCr(rev)} | Profit: {formatValCr(prof)}
               </Typography>
             </Box>
@@ -576,29 +576,29 @@ const Home: React.FC = () => {
       }
     ]),
     { field: 'upcomingDate', headerName: 'REPORT DATE', width: 130, sortComparator: dateSortComparator,
-      renderCell: (p: GridRenderCellParams) => renderCenteredCell(p.value, '#94a3b8', 500, '0.78rem')
+      renderCell: (p: GridRenderCellParams) => renderCenteredCell(p.value, saasTokens.text.secondary, 600, '0.78rem')
     }
   ];
 
   const totalCompanies = baseRows.length;
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#0a0b10', pb: 4, fontFamily: 'Inter, sans-serif', width: '100%', overflowX: 'hidden' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'transparent', pb: 4, fontFamily: 'Inter, sans-serif', width: '100%', overflowX: 'hidden' }}>
       {/* Top Controls Container with Padding */}
       <Box sx={{ px: { xs: 2, md: 3.5 }, pt: 3 }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={4} flexWrap="wrap" gap={2}>
           <Box>
-            <Typography sx={{ color: '#e2e8f0', fontSize: '1.25rem', fontWeight: 600, mb: 0.5 }}>Dashboard & Financial Health Analytics</Typography>
-            <Typography sx={{ color: '#64748b', fontSize: '0.85rem' }}>NSE Incoming Earnings Fixtures & Comprehensive Quantitative Health Grades</Typography>
+            <Typography sx={{ color: saasTokens.text.primary, fontSize: '1.25rem', fontWeight: 700, mb: 0.5 }}>Dashboard & Financial Health Analytics</Typography>
+            <Typography sx={{ color: saasTokens.text.secondary, fontSize: '0.85rem' }}>NSE Incoming Earnings Fixtures & Comprehensive Quantitative Health Grades</Typography>
           </Box>
           <Box display="flex" gap={2} alignItems="center">
-             <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#13151a', border: '1px solid #1e293b', borderRadius: 1, px: 2, py: 0.5 }}>
-                <SearchIcon sx={{ color: '#64748b', fontSize: '1rem', mr: 1 }} />
+             <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#ffffff', border: `1px solid ${saasTokens.border.main}`, borderRadius: 2, px: 2, py: 0.5, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}>
+                <SearchIcon sx={{ color: saasTokens.text.secondary, fontSize: '1rem', mr: 1 }} />
                 <InputBase 
                    placeholder="Search stock ticker..." 
                    value={search}
                    onChange={(e) => setSearch(e.target.value)}
-                   sx={{ color: '#e2e8f0', fontSize: '0.85rem', width: '200px' }} 
+                   sx={{ color: saasTokens.text.primary, fontSize: '0.85rem', width: '200px' }} 
                 />
              </Box>
              <Tooltip title="Mass calculate financial health & generate AI analytics for all stocks in background">
@@ -606,205 +606,154 @@ const Home: React.FC = () => {
                   onClick={() => massCalculate()} 
                   startIcon={<AssessmentIcon />}
                   sx={{ 
-                    backgroundColor: '#7c4dff',
-                    color: '#f8fafc', 
-                    borderRadius: 1.5, 
+                    backgroundColor: '#0f172a',
+                    color: '#ffffff', 
+                    borderRadius: 2, 
                     px: 2, 
                     py: 0.8,
-                    fontWeight: 700,
+                    fontWeight: 600,
                     fontSize: '0.82rem',
                     textTransform: 'none',
-                    boxShadow: '0 4px 14px rgba(124, 77, 255, 0.3)',
-                    '&:hover': { backgroundColor: '#651fff' } 
+                    boxShadow: '0 2px 6px rgba(15, 23, 42, 0.15)',
+                    '&:hover': { backgroundColor: '#1e293b' } 
                   }}
                 >
                   Mass Calculate Health
                 </Button>
              </Tooltip>
              <Tooltip title="Bulk download historical data from Yahoo Finance (Takes ~5 minutes)">
-                <IconButton onClick={handlePopulate} sx={{ bgcolor: '#1e293b', color: '#e2e8f0', borderRadius: 1, '&:hover': {bgcolor: '#334155'} }}>
+                <IconButton onClick={handlePopulate} sx={{ bgcolor: '#f8fafc', color: '#0f172a', border: `1px solid ${saasTokens.border.main}`, borderRadius: 2, '&:hover': {bgcolor: '#f1f5f9'} }}>
                    <CloudDownloadIcon fontSize="small" />
                 </IconButton>
              </Tooltip>
           </Box>
         </Box>
 
-        {/* Custom Share Instant Analyzer Banner */}
-        <Card sx={{ bgcolor: '#111420', border: '1px solid rgba(124, 77, 255, 0.4)', borderRadius: 2, mb: 4, boxShadow: '0 8px 24px rgba(124, 77, 255, 0.12)' }}>
-          <CardContent sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, gap: 2, py: '18px !important', px: 3 }}>
-            <Box>
-              <Typography sx={{ color: '#ffffff', fontSize: '1.02rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <span>🔍 Instant Custom Share Lookup & Analysis</span>
-                <Chip label="Any NSE / BSE Stock" size="small" sx={{ bgcolor: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', fontWeight: 700, fontSize: '0.68rem', border: '1px solid #38bdf8' }} />
+        <Card sx={{ mb: 4, borderRadius: 3, border: `1px solid ${saasTokens.border.main}`, bgcolor: '#ffffff', boxShadow: '0 4px 16px rgba(15, 23, 42, 0.04)', overflow: 'hidden' }}>
+          <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <SearchIcon sx={{ color: saasTokens.primary.main, fontSize: 20 }} />
+              <Typography sx={{ color: saasTokens.text.primary, fontSize: '1.05rem', fontWeight: 700, letterSpacing: '-0.01em' }}>
+                Instant Custom Share Lookup & Analytics
               </Typography>
-              <Typography sx={{ color: '#94a3b8', fontSize: '0.82rem', mt: 0.5 }}>
-                Want to check a specific stock not scheduled in upcoming calendar fixtures? Enter its symbol below (e.g. <span style={{ color: '#a78bfa', fontWeight: 600 }}>RELIANCE</span>, <span style={{ color: '#a78bfa', fontWeight: 600 }}>TCS</span>, <span style={{ color: '#a78bfa', fontWeight: 600 }}>INFY</span>) to generate live analytics & open its dedicated page immediately.
-              </Typography>
+              <Chip label="Any NSE / BSE Stock" size="small" sx={{ ml: 1, bgcolor: '#f1f5f9', color: '#0f172a', border: `1px solid ${saasTokens.border.main}`, fontWeight: 700, fontSize: '0.7rem' }} />
             </Box>
-            <Box component="form" onSubmit={handleCustomAnalyze} sx={{ display: 'flex', gap: 1.5, width: { xs: '100%', md: 'auto' }, alignItems: 'center' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#0b0c13', border: '1px solid #334155', borderRadius: 1.5, px: 2, py: 0.8, minWidth: '220px' }}>
+            <Typography sx={{ color: saasTokens.text.secondary, fontSize: '0.82rem', mb: 2.5 }}>
+              Want to evaluate a specific equity not currently scheduled in upcoming calendar fixtures? Enter its symbol below (e.g. RELIANCE, TCS, INFY) to generate quantitative health modeling immediately.
+            </Typography>
+
+            <Box component="form" onSubmit={handleCustomAnalyze} sx={{ display: 'flex', gap: 2, maxWidth: 540 }}>
+              <Box sx={{ flexGrow: 1, position: 'relative', display: 'flex', alignItems: 'center', bgcolor: '#f8fafc', border: `1px solid ${saasTokens.border.main}`, borderRadius: 2, px: 2, py: 0.5, '&:focus-within': { borderColor: saasTokens.primary.main, bgcolor: '#ffffff' } }}>
                 <InputBase
-                  placeholder="Ticker (e.g. RELIANCE)..."
                   value={customTicker}
                   onChange={(e) => setCustomTicker(e.target.value)}
-                  sx={{ color: '#ffffff', fontSize: '0.9rem', width: '100%', fontWeight: 600 }}
+                  placeholder="Enter Stock Ticker (e.g. RELIANCE)..."
+                  sx={{ color: saasTokens.text.primary, fontSize: '0.9rem', width: '100%', fontWeight: 600 }}
                   disabled={analyzingCustom}
                 />
               </Box>
               <Button
                 type="submit"
+                variant="contained"
+                color="primary"
                 disabled={analyzingCustom || !customTicker.trim()}
                 sx={{
-                  bgcolor: '#3b82f6',
-                  color: '#ffffff',
-                  fontWeight: 700,
-                  px: 3,
+                  fontWeight: 600,
+                  px: 3.5,
                   py: 1.1,
-                  borderRadius: 1.5,
-                  textTransform: 'none',
+                  borderRadius: 2,
                   whiteSpace: 'nowrap',
-                  boxShadow: '0 4px 14px rgba(59, 130, 246, 0.35)',
-                  '&:hover': { bgcolor: '#2563eb' },
-                  '&.Mui-disabled': { bgcolor: '#1e293b', color: '#64748b' }
+                  bgcolor: '#0f172a',
+                  color: '#ffffff',
+                  boxShadow: '0 2px 6px rgba(15, 23, 42, 0.12)',
+                  '&:hover': { bgcolor: '#1e293b' }
                 }}
               >
                 {analyzingCustom ? (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <CircularProgress size={16} sx={{ color: '#94a3b8' }} />
-                    <span>Analyzing...</span>
+                    <CircularProgress size={16} sx={{ color: '#ffffff' }} />
+                    <span>Processing...</span>
                   </Box>
-                ) : 'Launch Share Page 🚀'}
+                ) : 'Launch Analytics →'}
               </Button>
             </Box>
           </CardContent>
         </Card>
 
-        <Grid container spacing={3} mb={4}>
+        <Grid container spacing={2.5} mb={4}>
           <Grid item xs={12} sm={6} md={4}>
-            <Card 
+            <MetricCard
+              title="Total Companies Tracked"
+              value={totalCompanies}
+              subtitle="Live equity database constituents"
+              icon={<AssessmentIcon />}
               onClick={() => setFilterMode('ALL')}
-              sx={{ 
-                bgcolor: filterMode === 'ALL' ? '#1c1f2e' : '#13151a', 
-                border: filterMode === 'ALL' ? '1px solid #7c4dff' : '1px solid #1e293b', 
-                borderRadius: 2, 
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                '&:hover': { borderColor: '#7c4dff', transform: 'translateY(-2px)' }
-              }}
-            >
-              <CardContent sx={{ pb: '16px !important' }}>
-                <Typography color="#94a3b8" fontSize="0.8rem" fontWeight="600" textTransform="uppercase">Total Companies Tracked</Typography>
-                <Typography color="#e2e8f0" fontSize="1.8rem" fontWeight="bold" mt={0.5}>{totalCompanies}</Typography>
-              </CardContent>
-            </Card>
+              active={filterMode === 'ALL'}
+            />
           </Grid>
           <Grid item xs={12} sm={6} md={4}>
-            <Card 
+            <MetricCard
+              title="Events in Next 2-3 Days"
+              value={recentEventsCount}
+              subtitle="Imminent earnings release fixtures"
+              icon={<EventAvailableIcon />}
+              accentColor={saasTokens.status.success.main}
               onClick={() => setFilterMode(filterMode === 'RECENT_EVENTS' ? 'ALL' : 'RECENT_EVENTS')}
-              sx={{ 
-                bgcolor: filterMode === 'RECENT_EVENTS' ? '#064e3b' : '#13151a', 
-                border: filterMode === 'RECENT_EVENTS' ? '1px solid #10b981' : '1px solid #1e293b', 
-                borderRadius: 2,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                '&:hover': { borderColor: '#10b981', transform: 'translateY(-2px)' }
-              }}
-            >
-              <CardContent sx={{ pb: '16px !important' }}>
-                <Typography color="#94a3b8" fontSize="0.8rem" fontWeight="600" textTransform="uppercase">Events in Next 2-3 Days</Typography>
-                <Typography color="#10b981" fontSize="1.8rem" fontWeight="bold" mt={0.5}>{recentEventsCount}</Typography>
-              </CardContent>
-            </Card>
+              active={filterMode === 'RECENT_EVENTS'}
+            />
           </Grid>
           <Grid item xs={12} sm={12} md={4}>
-            <Card 
+            <MetricCard
+              title="High Health Score Stocks (>70)"
+              value={highHealthCount}
+              subtitle="Institutional fundamental quality grade"
+              icon={<HealthAndSafetyIcon />}
+              accentColor={saasTokens.secondary.main}
               onClick={() => setFilterMode(filterMode === 'HIGH_HEALTH' ? 'ALL' : 'HIGH_HEALTH')}
-              sx={{ 
-                bgcolor: filterMode === 'HIGH_HEALTH' ? '#075985' : '#13151a', 
-                border: filterMode === 'HIGH_HEALTH' ? '1px solid #38bdf8' : '1px solid #1e293b', 
-                borderRadius: 2,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                '&:hover': { borderColor: '#38bdf8', transform: 'translateY(-2px)' }
-              }}
-            >
-              <CardContent sx={{ pb: '16px !important' }}>
-                <Typography color="#94a3b8" fontSize="0.8rem" fontWeight="600" textTransform="uppercase">High Health Score Stocks (&gt;70)</Typography>
-                <Typography color="#38bdf8" fontSize="1.8rem" fontWeight="bold" mt={0.5}>{highHealthCount}</Typography>
-              </CardContent>
-            </Card>
+              active={filterMode === 'HIGH_HEALTH'}
+            />
           </Grid>
         </Grid>
 
-        <Box sx={{ display: 'flex', gap: 1.5, mb: 3, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Typography sx={{ fontSize: '0.8rem', color: '#94a3b8', mr: 1, fontWeight: 700, letterSpacing: '0.04em' }}>FILTER VIEW:</Typography>
-          <Chip 
-            label={`All Stocks (${baseRows.length})`} 
-            onClick={() => setFilterMode('ALL')} 
-            sx={{ 
-              bgcolor: filterMode === 'ALL' ? '#7c4dff' : '#13151a', 
-              color: '#f8fafc', 
-              border: '1px solid #1e293b',
-              fontWeight: 700,
-              cursor: 'pointer',
-              px: 0.5,
-              '&:hover': { bgcolor: filterMode === 'ALL' ? '#651fff' : '#1e293b' }
-            }} 
-          />
-          <Chip 
-            icon={<EventAvailableIcon sx={{ color: filterMode === 'RECENT_EVENTS' ? '#fff !important' : '#10b981 !important', fontSize: '1rem' }} />}
-            label={`Events in Next 2-3 Days (${recentEventsCount})`} 
-            onClick={() => setFilterMode(filterMode === 'RECENT_EVENTS' ? 'ALL' : 'RECENT_EVENTS')} 
-            sx={{ 
-              bgcolor: filterMode === 'RECENT_EVENTS' ? '#059669' : '#13151a', 
-              color: '#f8fafc', 
-              border: '1px solid #1e293b',
-              fontWeight: 700,
-              cursor: 'pointer',
-              px: 0.5,
-              '&:hover': { bgcolor: filterMode === 'RECENT_EVENTS' ? '#047857' : '#1e293b' }
-            }} 
-          />
-          <Chip 
-            icon={<HealthAndSafetyIcon sx={{ color: filterMode === 'HIGH_HEALTH' ? '#fff !important' : '#38bdf8 !important', fontSize: '1rem' }} />}
-            label={`High Financial Health (>70 Pts)`} 
-            onClick={() => setFilterMode(filterMode === 'HIGH_HEALTH' ? 'ALL' : 'HIGH_HEALTH')} 
-            sx={{ 
-              bgcolor: filterMode === 'HIGH_HEALTH' ? '#0284c7' : '#13151a', 
-              color: '#f8fafc', 
-              border: '1px solid #1e293b',
-              fontWeight: 700,
-              cursor: 'pointer',
-              px: 0.5,
-              '&:hover': { bgcolor: filterMode === 'HIGH_HEALTH' ? '#0369a1' : '#1e293b' }
-            }} 
+        <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center', flexWrap: 'wrap', px: { xs: 2, md: 3.5 } }}>
+          <Typography sx={{ fontSize: '0.78rem', color: saasTokens.text.secondary, mr: 0.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            Filter Universe:
+          </Typography>
+          <FilterChipGroup
+            options={[
+              { label: 'All Stocks', value: 'ALL', count: baseRows.length },
+              { label: 'Events in Next 2-3 Days', value: 'RECENT_EVENTS', count: recentEventsCount, color: saasTokens.status.success.main },
+              { label: 'High Financial Health (>70 Pts)', value: 'HIGH_HEALTH', count: highHealthCount, color: saasTokens.secondary.main },
+            ]}
+            selectedValue={filterMode}
+            onChange={(val) => setFilterMode(val as 'ALL' | 'RECENT_EVENTS' | 'HIGH_HEALTH')}
           />
         </Box>
       </Box>
 
-      {/* Edge-to-Edge Borderless DataGrid */}
-      <Box sx={{ height: 'calc(100vh - 280px)', width: '100%', bgcolor: '#0a0b10', border: 0, overflow: 'hidden' }}>
+      {/* Edge-to-Edge SaaS Borderless DataGrid */}
+      <Box sx={{ height: 'calc(100vh - 280px)', minHeight: 500, width: '100%', bgcolor: '#ffffff', border: `1px solid ${saasTokens.border.main}`, borderLeft: 0, borderRight: 0, overflow: 'hidden', boxShadow: '0 -4px 16px rgba(15, 23, 42, 0.03)' }}>
         <DataGrid 
           rows={rows} 
           columns={columns} 
           disableRowSelectionOnClick
           getRowHeight={() => 'auto'}
           getEstimatedRowHeight={() => 60}
-          columnHeaderHeight={40}
+          columnHeaderHeight={44}
           sx={{
              border: 0,
              borderRadius: 0,
-             color: '#e2e8f0',
+             color: saasTokens.text.primary,
              '& .MuiDataGrid-columnHeaders': {
-               bgcolor: '#13151a',
-               color: '#64748b',
+               bgcolor: saasTokens.background.header,
+               color: saasTokens.text.secondary,
                textTransform: 'uppercase',
-               fontSize: '0.7rem',
+               fontSize: '0.72rem',
                fontWeight: 700,
-               letterSpacing: '0.05em',
+               letterSpacing: '0.06em',
                borderRadius: 0,
-               borderBottom: '1px solid #1e293b',
-               borderTop: '1px solid #1e293b'
+               borderBottom: `1px solid ${saasTokens.border.main}`,
+               borderTop: `1px solid ${saasTokens.border.main}`
              },
              '& .MuiDataGrid-columnHeader': {
                borderRadius: 0,
@@ -812,29 +761,30 @@ const Home: React.FC = () => {
                '&:last-of-type': { pr: { xs: 2, md: 3.5 } }
              },
              '& .MuiDataGrid-cell': {
-               borderBottom: '1px solid #1e293b',
-               py: '4px',
+               borderBottom: `1px solid ${saasTokens.border.main}`,
+               py: '6px',
                '&:first-of-type': { pl: { xs: 2, md: 3.5 } },
                '&:last-of-type': { pr: { xs: 2, md: 3.5 } }
              },
              '& .MuiDataGrid-row': {
-               bgcolor: '#0a0b10',
-               '&:hover': { bgcolor: '#13151a' }
+               bgcolor: '#ffffff',
+               transition: 'background-color 0.15s ease',
+               '&:hover': { bgcolor: '#f8fafc' }
              },
              '& .MuiDataGrid-row:nth-of-type(even)': {
-               bgcolor: '#0e1017',
+               bgcolor: '#f8fafc',
              },
              '& .MuiDataGrid-footerContainer': {
-               borderTop: '1px solid #1e293b',
-               bgcolor: '#13151a',
-               color: '#64748b',
+               borderTop: `1px solid ${saasTokens.border.main}`,
+               bgcolor: saasTokens.background.header,
+               color: saasTokens.text.secondary,
                px: { xs: 2, md: 3.5 }
              },
-             '& .MuiTablePagination-root': { color: '#64748b' },
+             '& .MuiTablePagination-root': { color: saasTokens.text.secondary },
              '& .MuiDataGrid-virtualScroller': {
-               '&::-webkit-scrollbar': { width: '6px', height: '6px' },
-               '&::-webkit-scrollbar-track': { bgcolor: '#0a0b10' },
-               '&::-webkit-scrollbar-thumb': { bgcolor: '#282f45', borderRadius: '3px', '&:hover': { bgcolor: '#475569' } }
+               '&::-webkit-scrollbar': { width: '8px', height: '8px' },
+               '&::-webkit-scrollbar-track': { bgcolor: '#f8fafc' },
+               '&::-webkit-scrollbar-thumb': { bgcolor: '#cbd5e1', borderRadius: '4px', '&:hover': { bgcolor: '#94a3b8' } }
              }
           }}
         />

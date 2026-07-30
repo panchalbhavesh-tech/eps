@@ -8,11 +8,11 @@ import CompanyDetail from './pages/CompanyDetail'
 import TaskManager from './pages/TaskManager'
 import MomentumTracker from './pages/MomentumTracker'
 
-const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" />;
-  return children;
+  return <>{children}</>;
 };
 
 function App() {

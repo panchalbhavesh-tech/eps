@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { useQuery } from '@apollo/client';
 import { ME_QUERY } from '../graphql/operations';
 
@@ -24,7 +24,7 @@ const AuthContext = createContext<AuthContextType>({
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   
-  const { data, loading, refetch } = useQuery(ME_QUERY, {
+  const { data, loading } = useQuery(ME_QUERY, {
     skip: !token,
     onError: () => {
       logout(); // Invalid token

@@ -44,9 +44,9 @@ const renderGrowthText = (curr?: number | null, prev?: number | null) => {
   const isUp = pct >= 0;
   return (
     <Typography sx={{ 
-      color: isUp ? '#4ade80' : '#f87171', 
+      color: isUp ? '#059669' : '#e11d48', 
       fontSize: '0.75rem', 
-      fontWeight: 600,
+      fontWeight: 700,
       display: 'inline-flex',
       alignItems: 'center',
       gap: 0.3
@@ -69,9 +69,9 @@ const renderEpsTrendBadge = (currEps?: number | null, prevEps?: number | null, f
     }
   }
   const trendLabel = isUp ? 'UP' : 'DOWN';
-  const badgeBg = isUp ? 'rgba(20, 83, 45, 0.4)' : 'rgba(127, 29, 29, 0.4)';
-  const badgeColor = isUp ? '#4ade80' : '#f87171';
-  const badgeBorder = isUp ? '1px solid #16a34a' : '1px solid #dc2626';
+  const badgeBg = isUp ? '#d1fae5' : '#ffe4e6';
+  const badgeColor = isUp ? '#065f46' : '#9f1239';
+  const badgeBorder = isUp ? '1px solid #a7f3d0' : '1px solid #fecdd3';
 
   return (
     <Box sx={{
@@ -82,10 +82,10 @@ const renderEpsTrendBadge = (currEps?: number | null, prevEps?: number | null, f
       py: '3px',
       bgcolor: badgeBg,
       color: badgeColor,
-      borderRadius: '4px',
+      borderRadius: '6px',
       border: badgeBorder,
       fontSize: '0.72rem',
-      fontWeight: 700
+      fontWeight: 800
     }}>
       <span>EPS TREND: {trendLabel}</span>
       <span style={{ fontSize: '0.6rem' }}>{isUp ? '▲' : '▼'}</span>
@@ -232,23 +232,23 @@ const UnifiedNumberLineTimeline: React.FC<{ items: any[] }> = ({ items }) => {
             {/* Top Zone: Price & Chg or Pivot Event Badge */}
             <Box sx={{ mb: 1.5, minHeight: '44px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', width: '100%' }}>
               {isPivot ? (
-                <Box sx={{ bgcolor: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.35)', py: 0.4, px: 0.6, borderRadius: 1.5, boxShadow: '0 2px 8px rgba(245, 158, 11, 0.15)' }}>
-                  <Typography sx={{ color: '#f59e0b', fontSize: '0.68rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                <Box sx={{ bgcolor: '#fef3c7', border: '1px solid #fde68a', py: 0.4, px: 0.6, borderRadius: 1.5, boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)' }}>
+                  <Typography sx={{ color: '#b45309', fontSize: '0.68rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
                     EARNINGS PIVOT
                   </Typography>
-                  <Typography sx={{ color: '#f8fafc', fontSize: '0.78rem', fontWeight: 700, mt: 0.2 }}>
+                  <Typography sx={{ color: '#0f172a', fontSize: '0.78rem', fontWeight: 800, mt: 0.2 }}>
                     Base: ₹{safeToFixed(item.price, 2)}
                   </Typography>
                 </Box>
               ) : (
                 <>
-                  <Typography sx={{ color: '#f8fafc', fontSize: '0.82rem', fontWeight: 700, lineHeight: 1.2 }}>
+                  <Typography sx={{ color: '#0f172a', fontSize: '0.82rem', fontWeight: 800, lineHeight: 1.2 }}>
                     ₹{safeToFixed(item.price, 2)}
                   </Typography>
                   {item.chgPct != null && !isNaN(Number(item.chgPct)) && (
                     <Typography sx={{
-                      color: safeNum(item.chgPct) >= 0 ? '#4ade80' : '#f87171',
-                      fontWeight: 600,
+                      color: safeNum(item.chgPct) >= 0 ? '#059669' : '#e11d48',
+                      fontWeight: 700,
                       fontSize: '0.72rem',
                       mt: 0.2
                     }}>
@@ -266,7 +266,7 @@ const UnifiedNumberLineTimeline: React.FC<{ items: any[] }> = ({ items }) => {
                 left: 0,
                 right: '50%',
                 height: isPivot ? '2px' : '1.5px',
-                bgcolor: (isPost || isPivot) ? 'rgba(167, 139, 250, 0.4)' : 'rgba(100, 116, 139, 0.35)',
+                bgcolor: (isPost || isPivot) ? '#0f172a' : '#cbd5e1',
                 zIndex: 0,
                 display: idx === 0 ? 'none' : 'block'
               }} />
@@ -275,7 +275,7 @@ const UnifiedNumberLineTimeline: React.FC<{ items: any[] }> = ({ items }) => {
                 left: '50%',
                 right: 0,
                 height: isPivot ? '2px' : '1.5px',
-                bgcolor: (isPost || isPivot) ? 'rgba(167, 139, 250, 0.4)' : 'rgba(100, 116, 139, 0.35)',
+                bgcolor: (isPost || isPivot) ? '#0f172a' : '#cbd5e1',
                 zIndex: 0,
                 display: idx === items.length - 1 ? 'none' : 'block'
               }} />
@@ -284,16 +284,16 @@ const UnifiedNumberLineTimeline: React.FC<{ items: any[] }> = ({ items }) => {
               <Box sx={{
                 position: 'relative',
                 zIndex: 1,
-                bgcolor: isPivot ? '#451a03' : (item.isSurge ? '#5b21b6' : '#1a1d2e'),
+                bgcolor: isPivot ? '#d97706' : (item.isSurge ? '#0f172a' : '#f8fafc'),
                 border: '1.5px solid',
-                borderColor: isPivot ? '#f59e0b' : (item.isSurge ? '#a78bfa' : '#475569'),
-                color: isPivot ? '#fef3c7' : '#ffffff',
+                borderColor: isPivot ? '#b45309' : (item.isSurge ? '#0f172a' : '#cbd5e1'),
+                color: (isPivot || item.isSurge) ? '#ffffff' : '#0f172a',
                 fontSize: isPivot ? '0.72rem' : '0.7rem',
                 fontWeight: 700,
                 px: isPivot ? 1.4 : 1.1,
                 py: isPivot ? 0.3 : 0.2,
                 borderRadius: '14px',
-                boxShadow: isPivot ? '0 0 12px rgba(245, 158, 11, 0.5)' : (item.isSurge ? '0 0 10px rgba(139, 92, 246, 0.6)' : '0 1px 3px rgba(0,0,0,0.4)'),
+                boxShadow: 'none',
                 whiteSpace: 'nowrap'
               }}>
                 {item.dayLabel}
@@ -302,11 +302,11 @@ const UnifiedNumberLineTimeline: React.FC<{ items: any[] }> = ({ items }) => {
 
             {/* Bottom Zone: Date & Volume */}
             <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', minHeight: '36px' }}>
-              <Typography sx={{ color: isPivot ? '#f8fafc' : '#94a3b8', fontSize: isPivot ? '0.76rem' : '0.72rem', fontWeight: isPivot ? 700 : 500 }}>
+              <Typography sx={{ color: isPivot ? '#0f172a' : '#64748b', fontSize: isPivot ? '0.76rem' : '0.72rem', fontWeight: isPivot ? 700 : 500 }}>
                 {item.dateStr}
               </Typography>
               <Typography sx={{ 
-                color: isPivot ? '#f59e0b' : (item.isSurge ? '#38bdf8' : '#64748b'), 
+                color: isPivot ? '#d97706' : (item.isSurge ? '#0f172a' : '#64748b'), 
                 fontSize: '0.68rem', 
                 fontWeight: (isPivot || item.isSurge) ? 700 : 500, 
                 mt: 0.2 
@@ -402,25 +402,27 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
   return (
     <Box sx={{ mb: 6 }}>
       {/* Sleek Header with Refined Window Selectors */}
-      <Paper sx={{ bgcolor: '#0d0f17', border: '1px solid #1e293b', borderRadius: 2, p: 3 }}>
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, borderBottom: '1px solid #1e293b', pb: 2, mb: 3, gap: 2 }}>
+      {/* Sleek Header with Refined Window Selectors */}
+      <Paper elevation={0} sx={{ bgcolor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 3, p: 3, boxShadow: '0 4px 16px rgba(15, 23, 42, 0.04)' }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, borderBottom: '1px solid #cbd5e1', pb: 2.5, mb: 3.5, gap: 2 }}>
           <Box>
             {/* Minimalist Tab Selectors */}
-            <Box sx={{ display: 'inline-flex', bgcolor: '#090b10', p: 0.3, borderRadius: 1.5, border: '1px solid #1e293b', mb: 1.5 }}>
+            <Box sx={{ display: 'inline-flex', bgcolor: '#f1f5f9', p: 0.4, borderRadius: 2, border: '1px solid #cbd5e1', mb: 1.5 }}>
               <Button 
                 onClick={() => setTimeWindow('7D')}
                 size="small"
                 sx={{
-                  bgcolor: timeWindow === '7D' ? '#1f2438' : 'transparent',
-                  color: timeWindow === '7D' ? '#ffffff' : '#64748b',
-                  fontWeight: timeWindow === '7D' ? 700 : 500,
-                  px: 2,
-                  py: 0.4,
-                  borderRadius: 1,
+                  bgcolor: timeWindow === '7D' ? '#ffffff' : 'transparent',
+                  color: timeWindow === '7D' ? '#0f172a' : '#64748b',
+                  fontWeight: timeWindow === '7D' ? 700 : 600,
+                  px: 2.5,
+                  py: 0.6,
+                  borderRadius: 1.5,
                   textTransform: 'none',
                   fontSize: '0.78rem',
-                  minWidth: '100px',
-                  '&:hover': { bgcolor: timeWindow === '7D' ? '#1f2438' : '#141824', color: '#cbd5e1' }
+                  minWidth: '110px',
+                  boxShadow: timeWindow === '7D' ? '0 1px 3px rgba(15, 23, 42, 0.08)' : 'none',
+                  '&:hover': { bgcolor: timeWindow === '7D' ? '#ffffff' : '#e2e8f0', color: '#0f172a' }
                 }}
               >
                 7 Days Window
@@ -429,25 +431,26 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
                 onClick={() => setTimeWindow('1M')}
                 size="small"
                 sx={{
-                  bgcolor: timeWindow === '1M' ? '#1f2438' : 'transparent',
-                  color: timeWindow === '1M' ? '#ffffff' : '#64748b',
-                  fontWeight: timeWindow === '1M' ? 700 : 500,
-                  px: 2,
-                  py: 0.4,
-                  borderRadius: 1,
+                  bgcolor: timeWindow === '1M' ? '#ffffff' : 'transparent',
+                  color: timeWindow === '1M' ? '#0f172a' : '#64748b',
+                  fontWeight: timeWindow === '1M' ? 700 : 600,
+                  px: 2.5,
+                  py: 0.6,
+                  borderRadius: 1.5,
                   textTransform: 'none',
                   fontSize: '0.78rem',
-                  minWidth: '100px',
-                  '&:hover': { bgcolor: timeWindow === '1M' ? '#1f2438' : '#141824', color: '#cbd5e1' }
+                  minWidth: '110px',
+                  boxShadow: timeWindow === '1M' ? '0 1px 3px rgba(15, 23, 42, 0.08)' : 'none',
+                  '&:hover': { bgcolor: timeWindow === '1M' ? '#ffffff' : '#e2e8f0', color: '#0f172a' }
                 }}
               >
                 1 Month Window
               </Button>
             </Box>
-            <Typography variant="h6" sx={{ color: '#f8fafc', fontWeight: 800, letterSpacing: '-0.01em' }}>
+            <Typography variant="h6" sx={{ color: '#0f172a', fontWeight: 800, letterSpacing: '-0.01em' }}>
               Quarterly Earnings Market Impact & Live Price Performance
             </Typography>
-            <Typography variant="caption" sx={{ color: '#75b798', display: 'block', mt: 0.3, fontSize: '0.8rem', fontWeight: 600 }}>
+            <Typography variant="caption" sx={{ color: '#059669', display: 'block', mt: 0.3, fontSize: '0.8rem', fontWeight: 700 }}>
               ✓ Verified 100% Real Historical Daily OHLCV & True Public Release Dates from Yahoo Finance / NSE
             </Typography>
           </Box>
@@ -471,15 +474,15 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
             const combinedTimelineItems = [...displayPrior, pivotNode, ...displayPost];
 
             return (
-              <Box key={q.key} sx={{ bgcolor: '#0a0c12', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 2, p: 2.5 }}>
+              <Box key={q.key} sx={{ bgcolor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 2.5, p: 3, boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)' }}>
                 {/* Header: Quarter Name, Pivot Date & EPS Trend Badge */}
-                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, pb: 1.5, borderBottom: '1px solid rgba(255,255,255,0.06)', mb: 2, gap: 1 }}>
+                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, pb: 1.5, borderBottom: '1px solid #e2e8f0', mb: 2.5, gap: 1 }}>
                   <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2, flexWrap: 'wrap' }}>
-                    <Typography variant="subtitle1" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '1.05rem' }}>
+                    <Typography variant="subtitle1" sx={{ color: '#0f172a', fontWeight: 800, fontSize: '1.1rem' }}>
                       {q.name}
                     </Typography>
-                    <Typography sx={{ color: '#64748b', fontSize: '0.75rem', fontWeight: 500 }}>
-                      Public Release Date: <span style={{ color: '#cbd5e1' }}>{new Date(normalizeToYyyyMmDd(q.pivotDate)).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                    <Typography sx={{ color: '#64748b', fontSize: '0.78rem', fontWeight: 600 }}>
+                      Public Release Date: <span style={{ color: '#0f172a', fontWeight: 700 }}>{new Date(normalizeToYyyyMmDd(q.pivotDate)).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                     </Typography>
                   </Box>
                   {renderEpsTrendBadge(q.eps, q.prevEps, q.trend)}
@@ -488,42 +491,42 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
                 {/* Minimalist Financial Statements Summary */}
                 <Grid container spacing={2} sx={{ mb: 3 }}>
                   <Grid item xs={12} sm={4}>
-                    <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 1.5 }}>
+                    <Box sx={{ p: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 2 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography sx={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.04em' }}>TOTAL REVENUE</Typography>
+                        <Typography sx={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.04em' }}>TOTAL REVENUE</Typography>
                         {renderGrowthText(q.rev, q.prevRev)}
                       </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.4 }}>
-                        <Typography sx={{ color: '#f8fafc', fontSize: '1.15rem', fontWeight: 800 }}>{formatValCr(q.rev)}</Typography>
-                        <Typography sx={{ color: '#64748b', fontSize: '0.7rem' }}>vs {formatValCr(q.prevRev)} prior</Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
+                        <Typography sx={{ color: '#0f172a', fontSize: '1.25rem', fontWeight: 800 }}>{formatValCr(q.rev)}</Typography>
+                        <Typography sx={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 500 }}>vs {formatValCr(q.prevRev)} prior</Typography>
                       </Box>
                     </Box>
                   </Grid>
 
                   <Grid item xs={12} sm={4}>
-                    <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 1.5 }}>
+                    <Box sx={{ p: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 2 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography sx={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.04em' }}>NET PROFIT</Typography>
+                        <Typography sx={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.04em' }}>NET PROFIT</Typography>
                         {renderGrowthText(q.prof, q.prevProf)}
                       </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.4 }}>
-                        <Typography sx={{ color: '#f8fafc', fontSize: '1.15rem', fontWeight: 800 }}>{formatValCr(q.prof)}</Typography>
-                        <Typography sx={{ color: '#64748b', fontSize: '0.7rem' }}>vs {formatValCr(q.prevProf)} prior</Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
+                        <Typography sx={{ color: '#0f172a', fontSize: '1.25rem', fontWeight: 800 }}>{formatValCr(q.prof)}</Typography>
+                        <Typography sx={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 500 }}>vs {formatValCr(q.prevProf)} prior</Typography>
                       </Box>
                     </Box>
                   </Grid>
 
                   <Grid item xs={12} sm={4}>
-                    <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 1.5 }}>
+                    <Box sx={{ p: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 2 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography sx={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.04em' }}>DILUTED EPS</Typography>
+                        <Typography sx={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.04em' }}>DILUTED EPS</Typography>
                         {renderGrowthText(q.eps, q.prevEps)}
                       </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.4 }}>
-                        <Typography sx={{ color: '#f8fafc', fontSize: '1.15rem', fontWeight: 800 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
+                        <Typography sx={{ color: '#0f172a', fontSize: '1.25rem', fontWeight: 800 }}>
                           {q.eps != null && !isNaN(Number(q.eps)) ? `₹${safeToFixed(q.eps, 2)}` : '-'}
                         </Typography>
-                        <Typography sx={{ color: '#64748b', fontSize: '0.7rem' }}>
+                        <Typography sx={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 500 }}>
                           vs {q.prevEps != null && !isNaN(Number(q.prevEps)) ? `₹${safeToFixed(q.prevEps, 2)}` : '-'} prior
                         </Typography>
                       </Box>
@@ -532,17 +535,17 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
                 </Grid>
 
                 {/* Unified Single-Line Trading Timeline with Center Earning Release Pivot */}
-                <Box sx={{ bgcolor: '#08090d', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 1.5, p: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, pb: 1, borderBottom: '1px solid rgba(255,255,255,0.04)', flexWrap: 'wrap', gap: 2 }}>
-                    <Typography sx={{ color: '#94a3b8', fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.04em' }}>
+                <Box sx={{ bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 2, p: 2.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, pb: 1.5, borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap', gap: 2 }}>
+                    <Typography sx={{ color: '#0f172a', fontWeight: 800, fontSize: '0.75rem', letterSpacing: '0.04em' }}>
                       UNIFIED TRADING TIMELINE ({timeWindow === '7D' ? '7 DAYS BEFORE & AFTER PIVOT' : '30-DAY WINDOW BEFORE & AFTER PIVOT'})
                     </Typography>
                     {!loadingPrices && (
                       <Box sx={{ display: 'flex', gap: 3 }}>
-                        <Typography sx={{ color: preChg >= 0 ? '#4ade80' : '#f87171', fontWeight: 700, fontSize: '0.75rem' }}>
+                        <Typography sx={{ color: preChg >= 0 ? '#059669' : '#e11d48', fontWeight: 800, fontSize: '0.78rem' }}>
                           ◄ Pre-Event Drift: {preChg >= 0 ? '+' : ''}{safeToFixed(preChg, 2)}%
                         </Typography>
-                        <Typography sx={{ color: postChg >= 0 ? '#4ade80' : '#f87171', fontWeight: 700, fontSize: '0.75rem' }}>
+                        <Typography sx={{ color: postChg >= 0 ? '#059669' : '#e11d48', fontWeight: 800, fontSize: '0.78rem' }}>
                           Post-Earnings Reaction: {postChg >= 0 ? '+' : ''}{safeToFixed(postChg, 2)}% ►
                         </Typography>
                       </Box>
@@ -552,8 +555,8 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
                   {/* Unified Timeline Rendering All Days + Center Pivot */}
                   {loadingPrices ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4, gap: 2 }}>
-                      <CircularProgress size={24} sx={{ color: '#a78bfa' }} />
-                      <Typography sx={{ color: '#94a3b8', fontSize: '0.85rem' }}>
+                      <CircularProgress size={24} sx={{ color: '#0f172a' }} />
+                      <Typography sx={{ color: '#64748b', fontSize: '0.85rem', fontWeight: 600 }}>
                         Fetching live historical exchange OHLCV data from NSE / Yahoo Finance...
                       </Typography>
                     </Box>

@@ -1,10 +1,68 @@
+:root {
+  --bg-default: #f8fafc;
+  --bg-paper: #ffffff;
+  --bg-card: #ffffff;
+  --border-color: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --accent-primary: #0f172a;
+  --accent-secondary: #6366f1;
+}
+
 body {
   margin: 0;
+  padding: 0;
+  background-color: #f8fafc;
+  background-image: 
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(167, 139, 250, 0.22), transparent),
+    radial-gradient(ellipse 70% 50% at 90% 80%, rgba(129, 140, 248, 0.15), transparent),
+    radial-gradient(circle at 10% 90%, rgba(238, 242, 255, 0.6), transparent);
+  background-attachment: fixed;
+  color: var(--text-primary);
   font-family: 'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  min-height: 100vh;
 }
 
 * {
   box-sizing: border-box;
 }
+
+/* Custom Nexchange Light Slate Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Tabular Numbers for tables and metrics */
+.tabular-nums, table, .MuiDataGrid-cell {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Smooth micro-transitions for interactive links and elements */
+a {
+  color: #6366f1;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+a:hover {
+  color: #4f46e5;
+}
+
