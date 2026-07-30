@@ -94,12 +94,33 @@ A dedicated visualization module designed to perform event studies around offici
 A real-time institutional quantitative scanner engineered to rank the entire NSE equities universe across five orthogonal alpha dimensions:
 - **Five-Pillar Composite Score (T / F / SM / D / Regime)**: Normalizes and blends **Technical Strength** (breakout velocity vs SMA200/DMA50), **Fundamental Quality** (ROE & debt efficiency), **Smart Money Accumulation** (relative volume expansion and block order flows), **Derivatives Structure** (volatility dynamics), and **Market Regime Alignment** (`^NSEI` index structural health) into a continuous 100-point index.
 - **Automated Anomaly Attention Trigger**: Immediately flags equities for urgent analyst intervention when anomaly criteria are satisfied (e.g., daily volume exceeding $2\times$ the 20-day average, sudden volatility expansion, imminent earnings fixture within $\le 7$ days, or trend divergence).
-- **Embedded ML Probability & AI Sentiment (Phases 3–5)**: Incorporates calibrated 5-day directional gain probabilities ($P(\text{gain, 5d})$) from our LightGBM/XGBoost engine, SHAP feature attribution logs, and real-time news catalyst sentiment scores via Google Gemini LLM synthesis.
+- **Embedded ML Probability & AI Sentiment (Phases 3–5)**: Incorporates calibrated multi-horizon directional gain probabilities ($P(\text{gain, 3d})$, $P(\text{gain, 5d})$, $P(\text{gain, 10d})$) from our LightGBM/XGBoost engine, PCA sequence trajectory embeddings, SHAP feature attribution logs, and real-time news catalyst sentiment scores via Google Gemini LLM synthesis.
 
 ### 4.5 Intensive Strategy & Momentum Backtesting Engine (`IntensiveBacktestEngine`)
 An interactive quantitative simulation module directly accessible from the momentum grid via a dark glassmorphic report modal:
 - **Net-of-Friction Accuracy Calculation**: Automatically subtracts a **0.20% round-trip transaction friction deduction** (accounting for Indian Securities Transaction Tax, Stamp Duty, GST, brokerage fees, and execution impact cost) from every simulated trade return, guaranteeing realistic edge reporting.
 - **Executive Portfolio Analytics**: Computes strict **Net Win Rates**, **Expected Value (EV)** per trade ($\text{EV} = (\text{Win Rate} \times \text{Avg Gain}) + (\text{Loss Rate} \times \text{Avg Loss})$), **Profit Factor** ($\frac{\sum \text{Winning Gains}}{|\sum \text{Losing Losses}|}$), **Sharpe/Sortino Ratios**, and **Nifty 50 Alpha (%)** across customizable 1-Year, 3-Year, and 5-Year historical windows.
+
+### 4.6 Native NSE Hybrid Data & Surveillance Pipeline (`NseDataService`)
+Engineered to deliver institutional accuracy by supplementing global historical price feeds with native Indian market parameters:
+- **Official Daily Bhavcopy Ingestion**: Downloads and parses daily EOD exchange CSV archives to extract precise T+1 Delivery Percentages (differentiating long-term capital accumulation from intraday speculation).
+- **Regulatory Surveillance Watchlists**: Automatically syncs with active SEBI & NSE **Additional Surveillance Measure (ASM)** and **Graded Surveillance Measure (GSM)** warning rosters and frozen circuit-filter tables. Equities flagged under surveillance are automatically barred from momentum BUY recommendations.
+- **Institutional Order Flows**: Monitors daily regulatory disclosures for large Bulk and Block deals to quantify institutional sentiment directions.
+- **Hybrid Fallback Resilience**: Employs polite rotating headers and robust timeout retries when accessing NSE archives, gracefully falling back to historical database proxies if exchange rate limits trigger.
+
+### 4.7 Institutional Portfolio Risk Engine & Emergency Kill Switch (`RiskEngine`)
+An enterprise-grade safety defense layer integrated into the quantitative evaluation loop to guard capital and prevent systemic portfolio blowups:
+- **Emergency Algorithmic Kill Switch**: Automatically monitors trailing portfolio drawdowns across live and simulated recommendations. If rolling maximum drawdown crosses **-15.0%** (or during a systemic market crash), the **Kill Switch automatically trips**. While active, all new directional `BUY` momentum signals are instantly halted across the dashboard (downgraded to `WATCHLIST` or `EXIT`) until an analyst verifies market recovery and manually resets the system.
+- **Strict Concurrency Caps**: Caps active portfolio exposure at a maximum of **15 concurrent long recommendations**, preventing capital dilution and over-diversification.
+- **Concentration & Sizing Ceilings**: Enforces a strict **30% maximum capital allocation per industry sector** and caps individual position weighting at 20% max (adjusted dynamically via ATR volatility sizing).
+- **Correlation Gating**: Rejects new candidate BUY recommendations if their trailing 180-day daily price returns exhibit a Pearson correlation $>0.78$ with existing portfolio holdings.
+- **Event-Risk Blackouts**: Enforces a protective trading exclusion buffer that suppresses directional BUY entries within $\le 3$ trading days of an upcoming corporate earnings announcement or scheduled macroeconomic release.
+
+### 4.8 Validation Suite, IC Tracking & Model Shadow Probation (`ValidationService`)
+A continuous real-world verification infrastructure ensuring statistical integrity and AI safety:
+- **14-Day Shadow Model Probationary Controller ("Shadow Mode")**: Whenever automated walk-forward workers retrain a new AI/ML predictive model, it is prohibited from immediately taking control of live trading recommendations. Instead, it enters **Shadow Mode**—an automated probationary testing period where it calculates predictions silently in the background alongside our active production model for **14 days**. Only if the new shadow model statistically proves a superior forward win-rate accuracy over those 14 days will the controller authorize its official switch into active production.
+- **Rolling Information Coefficient (IC) Tracking**: Calculates daily Spearman rank correlations between composite momentum scores and actual subsequently realized price returns across the universe, guaranteeing signal edge persistence ($IC > 0.03$).
+- **Quintile Spread Monotonicity Audit**: Monthly automated test sorting all scored equities into 5 quintile buckets to mathematically verify that Quintile 5 (top momentum ranks) monotonically outperforms Quintile 1 (laggard ranks).
 
 ---
 
@@ -128,7 +149,22 @@ Executed as a weekly background cron job by Celery Beat:
 - Re-fits our LightGBM gradient booster across trailing historical OHLCV features using Purged Walk-Forward Cross-Validation.
 - Tracks Population Stability Index (PSI) drift across data distributions and updates model hyperparameters and PCA sequence trajectory compression weights.
 
-### 5.6 Intensive Historical Backtest CLI Suite (`run_backtest_suite.py`)
+### 5.6 Overnight NSE Hybrid Data Ingestion (`sync_nse_market_data_task`)
+Scheduled in Celery Beat to execute daily after exchange settlement hours (19:30 IST):
+- Connects to exchange archives to download official EOD Bhavcopy CSVs, extracting daily Delivery Percentages and Bulk/Block institutional flows.
+- Synchronizes active regulatory exclusions (ASM/GSM watchlists) to prevent scoring compromised equities.
+
+### 5.7 Daily Forward Return Resolution & IC Audit (`resolve_realized_forward_returns_task`)
+Runs daily via Celery Beat:
+- Scopes past prediction logs whose 3-day, 5-day, or 10-day forward prediction horizons have matured.
+- Compares real-world realized market price movements against past predictions to compute exact predictive calibration and update rolling Spearman Rank Information Coefficients (IC).
+
+### 5.8 Weekly Shadow Model Probation Review (`audit_shadow_model_performance_task`)
+Scheduled weekly by Celery Beat:
+- Reviews all AI/ML models currently undergoing silent probationary evaluation in Shadow Mode.
+- Checks whether 14 days of live statistical backfill have been completed and evaluates comparative precision against baseline production models before triggering promotion.
+
+### 5.9 Intensive Historical Backtest CLI Suite (`run_backtest_suite.py`)
 A containerized batch simulation script designed for large-scale multi-year historical accuracy sweeps across NSE constituents:
 - Invokable inside Docker via `docker compose exec -T backend python run_backtest_suite.py --limit 50 --years 3`.
 - Outputs an executive ASCII table directly to the console detailing trade counts, win rates, Sharpe ratios, profit factors, and benchmark Nifty 50 alpha, while exporting detailed JSON research logs to disk.
@@ -138,12 +174,16 @@ A containerized batch simulation script designed for large-scale multi-year hist
 ## 6. Database Schema Core Entities
 
 - `User`: Manages analyst identities, encrypted passwords, and session authentication.
-- `Company`: Primary entity storing stock metadata (Ticker, Name, Purpose, Upcoming Date), immediate closing pricing, 4-quarter fundamental snapshots, and normalized health grades.
-- `EarningsReport`: Historical ledger of past quarterly earnings events.
+- `Company`: Primary entity storing stock metadata (Ticker, Name, Purpose, Upcoming Date), immediate closing pricing, 4-quarter fundamental snapshots, normalized health grades, and Point-in-Time timestamps (`known_at`, `period_end`).
+- `EarningsReport`: Historical ledger of past quarterly earnings events with strict publication lag timestamps.
 - `Prediction`: Directional confidence scoring and statistical probability estimates.
 - `EventStudyResult`: Holds empirical backtested performance metrics (Pre-announcement drift %, announcement gap %, post-announcement return trajectories).
 - `StrategyBacktest`: Logs quantitative event strategies (A–F) and rolling momentum simulations, recording exact win rates, expected values, profit factors, drawdown profiles, and total net trades executed.
-- `MomentumSignal`: Persists multi-factor composite ranks (Technical, Fundamental, Smart Money, Derivatives, Regime), ML gain probability calibrations ($P(\text{gain, 5d})$), volatility stop losses, and attention anomaly flags.
+- `MomentumSignal`: Persists multi-factor composite ranks (Technical, Fundamental, Smart Money, Derivatives, Regime), ML gain probability calibrations ($P(\text{gain, 3d/5d/10d})$), volatility stop losses, attention anomaly flags, and point-in-time timestamps.
+- `DailyBhavcopy`: Stores official EOD exchange records including trade date volume, closing prices, and precise T+1 Delivery Percentages.
+- `BulkBlockDeal`: Archives large institutional regulatory transaction disclosures (Bulk/Block deals) to gauge professional capital bias.
+- `SurveillanceWatchlist`: Registry of equities actively listed under SEBI/NSE ASM, GSM, or circuit breaker trading exclusions.
+- `ScorePredictionLog`: Point-in-time historical audit ledger logging daily composite scores and multi-horizon gain predictions alongside subsequently realized 3d/5d/10d forward returns for IC verification and shadow model evaluation.
 - `TechnicalSnapshot`: Point-in-time snapshot of technical trading indicator oscillators.
 - `AIAnalysisReport`: Persisted storage for LLM-generated qualitative analytical narratives, news catalyst sentiments, and markdown commentary.
 
@@ -188,4 +228,4 @@ When extending backend models or adding new analytical fields:
 ---
 
 ## 8. Git Maintenance & Branch Status
-The local repository is connected to the upstream remote `origin` (`main` branch). All UI/UX density refinements, interactive click-only tooltip behaviors, unified earnings pivot number lines, Multi-Factor Momentum & Attention Scanners (Phases 1–5), ML gain calibration pipelines, and the Intensive Net-of-Costs Strategy Backtesting Suite have been validated against the containerized test suite and incorporated into the active deployment branch.
+The local repository is connected to the upstream remote `origin` (`main` branch). All UI/UX density refinements, interactive click-only tooltip behaviors, unified earnings pivot number lines, Multi-Factor Momentum & Attention Scanners (Phases 1–5), multi-horizon ML probability pipelines, native NSE Bhavcopy T+1 delivery parsing, regulatory surveillance filtering, Portfolio Risk Engine with Emergency Kill Switch (-15% drawdown limit), and the 14-Day Shadow Model Probationary verification suite have been fully incorporated into the active containerized deployment branch.

@@ -102,13 +102,24 @@ class MomentumService:
         de_ratio = float(company.debt_to_equity) if company.debt_to_equity is not None else 1.0
         pe_ratio = float(company.pe_ratio) if (company.pe_ratio is not None and company.pe_ratio > 0) else 30.0
 
-        # Phase 2: Smart Money & Derivatives factor calculation
+        # Phase 2: Smart Money & Derivatives factor calculation with native NSE Bhavcopy T+1 Delivery %
+        from app.services.nse_data_service import NseDataService
+        from app.services.ml_service import MomentumMLService
+        nse_svc = NseDataService(self.db)
+        ml_svc = MomentumMLService(self.db)
+
+        deliv_pct = nse_svc.get_delivery_pct(company.ticker)
         promoter = float(company.promoter_holding or 0.0)
         fii = float(company.fii_holding or 0.0)
         dii = float(company.dii_holding or 0.0)
         inst_holding = fii + dii
-        smart_money_val = promoter * 0.4 + inst_holding * 0.6
-        derivatives_val = (relative_volume * 50.0) / max(1.0, abs(high_52w - dma_200) / max(0.1, dma_200))
+        smart_money_val = (promoter * 0.3) + (inst_holding * 0.5) + (deliv_pct * 0.2)
+        derivatives_val = ((relative_volume * 40.0) + (deliv_pct * 0.6)) / max(1.0, abs(high_52w - dma_200) / max(0.1, dma_200))
+
+        # Phase 5 PCA Sequence Trajectory Embeddings
+        recent_prices = df['Close'].tail(30).tolist()
+        recent_vols = df['Volume'].tail(30).tolist()
+        seq_embeddings = ml_svc.generate_sequence_embeddings(recent_prices, recent_vols, n_components=2)
 
         return {
             "company": company,
@@ -130,7 +141,8 @@ class MomentumService:
             "pe_score": -pe_ratio,  # Lower PE is better in simple ranking
             "smart_money_val": smart_money_val,
             "inst_holding": inst_holding,
-            "derivatives_val": derivatives_val
+            "derivatives_val": derivatives_val,
+            "sequence_embeddings": seq_embeddings
         }
 
     def scan_and_rank_universe(self, limit: Optional[int] = None) -> Dict[str, Any]:
@@ -149,18 +161,32 @@ class MomentumService:
         
         raw_metrics = []
         excluded_count = 0
+        surveillance_count = 0
+
+        # Instantiate Institutional Algorithmic Engines
+        from app.services.nse_data_service import NseDataService
+        from app.services.risk_engine import RiskEngine
+        from app.services.validation_service import ValidationService
+        nse_service = NseDataService(self.db)
+        risk_engine = RiskEngine(self.db)
+        val_service = ValidationService(self.db)
 
         # 1. Fetch real-time metrics for all companies
         for c in companies:
             try:
+                # Regulatory Surveillance Gate (ASM / GSM / Frozen Circuit exclusion)
+                surv_status = nse_service.is_under_surveillance(c.ticker)
+                if surv_status.get("is_restricted"):
+                    surveillance_count += 1
+                    continue
+
                 data = self.evaluate_stock_raw_metrics(c)
                 if data is None:
                     continue
 
-                # Universe Liquidity Filter (Phase 1 Spec: ADV_MIN > 5 Cr / 50M INR, or fallback check)
-                # If total company pool is small in demo/dev workspace, we adjust threshold to prevent zeroing out all test tickers
+                # Universe Liquidity Filter (ADV_MIN > 5 Cr / 50M INR)
                 adv = data["adv_20d"]
-                if adv < 500000 and len(companies) > 200: # Apply strict filter only if universe is sufficiently large
+                if adv < 500000 and len(companies) > 200:
                     excluded_count += 1
                     continue
 
@@ -202,6 +228,7 @@ class MomentumService:
 
         processed_count = 0
         attention_count = 0
+        active_recommended_signals = []
 
         # Phase 3 & 4: Instantiate ML and AI Catalyst Engines
         from app.services.ml_service import MomentumMLService
@@ -209,7 +236,7 @@ class MomentumService:
         ml_svc = MomentumMLService(self.db)
         ai_svc = AIAnalystService()
 
-        # 3. Decision Engine & Attention Trigger Identification
+        # 3. Decision Engine, Portfolio Risk Controls & Attention Trigger Identification
         for idx, row in m_df.iterrows():
             comp = row['company']
             comp_score = float(row['composite_score'])
@@ -217,16 +244,22 @@ class MomentumService:
             fund_score = float(row['fundamental_score'])
             smart_score = float(row['smart_money_score'])
             deriv_score = float(row['derivatives_score'])
+            seq_embed = row.get('sequence_embeddings')
 
-            # Calibrated Phase 3 ML Probability Inference P(gain, 5d)
-            prob_gain = ml_svc.predict_gain_probability({
+            # Calibrated Phase 3 & 5 Multi-Horizon ML Probability Inference P(gain, 3d/5d/10d)
+            multi_probs = ml_svc.predict_multi_horizon({
                 "fundamental_score": fund_score,
                 "technical_score": tech_score,
                 "regime_score": regime_score,
                 "smart_money_score": smart_score,
                 "derivatives_score": deriv_score
-            })
-            comp_score = round(0.55 * comp_score + 0.45 * (prob_gain * 100.0), 2)
+            }, sequence_embeddings=seq_embed)
+
+            prob_gain_3d = multi_probs["prob_3d"]
+            prob_gain_5d = multi_probs["prob_5d"]
+            prob_gain_10d = multi_probs["prob_10d"]
+            
+            comp_score = round(0.55 * comp_score + 0.45 * (prob_gain_5d * 100.0), 2)
             cur_price = float(row['current_price'])
             atr = float(row['latest_atr'])
             rel_vol = float(row['relative_volume'])
@@ -235,17 +268,21 @@ class MomentumService:
             dma_50 = float(row['dma_50'])
             dma_200 = float(row['dma_200'])
 
-            # Determine Action Signal (Section 7)
-            signal = "NEUTRAL"
-            if comp_score >= 72.0 and tech_score >= 60.0 and "Bearish" not in regime_status:
-                signal = "BUY"
+            # Determine Raw Action Signal (Section 7)
+            raw_signal = "NEUTRAL"
+            if comp_score >= 72.0 and tech_score >= 60.0 and "Bearish" not in regime_status and prob_gain_5d >= 0.55:
+                raw_signal = "BUY"
             elif comp_score >= 60.0 or rel_vol >= 2.0:
-                signal = "WATCHLIST"
+                raw_signal = "WATCHLIST"
             elif comp_score < 38.0 or (cur_price < dma_200 and rsi_val < 42):
-                signal = "EXIT"
+                raw_signal = "EXIT"
+
+            # Section 8 Portfolio Risk Engine Gate & Emergency Kill Switch evaluation
+            risk_eval = risk_engine.evaluate_signal_risk(comp, raw_signal, comp_score, active_recommended_signals)
+            signal = risk_eval["signal"]
 
             # Check for immediate Attention Required Triggers
-            reasons = []
+            reasons = list(risk_eval["risk_reasons"]) # Include any risk warnings first
             if rel_vol >= 2.5:
                 reasons.append(f"🔥 Unusual Volume Spike ({rel_vol:.1f}x 20-day avg)")
             if (cur_price >= high52w * 0.97) and rel_vol >= 1.5:
@@ -287,12 +324,25 @@ class MomentumService:
                 suggested_weight = 5.0
 
             # Confidence Score (Phase 3 Calibrated): Distance of predicted probability from random chance (0.5)
-            prob_distance = abs(prob_gain - 0.50) * 200.0  # Scaled 0 to 100
+            prob_distance = abs(prob_gain_5d - 0.50) * 200.0  # Scaled 0 to 100
             confidence = round(min(99.0, max(15.0, prob_distance * 0.7 + abs(comp_score - 50.0) * 0.5)), 1)
 
-            # Persist to DB
+            if signal == "BUY":
+                active_recommended_signals.append({"ticker": comp.ticker, "sector": comp.sector, "signal": signal, "score": comp_score})
+
+            # Section 9 Point-in-Time Prediction Snapshot Logging for IC tracking
+            val_service.log_prediction_snapshot(
+                company_id=comp.id,
+                ticker=comp.ticker,
+                composite_score=comp_score,
+                prob_3d=prob_gain_3d,
+                prob_5d=prob_gain_5d,
+                prob_10d=prob_gain_10d,
+                signal=signal
+            )
+
+            # Persist to DB with Point-in-Time discipline
             try:
-                # Delete old signals for this company to maintain crisp latest snapshot or append new
                 self.db.query(MomentumSignal).filter(MomentumSignal.company_id == comp.id).delete()
                 
                 sig_record = MomentumSignal(
@@ -310,11 +360,11 @@ class MomentumService:
                     stop_loss_price=stop_loss,
                     position_size_pct=suggested_weight,
                     requires_attention=requires_attention,
-                    attention_reasons=" | ".join(reasons) if reasons else None
+                    attention_reasons=" | ".join(reasons) if reasons else None,
+                    known_at=datetime.utcnow()
                 )
                 self.db.add(sig_record)
                 
-                # Also update latest price on Company record while we have real-time feed
                 comp.current_price = cur_price
                 comp.momentum_probability = comp_score
                 
@@ -328,6 +378,7 @@ class MomentumService:
             "status": "Success",
             "analyzed": processed_count,
             "excluded_liquidity": excluded_count,
+            "excluded_surveillance": surveillance_count,
             "attention_flagged": attention_count,
             "market_regime": regime
         }

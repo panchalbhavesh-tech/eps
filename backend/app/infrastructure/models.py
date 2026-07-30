@@ -68,6 +68,8 @@ class Company(Base):
     fii_holding = Column(Float, nullable=True)
     dii_holding = Column(Float, nullable=True)
     public_holding = Column(Float, nullable=True)
+    known_at = Column(DateTime, default=datetime.utcnow, nullable=True)
+    period_end = Column(DateTime, nullable=True)
 
     earnings_reports = relationship("EarningsReport", back_populates="company", cascade="all, delete-orphan")
     predictions = relationship("Prediction", back_populates="company", cascade="all, delete-orphan")
@@ -93,6 +95,8 @@ class EarningsReport(Base):
     management_guidance = Column(String, nullable=True)
     market_expectation = Column(String, nullable=True)
     overall_rating = Column(String, nullable=True)
+    known_at = Column(DateTime, default=datetime.utcnow, nullable=True)
+    period_end = Column(DateTime, nullable=True)
 
     company = relationship("Company", back_populates="earnings_reports")
 
@@ -216,5 +220,63 @@ class MomentumSignal(Base):
     position_size_pct = Column(Float, nullable=True)
     requires_attention = Column(Boolean, default=False)
     attention_reasons = Column(String, nullable=True)
+    known_at = Column(DateTime, default=datetime.utcnow, nullable=True)
+    period_end = Column(DateTime, nullable=True)
     company = relationship("Company", back_populates="momentum_signals")
+
+
+class DailyBhavcopy(Base):
+    __tablename__ = "daily_bhavcopy"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ticker = Column(String, index=True, nullable=False)
+    trade_date = Column(DateTime, nullable=False, index=True)
+    open_price = Column(Float, nullable=True)
+    high_price = Column(Float, nullable=True)
+    low_price = Column(Float, nullable=True)
+    close_price = Column(Float, nullable=True)
+    volume = Column(Float, nullable=True)
+    delivery_pct = Column(Float, nullable=True)
+    known_at = Column(DateTime, default=datetime.utcnow)
+
+
+class BulkBlockDeal(Base):
+    __tablename__ = "bulk_block_deals"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ticker = Column(String, index=True, nullable=False)
+    deal_date = Column(DateTime, nullable=False)
+    deal_type = Column(String, nullable=False) # 'BULK' or 'BLOCK'
+    client_name = Column(String, nullable=True)
+    direction = Column(String, nullable=False) # 'BUY' or 'SELL'
+    quantity = Column(Float, nullable=True)
+    trade_price = Column(Float, nullable=True)
+    known_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SurveillanceWatchlist(Base):
+    __tablename__ = "surveillance_watchlist"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ticker = Column(String, unique=True, index=True, nullable=False)
+    list_type = Column(String, nullable=False) # 'ASM', 'GSM', or 'CIRCUIT_FROZEN'
+    stage = Column(String, nullable=True)
+    date_added = Column(DateTime, default=datetime.utcnow)
+    known_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ScorePredictionLog(Base):
+    __tablename__ = "score_prediction_logs"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
+    ticker = Column(String, index=True, nullable=False)
+    date_evaluated = Column(DateTime, default=datetime.utcnow, index=True)
+    composite_score = Column(Float, nullable=True)
+    prob_gain_3d = Column(Float, nullable=True)
+    prob_gain_5d = Column(Float, nullable=True)
+    prob_gain_10d = Column(Float, nullable=True)
+    signal_emitted = Column(String, nullable=True)
+    model_version_id = Column(String, nullable=True, default="production")
+    is_shadow = Column(Boolean, default=False)
+    realized_3d_return = Column(Float, nullable=True)
+    realized_5d_return = Column(Float, nullable=True)
+    realized_10d_return = Column(Float, nullable=True)
+    known_at = Column(DateTime, default=datetime.utcnow)
 

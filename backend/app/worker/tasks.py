@@ -459,3 +459,49 @@ def retrain_momentum_ml_model_task(force_retrain: bool = True):
         raise e
     finally:
         db.close()
+
+
+@shared_task
+def sync_nse_market_data_task():
+    from app.services.nse_data_service import NseDataService
+    db = SessionLocal()
+    try:
+        service = NseDataService(db)
+        bhav_res = service.sync_daily_bhavcopy()
+        surv_res = service.sync_surveillance_watchlists()
+        return f"NSE Market Data Synced -> Bhavcopy: {bhav_res}, Surveillance: {surv_res}"
+    except Exception as e:
+        db.rollback()
+        print(f"Error syncing NSE market data: {e}")
+    finally:
+        db.close()
+
+
+@shared_task
+def resolve_realized_forward_returns_task():
+    from app.services.validation_service import ValidationService
+    db = SessionLocal()
+    try:
+        val_svc = ValidationService(db)
+        res = val_svc.resolve_realized_forward_returns()
+        ic_res = val_svc.compute_rolling_ic()
+        return f"Forward Return Resolution: {res} | Rolling IC: {ic_res}"
+    except Exception as e:
+        db.rollback()
+        print(f"Error resolving forward returns: {e}")
+    finally:
+        db.close()
+
+
+@shared_task
+def audit_shadow_model_performance_task(model_id: str = "latest_shadow"):
+    from app.services.validation_service import ValidationService
+    db = SessionLocal()
+    try:
+        val_svc = ValidationService(db)
+        res = val_svc.evaluate_model_probation(new_model_id=model_id)
+        return f"Shadow Model Probation Audit: {res}"
+    except Exception as e:
+        print(f"Error evaluating model probation: {e}")
+    finally:
+        db.close()
