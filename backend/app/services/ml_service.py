@@ -150,32 +150,49 @@ class MomentumMLService:
             except Exception:
                 pass
 
-        # Gather signals for training simulation
-        signals = self.db.query(MomentumSignal).all()
-        if not signals or len(signals) < 10:
-            # Not enough stored DB events yet; train a bootstrapped synthetic initial calibration
-            self.selected_features = ['fundamental_score', 'technical_score', 'regime_score', 'smart_money_score', 'derivatives_score']
-            X = np.random.uniform(20, 90, size=(100, 5))
-            y = ((X[:, 0] * 0.3 + X[:, 1] * 0.4 + X[:, 2] * 0.3) > 60).astype(int)
-            self.lgb_model = lgb.LGBMClassifier(n_estimators=30, random_state=42, verbose=-1)
-            self.lgb_model.fit(X, y)
-        else:
-            data = []
-            for s in signals:
+        # Gather prediction logs with actual realized returns for training
+        from app.infrastructure.models import ScorePredictionLog
+        logs = self.db.query(ScorePredictionLog).filter(
+            ScorePredictionLog.realized_5d_return != None
+        ).all()
+
+        self.selected_features = [
+            'fundamental_score', 'technical_score', 'regime_score',
+            'smart_money_score', 'derivatives_score'
+        ]
+
+        if not logs or len(logs) < 30:
+            # Insufficient actual realized returns to train a statistically valid model; return None
+            self.lgb_model = None
+            return None
+
+        data = []
+        for log in logs:
+            # Match prediction log with historical momentum signal known at evaluation time
+            signal = self.db.query(MomentumSignal).filter(
+                MomentumSignal.company_id == log.company_id,
+                MomentumSignal.date_calculated <= log.date_evaluated
+            ).order_by(MomentumSignal.date_calculated.desc()).first()
+
+            if signal:
                 data.append({
-                    "fundamental_score": s.fundamental_score or 50.0,
-                    "technical_score": s.technical_score or 50.0,
-                    "regime_score": s.regime_score or 50.0,
-                    "smart_money_score": s.smart_money_score or 50.0,
-                    "derivatives_score": s.derivatives_score or 50.0,
-                    "target": 1 if (s.composite_score or 50) >= 65 else 0
+                    "fundamental_score": signal.fundamental_score or 50.0,
+                    "technical_score": signal.technical_score or 50.0,
+                    "regime_score": signal.regime_score or 50.0,
+                    "smart_money_score": signal.smart_money_score or 50.0,
+                    "derivatives_score": signal.derivatives_score or 50.0,
+                    "target": 1 if log.realized_5d_return > 0 else 0
                 })
-            df = pd.DataFrame(data)
-            self.selected_features = ['fundamental_score', 'technical_score', 'regime_score', 'smart_money_score', 'derivatives_score']
-            X = df[self.selected_features].fillna(50.0)
-            y = df['target'].values
-            self.lgb_model = lgb.LGBMClassifier(n_estimators=50, random_state=42, verbose=-1)
-            self.lgb_model.fit(X, y)
+
+        if len(data) < 30:
+            self.lgb_model = None
+            return None
+
+        df = pd.DataFrame(data)
+        X = df[self.selected_features].fillna(50.0)
+        y = df['target'].values
+        self.lgb_model = lgb.LGBMClassifier(n_estimators=50, random_state=42, verbose=-1)
+        self.lgb_model.fit(X, y)
 
         try:
             import joblib
@@ -231,7 +248,8 @@ class MomentumMLService:
         )
         base_prob = min(0.95, max(0.05, comp / 100.0))
 
-        if ML_AVAILABLE and self.train_or_load_model():
+        model = self.train_or_load_model() if ML_AVAILABLE else None
+        if model is not None:
             try:
                 x_vec = np.array([[
                     features.get("fundamental_score", 50.0),

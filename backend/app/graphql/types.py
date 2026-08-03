@@ -236,3 +236,34 @@ class IntensiveBacktestReportType:
     benchmark_nifty_return_pct: float
     momentum_performance: Optional[MomentumPerformanceType] = None
     event_strategies: Optional[List[StrategyBacktestType]] = None
+
+
+@strawberry.type
+class HypothesisExperimentType:
+    id: str
+    hypothesis_id: str
+    execution_date: str
+    total_trials_in_family: int
+    classic_sharpe: Optional[float] = None
+    deflated_sharpe: Optional[float] = None
+    spearman_ic_mean: Optional[float] = None
+    spearman_ic_tstat: Optional[float] = None
+    is_statistically_valid: bool
+    failure_mode_tag: Optional[str] = None
+
+
+@strawberry.type
+class ResearchHypothesisType:
+    id: str
+    name: str
+    author: str
+    economic_mechanism: str
+    economic_rationale_text: str
+    alpha_expression: str
+    target_universe: str
+    holding_horizon_days: int
+    current_stage: str
+    created_at: str
+    decommissioned_at: Optional[str] = None
+    decommission_reason: Optional[str] = None
+    experiments: Optional[List[HypothesisExperimentType]] = None

@@ -40,6 +40,7 @@ def upgrade_db():
         ("companies", "financial_health_grade", "VARCHAR"),
         ("companies", "momentum_probability", "FLOAT"),
         ("companies", "avg_post_earnings_momentum", "FLOAT"),
+        ("companies", "post_release_return", "FLOAT"),
         ("companies", "enterprise_value", "FLOAT"),
         ("companies", "high_52w", "FLOAT"),
         ("companies", "low_52w", "FLOAT"),
@@ -112,6 +113,64 @@ def upgrade_db():
         except Exception as e:
             conn.rollback()
             print(f"Error adding {col_name} to momentum_signals: {e}")
+
+    try:
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_bhavcopy_ticker_date
+            ON daily_bhavcopy (ticker, trade_date);
+        """)
+        print("Ensured unique index on daily_bhavcopy.")
+    except Exception as e:
+        conn.rollback()
+        print(f"Error creating index on daily_bhavcopy: {e}")
+
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS research_hypotheses (
+                id UUID PRIMARY KEY,
+                name VARCHAR(255) NOT NULL UNIQUE,
+                author VARCHAR(100) DEFAULT 'AI_RESEARCH_AGENT',
+                economic_mechanism VARCHAR(100) NOT NULL,
+                economic_rationale_text TEXT NOT NULL,
+                alpha_expression VARCHAR(500) NOT NULL,
+                target_universe VARCHAR(100) DEFAULT 'NIFTY500',
+                holding_horizon_days INTEGER DEFAULT 5,
+                current_stage VARCHAR(50) DEFAULT 'DRAFT_HYPOTHESIS',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                decommissioned_at TIMESTAMP,
+                decommission_reason VARCHAR(255),
+                known_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        print("Ensured research_hypotheses table exists.")
+    except Exception as e:
+        conn.rollback()
+        print(f"Error creating research_hypotheses table: {e}")
+
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS hypothesis_experiments (
+                id UUID PRIMARY KEY,
+                hypothesis_id UUID NOT NULL REFERENCES research_hypotheses(id) ON DELETE CASCADE,
+                execution_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                test_window_start TIMESTAMP,
+                test_window_end TIMESTAMP,
+                total_trials_in_family INTEGER DEFAULT 1,
+                classic_sharpe FLOAT,
+                deflated_sharpe FLOAT,
+                spearman_ic_mean FLOAT,
+                spearman_ic_tstat FLOAT,
+                max_drawdown_pct FLOAT,
+                turnover_decay_penalty FLOAT,
+                is_statistically_valid BOOLEAN DEFAULT FALSE,
+                failure_mode_tag VARCHAR(100),
+                known_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        print("Ensured hypothesis_experiments table exists.")
+    except Exception as e:
+        conn.rollback()
+        print(f"Error creating hypothesis_experiments table: {e}")
 
     cursor.close()
     conn.close()

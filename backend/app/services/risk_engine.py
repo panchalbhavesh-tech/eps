@@ -30,15 +30,19 @@ class RiskEngine:
             return self._kill_switch_active
 
         try:
-            # Query active momentum recommendations and historical drawdown profiles
-            backtests = self.db.query(StrategyBacktest).all()
-            if backtests:
-                drawdowns = [float(b.max_drawdown) for b in backtests if b.max_drawdown is not None and b.max_drawdown < 0]
-                avg_drawdown = sum(drawdowns) / len(drawdowns) if drawdowns else 0.0
-                
-                # If average realized system drawdown breaches threshold, trip switch
-                if avg_drawdown < self.mdd_kill_switch_threshold:
-                    self._kill_switch_active = (True, f"Emergency Kill Switch Tripped: System average drawdown ({avg_drawdown:.1f}%) crossed {self.mdd_kill_switch_threshold}% threshold.")
+            # Evaluate trailing performance of live recommendations
+            from app.infrastructure.models import ScorePredictionLog
+            cutoff = datetime.utcnow() - timedelta(days=30)
+            logs = self.db.query(ScorePredictionLog).filter(
+                ScorePredictionLog.is_shadow == False,
+                ScorePredictionLog.date_evaluated >= cutoff,
+                ScorePredictionLog.realized_5d_return != None
+            ).all()
+            if logs:
+                returns = [float(l.realized_5d_return) for l in logs]
+                cumulative_return = sum(returns) / len(returns)
+                if cumulative_return < self.mdd_kill_switch_threshold:
+                    self._kill_switch_active = (True, f"Emergency Kill Switch Tripped: Live recommendation trailing return ({cumulative_return:.1f}%) breached {self.mdd_kill_switch_threshold}% safety boundary.")
                     return self._kill_switch_active
         except Exception as e:
             print(f"Error checking kill switch status: {e}")
@@ -89,14 +93,36 @@ class RiskEngine:
         """
         Rejects new BUY recommendations if Pearson correlation against existing recommended long positions exceeds 0.78.
         """
-        if not existing_buy_tickers or not candidate_returns or len(candidate_returns) < 20:
+        if not existing_buy_tickers:
             return False, ""
+
+        try:
+            from app.services.ohlcv_cache_service import OHLCVCacheService
+            cache_svc = OHLCVCacheService(self.db)
+            cand_df = cache_svc.get_ohlcv(ticker)
+            if cand_df.empty or len(cand_df) < 30 or 'Close' not in cand_df:
+                return False, ""
             
-        # In actual execution, if the portfolio is nearing capacity, we check correlation against top holding
-        if len(existing_buy_tickers) >= (self.max_concurrent_positions * 0.8):
-            # If already near position limit, enforce strict diversity gate
-            if any(ticker[:3] == ex[:3] for ex in existing_buy_tickers):
-                return True, "🔗 Correlation Gate Rejected: Highly correlated price behavior with existing portfolio holdings."
+            cand_rets = cand_df['Close'].pct_change().dropna().tail(60)
+            if len(cand_rets) < 20:
+                return False, ""
+
+            for ex_ticker in existing_buy_tickers:
+                if not ex_ticker or ex_ticker == ticker:
+                    continue
+                ex_df = cache_svc.get_ohlcv(ex_ticker)
+                if ex_df.empty or 'Close' not in ex_df:
+                    continue
+                ex_rets = ex_df['Close'].pct_change().dropna().tail(60)
+                
+                # Align dates to calculate accurate correlation
+                combined = pd.concat([cand_rets, ex_rets], axis=1, join='inner')
+                if len(combined) >= 20:
+                    corr = combined.iloc[:, 0].corr(combined.iloc[:, 1], method='pearson')
+                    if corr > 0.78:
+                        return True, f"🔗 Correlation Gate Rejected: Pearson correlation ({corr:.2f}) with existing holding {ex_ticker} exceeds 0.78 diversity cap."
+        except Exception as e:
+            print(f"Error executing correlation gate check for {ticker}: {e}")
 
         return False, ""
 
@@ -136,6 +162,13 @@ class RiskEngine:
         if is_blackout:
             final_signal = "WATCHLIST"
             reasons.append(blackout_reason)
+
+        # 5. Correlation Diversity Gate
+        existing_buy_tickers = [s.get("ticker") for s in active_buys if s.get("ticker")]
+        is_correl, correl_reason = self.check_correlation_gate(company.ticker, None, existing_buy_tickers)
+        if is_correl:
+            final_signal = "WATCHLIST"
+            reasons.append(correl_reason)
 
         return {
             "signal": final_signal,

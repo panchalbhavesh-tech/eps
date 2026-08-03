@@ -1,7 +1,7 @@
 import strawberry
 from typing import List, Optional
 from strawberry.types import Info
-from app.graphql.types import CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType
+from app.graphql.types import CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType
 from app.services.company_service import CompanyService
 from app.graphql.context import Context
 import uuid
@@ -468,4 +468,48 @@ class Query:
             momentum_performance=mom_perf,
             event_strategies=event_strats
         )
+
+    @strawberry.field
+    def research_hypotheses(self, info: Info[Context, None], stage_filter: Optional[str] = None) -> List[ResearchHypothesisType]:
+        from app.infrastructure.models import ResearchHypothesis
+        db = info.context.db
+        query = db.query(ResearchHypothesis)
+        if stage_filter:
+            query = query.filter(ResearchHypothesis.current_stage == stage_filter)
+        hyps = query.order_by(ResearchHypothesis.created_at.desc()).all()
+        
+        result = []
+        for h in hyps:
+            exps = [
+                HypothesisExperimentType(
+                    id=str(e.id),
+                    hypothesis_id=str(e.hypothesis_id),
+                    execution_date=e.execution_date.isoformat() if e.execution_date else "",
+                    total_trials_in_family=e.total_trials_in_family or 1,
+                    classic_sharpe=e.classic_sharpe,
+                    deflated_sharpe=e.deflated_sharpe,
+                    spearman_ic_mean=e.spearman_ic_mean,
+                    spearman_ic_tstat=e.spearman_ic_tstat,
+                    is_statistically_valid=e.is_statistically_valid or False,
+                    failure_mode_tag=e.failure_mode_tag
+                ) for e in (h.experiments or [])
+            ]
+            result.append(
+                ResearchHypothesisType(
+                    id=str(h.id),
+                    name=h.name,
+                    author=h.author or "AI_RESEARCH_AGENT",
+                    economic_mechanism=h.economic_mechanism,
+                    economic_rationale_text=h.economic_rationale_text,
+                    alpha_expression=h.alpha_expression,
+                    target_universe=h.target_universe or "NIFTY500",
+                    holding_horizon_days=h.holding_horizon_days or 5,
+                    current_stage=h.current_stage or "DRAFT_HYPOTHESIS",
+                    created_at=h.created_at.isoformat() if h.created_at else "",
+                    decommissioned_at=h.decommissioned_at.isoformat() if h.decommissioned_at else None,
+                    decommission_reason=h.decommission_reason,
+                    experiments=exps
+                )
+            )
+        return result
 

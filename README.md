@@ -5,7 +5,6 @@
 The platform is designed around a high-performance **Institutional Trading Terminal Interface** featuring dual **Trading Floor Dark** and **Institutional Light** aesthetic themes, optimized for ultra-dense screening across up to **885+ NSE equities natively monitored**.
 
 ---
-### https://chatgpt.com/share/6a701127-7ca4-83ee-be57-74540d19eab3
 ### ✨ Institutional Features & Frontend Trading Terminal Infrastructure
 
 #### 🖥️ Next-Gen Visual Architecture & Theme Engine
@@ -39,6 +38,10 @@ The platform is designed around a high-performance **Institutional Trading Termi
   - **Edge-to-Edge Terminal Grid Row Drawers**: Clicking any card slides open a zero-padding right-hand analytical panel where explainer banners, calculation code boxes, and intelligence feeds extend wall-to-wall without rounded borders or side margins.
   - **Mathematical Methodology & Time Decay**: Details source authority weightings, exponential 24-hour time decay ($\lambda$), emoji hype vs. financial rhetoric density, and verified custodial delivery (>65%) absorption ratios.
   - **Actionable Intelligence Feed with Clickable Navigation**: Synthesizes 10 live institutional press reports, 6 retail forum threads (`r/IndianStreetBets`, `r/IndiaInvestments`), and 5 Smart Money block deal signatures. Features live item counter badges, sentiment flag tags positioned in the top-right corner opposite headlines, and source/timestamp lines placed directly underneath headlines equipped with an external link affordance (`OpenInNewIcon`) that opens live search queries in a new browser tab upon clicking.
+- **Quantitative Hypothesis Laboratory (QHLM) & AI Quant Agent (`/research`)**:
+  - **5-Stage FSM Lifecycle Tracking**: Governs factor candidates through strict operational stages: `Draft`, `In-Sample Audit`, `Shadow Probation`, `Live Alpha Stream`, and `Rejected / Decayed Archive`.
+  - **Deflated Sharpe Ratio (DSR) Audit**: Implements Bailey & Lopez de Prado statistical evaluation ($DSR \ge 0.85$, student-$t$ significance $|t| \ge 1.96$) to explicitly penalize multiple testing variance ($N$ family trials) and protect capital from false discovery (P-Hacking).
+  - **Autonomous Gemini Quant Generation**: Powered by `AIAnalystService.generate_orthogonal_hypothesis()`, which ingests historical database state to autonomously formulate novel orthogonal vector alpha equations paired with mandatory *A Priori* economic mechanisms (`MICROSTRUCTURE`, `BEHAVIORAL`, `RISK_PREMIUM`).
 - **High-Performance GraphQL & Database Caching Engine**: Eradicates dashboard loading bottlenecks across Events and Momentum pages by leveraging SQLAlchemy batch relationship eager-loading (`selectinload`), memoized in-memory sector statistical caching (`momentum_cache_service.py`) with thread-safe atomic swaps, and optimized GraphQL payload projections for sub-second page rendering.
 - **Native NSE Bhavcopy & Surveillance Watchlists**: Daily automated background ingestion of official NSE EOD Delivery Percentages (T+1), institutional Bulk/Block Deal directions, and automatic filtering of equities placed on SEBI Additional & Graded Surveillance Measure (ASM/GSM) rosters.
 - **Institutional Portfolio Risk Engine & Emergency Kill Switch**: Automated continuous drawdown monitoring that trips an **Emergency Algorithmic Kill Switch** if simulated system trailing losses cross **-15.0%**, instantly terminating all new directional BUY signals across the app. Enforces a 15 concurrent long position cap, a 30% maximum industry sector concentration limit, correlation gating against existing holdings, and a 3-day pre-earnings blackout buffer.

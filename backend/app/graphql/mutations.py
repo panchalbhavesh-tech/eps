@@ -1,4 +1,5 @@
 import strawberry
+from typing import Optional, List
 from strawberry.types import Info
 from app.graphql.types import AuthPayload, UserType
 from app.services.auth_service import AuthService
@@ -136,6 +137,47 @@ class Mutation:
         task = celery_app.send_task("app.worker.tasks.run_nse_momentum_scan_task")
         _log_queued_task(info.context.db, task.id, "app.worker.tasks.run_nse_momentum_scan_task")
         return f"Momentum scanner task {task.id} started in the background."
+
+    @strawberry.mutation
+    def register_research_hypothesis(
+        self,
+        info: Info[Context, None],
+        name: str,
+        economic_mechanism: str,
+        economic_rationale_text: str,
+        alpha_expression: str,
+        author: Optional[str] = "HUMAN_QUANT_ANALYST",
+        target_universe: Optional[str] = "NIFTY500",
+        holding_horizon_days: Optional[int] = 5
+    ) -> str:
+        from app.services.hypothesis_service import HypothesisService
+        db = info.context.db
+        svc = HypothesisService(db)
+        res = svc.register_hypothesis(
+            name=name,
+            economic_mechanism=economic_mechanism,
+            economic_rationale_text=economic_rationale_text,
+            alpha_expression=alpha_expression,
+            author=author or "HUMAN_QUANT_ANALYST",
+            target_universe=target_universe or "NIFTY500",
+            holding_horizon_days=holding_horizon_days or 5
+        )
+        if res.get("status") == "Error":
+            return f"ERROR: {res.get('message')}"
+        
+        try:
+            task = celery_app.send_task("app.worker.tasks.evaluate_single_hypothesis_task", args=[res["hypothesis_id"]])
+            _log_queued_task(db, task.id, "app.worker.tasks.evaluate_single_hypothesis_task")
+        except Exception as e:
+            print(f"Notice: Background hypothesis evaluation trigger bypassed: {e}")
+            
+        return f"SUCCESS: Hypothesis {name} registered with ID {res.get('hypothesis_id')} in stage DRAFT_HYPOTHESIS."
+
+    @strawberry.mutation
+    def trigger_automated_hypothesis_research(self, info: Info[Context, None]) -> str:
+        task = celery_app.send_task("app.worker.tasks.run_automated_hypothesis_research_task")
+        _log_queued_task(info.context.db, task.id, "app.worker.tasks.run_automated_hypothesis_research_task")
+        return f"Automated AI hypothesis research task {task.id} started in background."
 
 def _log_queued_task(db, task_id: str, name: str):
     from app.infrastructure.models import BackgroundJob

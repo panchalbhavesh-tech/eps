@@ -41,6 +41,14 @@ celery_app.conf.update(
             'task': 'app.worker.tasks.audit_shadow_model_performance_task',
             'schedule': 604800.0, # Weekly review of 14-day shadow probation status
         },
+        'sync-ohlcv-cache-daily': {
+            'task': 'app.worker.tasks.sync_ohlcv_cache_task',
+            'schedule': 86400.0, # Nightly incremental OHLCV cache synchronization
+        },
+        'run-automated-hypothesis-research-daily': {
+            'task': 'app.worker.tasks.run_automated_hypothesis_research_task',
+            'schedule': 86400.0, # Nightly QHLM FSM statistical evaluation and alpha decay retirement
+        },
     }
 )
 

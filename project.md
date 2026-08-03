@@ -168,6 +168,14 @@ Engineered to resolve data throughput bottlenecks and ensure instantaneous dashb
 - **In-Memory Thread-Safe Atomic Cache**: Implemented a specialized caching daemon (`momentum_cache_service.py`) that precomputes and buffers sector momentum aggregations and technical indicators directly within server runtime RAM.
 - **Non-Blocking Background Hydration**: The caching layer updates atomically without locking API client requests, reducing backend response latency from several seconds down to under **80ms** during heavy dashboard screening sessions.
 
+### 4.13 Quantitative Hypothesis Laboratory (QHLM) & Deflated Sharpe Verification (`HypothesisLaboratory.tsx`)
+An interactive quantitative terminal screen (`/research`) dedicated to rigorous algorithmic factor discovery, lifecycle management, and defense against statistical P-Hacking:
+- **Five-Stage FSM Pipeline Tracker**: Governs every alpha proposal through strict operational states: `DRAFT_HYPOTHESIS`, `IN_SAMPLE_AUDIT`, `OUT_OF_SAMPLE_SHADOW` (probation), `LIVE_ALPHA_STREAM` (capital deployment), and `ALPHA_DECAY_ARCHIVE` or `ARCHIVE_FAILED` (false discovery rejection).
+- **Bailey & Lopez de Prado Deflated Sharpe Ratio (DSR)**: To prevent data dredging and multiple testing bias, the backtest audit engine (`HypothesisService.py`) computes empirical Deflated Sharpe Ratios ($DSR \ge 0.85$ confidence threshold). It explicitly penalizes factors based on family trial counts ($N$), variance of trial Sharpe ratios, and non-normal kurtosis/skewness of candidate return distributions.
+- **Spearman Rank Information Coefficient (IC) & Significance**: Evaluates linear cross-sectional predictability against forward returns, requiring student-$t$ statistic significance ($|t| \ge 1.96$) alongside DSR validation before allowing promotion to active shadow probation.
+- **A Priori Economic Mechanism Enforcement**: To prevent curve-fitting, manual quant submissions and autonomous AI proposals are mandated to provide an explicit institutional economic rationale (minimum 20 characters) mapped to valid anomalies (`MICROSTRUCTURE`, `BEHAVIORAL`, `RISK_PREMIUM`) prior to empirical return execution.
+- **Interactive Executive KPI Dash & Deep Inspect Drawers**: Tracks live counts of False Discoveries Avoided and Mean DSR across experiments. Clicking `Deep Inspect` expands an audit modal showcasing empirical trial history, statistical student-$t$ metrics, and original economic hypotheses.
+
 ---
 
 ## 5. Backend Task Workflow & Processing Pipelines
@@ -215,6 +223,13 @@ A containerized batch simulation script designed for large-scale multi-year hist
 - Invokable inside Docker via `docker compose exec -T backend python run_backtest_suite.py --limit 50 --years 3`.
 - Outputs an executive ASCII table directly to the console detailing trade counts, win rates, Sharpe ratios, profit factors, and benchmark Nifty 50 alpha, while exporting detailed JSON research logs to disk.
 
+### 5.10 Autonomous AI Factor Discovery & FSM Research Loop (`run_automated_hypothesis_research_task`)
+Scheduled daily by Celery Beat and directly deployable via the `/research` UI (`Deploy Gemini Quant Agent`):
+- **Automated FSM Transitions**: Promotes audited hypotheses ($DSR \ge 0.85$, $|t| \ge 1.96$) from `IN_SAMPLE_AUDIT` to `OUT_OF_SAMPLE_SHADOW` and eventually `LIVE_ALPHA_STREAM`, while retiring degrading signals to `ALPHA_DECAY_ARCHIVE`.
+- **Autonomous Gemini Quant Generation**: When live and candidate factor density dips below operational thresholds ($<5$), the worker calls `AIAnalystService.generate_orthogonal_hypothesis()`. It injects previously failed factors as negative context and prompts Google Gemini to formulate novel, mathematically orthogonal vector alpha equations paired with valid economic mechanisms.
+- **Deterministic Offline Continuity**: Equipped with an institutional fallback equation registry to ensure zero-latency factor discovery even during network disconnections.
+- **Automated Evaluation Loop**: Instantly executes candidate expressions against cached daily OHLCV bars, computing Deflated Sharpe and Spearman student-$t$ statistics automatically upon proposal.
+
 ---
 
 ## 6. Database Schema Core Entities & GraphQL Mappings
@@ -232,6 +247,8 @@ A containerized batch simulation script designed for large-scale multi-year hist
 - `ScorePredictionLog`: Point-in-time historical audit ledger logging daily composite scores and multi-horizon gain predictions alongside subsequently realized 3d/5d/10d forward returns for IC verification and shadow model evaluation.
 - `TechnicalSnapshot`: Point-in-time snapshot of technical trading indicator oscillators.
 - `AIAnalysisReport`: Persisted storage for LLM-generated qualitative analytical narratives, news catalyst sentiments, and markdown commentary.
+- `ResearchHypothesis`: Stores institutional quant factors with author identification (`AI_RESEARCH_AGENT` vs `HUMAN_QUANT_ANALYST`), A Priori economic mechanisms, vector alpha expressions, target universes, holding horizons, and current FSM lifecycle stages.
+- `HypothesisExperiment`: Records empirical evaluation audit runs, capturing family trial counts ($N$), classic vs. deflated Sharpe ratios (DSR), Spearman IC mean/student-$t$ statistics, and statistical rejection tags to shield against P-Hacking.
 
 ---
 
@@ -292,3 +309,4 @@ The local repository is connected to the upstream remote `origin` (`main` branch
 - **High-Performance GraphQL & Database Caching Layer**: In-memory memoized sector statistical caching (`momentum_cache_service.py`) and SQLAlchemy batch relationship eager loading (`selectinload`) to eradicate N+1 database queries and deliver sub-second rendering.
 - **Interactive Behavioral Matrix & Social Deck**: 3-column clickable sentiment suite (`SocialSentimentCard.tsx`) launching edge-to-edge zero-padding terminal slide-out panels. Features complete quantitative methodology formulas, article count badges, top-right sentiment flag positioning, and an extensive 10-article News / 6-thread Reddit / 5-signature Smart Money feed equipped with under-headline clickable external search navigation (`OpenInNewIcon`).
 - **Institutional Risk & Surveillance Suite**: Native NSE Bhavcopy T+1 delivery parsing, SEBI ASM/GSM regulatory exclusions, Portfolio Risk Engine with Emergency Kill Switch (-15% drawdown limit), Rolling IC tracking ($IC > 0.03$), and our 14-Day Shadow Model Probationary testing suite.
+- **Quantitative Hypothesis Laboratory & Autonomous AI Quant Agent**: Dedicated terminal dashboard (`/research`) managing a 5-stage FSM lifecycle (Draft $\to$ Audit $\to$ Shadow $\to$ Live $\to$ Decay/Archive) with Bailey & Lopez de Prado Deflated Sharpe (DSR) evaluation and student-$t$ significance verification. Integrated with Google Gemini for autonomous orthogonal vector equation formulation under strict *A Priori* economic anomaly mandates.

@@ -358,8 +358,6 @@ class MomentumService:
 
             # Persist to DB with Point-in-Time discipline
             try:
-                self.db.query(MomentumSignal).filter(MomentumSignal.company_id == comp.id).delete()
-                
                 sig_record = MomentumSignal(
                     id=uuid.uuid4(),
                     company_id=comp.id,
@@ -383,11 +381,11 @@ class MomentumService:
                 comp.current_price = cur_price
                 try:
                     q_dates = [getattr(comp, 'q1_date', None), getattr(comp, 'q2_date', None), getattr(comp, 'q3_date', None), getattr(comp, 'q4_date', None)]
-                    prob_val, avg_val = self.quant_service.calculate_post_earnings_momentum_stats(comp.ticker, q_dates, df)
+                    prob_val, avg_val = self.quant.calculate_post_earnings_momentum_stats(comp.ticker, q_dates, df)
                     if prob_val is not None and avg_val is not None:
                         comp.momentum_probability = prob_val
                         comp.avg_post_earnings_momentum = avg_val
-                    pr_ret = self.quant_service.calculate_latest_post_release_return(comp.ticker, getattr(comp, 'upcoming_date', None), df)
+                    pr_ret = self.quant.calculate_latest_post_release_return(comp.ticker, getattr(comp, 'upcoming_date', None), df)
                     if pr_ret is not None:
                         comp.post_release_return = pr_ret
                 except Exception as ex:

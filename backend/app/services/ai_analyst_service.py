@@ -430,5 +430,105 @@ Do NOT output any markdown around the JSON or additional commentary.
             "composite_sentiment_index": round(float(composite), 1)
         }
 
+    def generate_orthogonal_hypothesis(self, failed_hypotheses: list, active_hypotheses: list) -> dict:
+        """
+        Ingests previously failed and currently active quantitative hypotheses to generate a novel,
+        mathematically orthogonal alpha factor expression accompanied by mandatory economic rationale.
+        """
+        # 1. Attemptcalling Gemini AI if API key is present
+        if self.gemini_api_key and len(self.gemini_api_key) > 5:
+            try:
+                failed_summary = json.dumps([{"name": h.get("name"), "expression": h.get("alpha_expression"), "failure": h.get("decommission_reason")} for h in failed_hypotheses], indent=2)
+                active_summary = json.dumps([{"name": h.get("name"), "expression": h.get("alpha_expression")} for h in active_hypotheses], indent=2)
+                prompt = f"""
+You are an autonomous institutional quantitative researcher designing multi-factor equity trading strategies for the Indian Stock Market (NSE).
+Your goal is to discover statistically valid alpha factor formulas that do not overlap with existing or failed ideas.
+
+FAILED HYPOTHESES (Do not re-test these or similar collinear factors):
+{failed_summary}
+
+ACTIVE LIVE HYPOTHESES:
+{active_summary}
+
+Propose exactly ONE new, mathematically orthogonal alpha expression to evaluate against historical daily exchange OHLCV data.
+You MUST output strictly valid JSON with the following exact keys:
+{{
+  "name": "Concise Descriptive Alpha Name V1",
+  "economic_mechanism": "MICROSTRUCTURE" | "BEHAVIORAL" | "RISK_PREMIUM",
+  "economic_rationale_text": "Detailed institutional economic explanation of why this mispricing or risk premium exists and why it persists without instant arbitrage.",
+  "alpha_expression": "vector formula using keywords: close, volume, high, low, volatility, delta, rank",
+  "holding_horizon_days": 5
+}}
+"""
+                payload = {
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0.4, "responseMimeType": "application/json"}
+                }
+                headers = {"Content-Type": "application/json"}
+                response = requests.post(self.model_url, headers=headers, json=payload, timeout=25)
+                if response.status_code == 200:
+                    data = response.json()
+                    text_resp = data['candidates'][0]['content']['parts'][0]['text']
+                    parsed = json.loads(text_resp.strip())
+                    if parsed.get("name") and parsed.get("alpha_expression"):
+                        return parsed
+            except Exception as e:
+                print(f"Gemini autonomous research generation failed: {e}, using deterministic quant repository.")
+
+        # 2. Deterministic Quant Alpha Repository Fallback (Guaranteed Continuity)
+        candidates = [
+            {
+                "name": "T+1 Delivery Volatility Compression Squeeze V1",
+                "economic_mechanism": "MICROSTRUCTURE",
+                "economic_rationale_text": "When institutional delivery trading volume persists during periods of extreme price range compression, it indicates covert supply absorption by strong hands prior to public momentum expansion.",
+                "alpha_expression": "rank(volume_5d) / (rank(high_low_spread_10d) + 0.0001)",
+                "holding_horizon_days": 5
+            },
+            {
+                "name": "Mean-Reverting Intraday Exhaustion Spike V1",
+                "economic_mechanism": "BEHAVIORAL",
+                "economic_rationale_text": "Retail overreaction to short-term momentum headlines causes abnormal intraday volatility extension that temporary market-making liquidity providers require extra risk premium to absorb.",
+                "alpha_expression": "(high - low) / close * rank(volume_5d)",
+                "holding_horizon_days": 3
+            },
+            {
+                "name": "Rolling Momentum Decisive Breakout Drift V2",
+                "economic_mechanism": "RISK_PREMIUM",
+                "economic_rationale_text": "Investors systematically underreact to persistent fundamental operating cash flow acceleration, creating slow price drift that outpaces simple random walking moves.",
+                "alpha_expression": "delta(close, 5) / (volatility_20d + 0.0001)",
+                "holding_horizon_days": 10
+            },
+            {
+                "name": "Asymmetric Volume Accumulation Differential V1",
+                "economic_mechanism": "MICROSTRUCTURE",
+                "economic_rationale_text": "Volume traded on advancing bars consistently outweighs volume on declinining bars during smart money fund repositioning, creating an observable order flow divergence.",
+                "alpha_expression": "rank(volume_5d) * delta(close, 3)",
+                "holding_horizon_days": 5
+            },
+            {
+                "name": "Tail-Risk Volatility Premium Contraction V1",
+                "economic_mechanism": "RISK_PREMIUM",
+                "economic_rationale_text": "Equities entering low-volatility regimes command an empirical risk anomaly premium over high-beta exploratory peers on the Indian exchanges due to leverage constraints.",
+                "alpha_expression": "1.0 / (rank(volatility_20d) + 0.01)",
+                "holding_horizon_days": 10
+            }
+        ]
+
+        existing_names = {h.get("name") for h in (failed_hypotheses + active_hypotheses)}
+        for cand in candidates:
+            if cand["name"] not in existing_names:
+                return cand
+
+        # If all predefined have been tested, generate evolutionary parameterized variant
+        import uuid as _uuid
+        idx = len(existing_names) + 1
+        return {
+            "name": f"Adaptive Orthogonal Momentum Multiplier V{idx}",
+            "economic_mechanism": "MICROSTRUCTURE",
+            "economic_rationale_text": f"Automated evolutionary generation {idx} exploring multi-timeframe volume dispersal differentials against market microstructure friction.",
+            "alpha_expression": "rank(volume_5d) / (volatility_20d + 0.01)",
+            "holding_horizon_days": 5
+        }
+
 
 

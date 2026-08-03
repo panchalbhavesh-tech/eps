@@ -505,3 +505,86 @@ def audit_shadow_model_performance_task(model_id: str = "latest_shadow"):
         print(f"Error evaluating model probation: {e}")
     finally:
         db.close()
+
+
+@shared_task
+def sync_ohlcv_cache_task():
+    """Nightly task: incrementally update OHLCV cache for all tracked tickers."""
+    from app.services.ohlcv_cache_service import OHLCVCacheService
+    db = SessionLocal()
+    try:
+        svc = OHLCVCacheService(db)
+        companies = db.query(Company).all()
+        synced = 0
+        for c in companies:
+            try:
+                rows = svc.sync_ticker(c.ticker)
+                if rows > 0:
+                    synced += 1
+                time.sleep(0.5)  # Rate limit
+            except Exception as e:
+                print(f"OHLCV cache sync failed for {c.ticker}: {e}")
+        return f"OHLCV cache updated for {synced} tickers."
+    finally:
+        db.close()
+
+
+@shared_task
+def evaluate_single_hypothesis_task(hypothesis_id: str):
+    """Worker task: executes Deflated Sharpe & IC evaluation for a single candidate hypothesis."""
+    from app.services.hypothesis_service import HypothesisService
+    db = SessionLocal()
+    try:
+        svc = HypothesisService(db)
+        res = svc.evaluate_hypothesis(hypothesis_id)
+        return f"Hypothesis Evaluation Result: {res}"
+    finally:
+        db.close()
+
+
+@shared_task
+def run_automated_hypothesis_research_task():
+    """Worker task: runs scheduled FSM lifecycle transitions and deploys Gemini AI to generate new orthogonal hypotheses."""
+    from app.services.hypothesis_service import HypothesisService
+    from app.services.ai_analyst_service import AIAnalystService
+    from app.infrastructure.models import ResearchHypothesis
+    db = SessionLocal()
+    try:
+        svc = HypothesisService(db)
+        # 1. Evolve current state transitions
+        res = svc.check_and_evolve_all_hypotheses()
+        
+        # 2. Autonomous AI Alpha Proposal if live stream is low
+        active_count = db.query(ResearchHypothesis).filter(
+            ResearchHypothesis.current_stage.in_(["DRAFT_HYPOTHESIS", "OUT_OF_SAMPLE_SHADOW", "LIVE_ALPHA_STREAM"])
+        ).count()
+        
+        ai_msg = "No new generation required."
+        if active_count < 5:
+            failed = db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage == "ARCHIVE_FAILED").limit(20).all()
+            active = db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage != "ARCHIVE_FAILED").limit(20).all()
+            
+            failed_list = [{"name": f.name, "alpha_expression": f.alpha_expression, "decommission_reason": f.decommission_reason} for f in failed]
+            active_list = [{"name": a.name, "alpha_expression": a.alpha_expression} for a in active]
+            
+            ai_svc = AIAnalystService()
+            proposal = ai_svc.generate_orthogonal_hypothesis(failed_list, active_list)
+            if proposal and proposal.get("name"):
+                reg = svc.register_hypothesis(
+                    name=proposal["name"],
+                    economic_mechanism=proposal["economic_mechanism"],
+                    economic_rationale_text=proposal["economic_rationale_text"],
+                    alpha_expression=proposal["alpha_expression"],
+                    author="GEMINI_AI_QUANT",
+                    target_universe="NIFTY500",
+                    holding_horizon_days=int(proposal.get("holding_horizon_days", 5))
+                )
+                if reg.get("status") == "Success":
+                    eval_res = svc.evaluate_hypothesis(reg["hypothesis_id"])
+                    ai_msg = f"Generated and evaluated new hypothesis '{proposal['name']}': {eval_res.get('stage')} (DSR: {eval_res.get('deflated_sharpe')})"
+                else:
+                    ai_msg = f"Proposal skipped: {reg.get('message')}"
+
+        return f"Automated QHLM FSM Research Cycle complete: {res} | AI Action: {ai_msg}"
+    finally:
+        db.close()

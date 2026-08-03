@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from app.infrastructure.models import Company, ScorePredictionLog, MomentumSignal
+from app.infrastructure.models import Company, ScorePredictionLog, MomentumSignal, DailyBhavcopy
 
 logger = logging.getLogger(__name__)
 
@@ -68,23 +68,27 @@ class ValidationService:
         now = datetime.utcnow()
         resolved_count = 0
         
-        # Look for records older than 3 days lacking resolved returns
         unresolved = self.db.query(ScorePredictionLog).filter(
             ScorePredictionLog.realized_5d_return == None,
-            ScorePredictionLog.date_evaluated <= (now - timedelta(days=5))
-        ).limit(100).all()
+            ScorePredictionLog.date_evaluated <= (now - timedelta(days=7)),
+            ScorePredictionLog.baseline_price != None
+        ).limit(200).all()
 
         for rec in unresolved:
             try:
-                comp = self.db.query(Company).filter_by(id=rec.company_id).first()
-                if not comp or not comp.current_price:
+                base_p = float(rec.baseline_price)
+                if base_p <= 0:
                     continue
                     
-                # Calculate actual percentage change against historical baseline price at prediction time
-                days_elapsed = (now - rec.date_evaluated).days
-                if days_elapsed >= 5:
-                    base_p = float(rec.baseline_price or comp.current_price or 1.0)
-                    ret_5d = ((float(comp.current_price) - base_p) / max(0.01, base_p)) * 100.0
+                # Look up actual closing price from OHLCV cache (DailyBhavcopy)
+                bhav = self.db.query(DailyBhavcopy).filter(
+                    DailyBhavcopy.ticker == rec.ticker,
+                    DailyBhavcopy.trade_date >= rec.date_evaluated + timedelta(days=4),
+                    DailyBhavcopy.trade_date <= rec.date_evaluated + timedelta(days=9),
+                ).order_by(DailyBhavcopy.trade_date.asc()).first()
+
+                if bhav and bhav.close_price:
+                    ret_5d = ((float(bhav.close_price) - base_p) / base_p) * 100.0
                     rec.realized_5d_return = round(min(50.0, max(-50.0, ret_5d)), 2)
                     resolved_count += 1
             except Exception:
@@ -105,7 +109,7 @@ class ValidationService:
         try:
             logs = self.db.query(ScorePredictionLog).filter(ScorePredictionLog.realized_5d_return != None).all()
             if not logs or len(logs) < 15:
-                return {"status": "Incomplete sample size for statistical IC", "mean_ic_5d": 0.045, "is_valid": True}
+                return {"status": "Incomplete sample size for statistical IC", "mean_ic_5d": None, "is_valid": False}
 
             scores = [float(l.composite_score or 50.0) for l in logs]
             returns = [float(l.realized_5d_return or 0.0) for l in logs]
@@ -115,7 +119,7 @@ class ValidationService:
             ic_val = s_series.corr(r_series, method='spearman')
             
             if np.isnan(ic_val):
-                ic_val = 0.045 # Default empirical edge if correlation matrix flat
+                return {"status": "IC computation returned NaN due to flat variance", "mean_ic_5d": None, "is_valid": False}
 
             return {
                 "status": "Success",
@@ -131,12 +135,42 @@ class ValidationService:
         Monthly validation test: Ranks stocks into 5 quintiles by score and confirms forward returns are monotonic
         (Quintile 5 top momentum names must outperform Quintile 1 laggards).
         """
+        logs = self.db.query(ScorePredictionLog).filter(
+            ScorePredictionLog.realized_5d_return != None,
+            ScorePredictionLog.composite_score != None
+        ).all()
+
+        if len(logs) < 50:
+            return {"status": "Insufficient data for quintile test", "pass_test": None, "sample_size": len(logs)}
+
+        df = pd.DataFrame([{
+            "score": l.composite_score,
+            "ret": l.realized_5d_return
+        } for l in logs])
+
+        try:
+            df['quintile'] = pd.qcut(df['score'], 5, labels=[1, 2, 3, 4, 5], duplicates='drop')
+        except Exception:
+            return {"status": "Unable to calculate distinct quintiles (flat score variance)", "pass_test": None, "sample_size": len(logs)}
+
+        quintile_means = df.groupby('quintile', observed=False)['ret'].mean()
+
+        q1_ret = float(quintile_means.get(1, 0.0))
+        q5_ret = float(quintile_means.get(5, 0.0))
+        spread = q5_ret - q1_ret
+
+        values = [float(quintile_means.get(i, 0.0)) for i in range(1, 6) if i in quintile_means]
+        is_monotonic = all(values[i] >= values[i-1] for i in range(1, len(values))) if len(values) > 1 else False
+
         return {
-            "status": "Monotonicity Confirmed",
-            "q5_mean_return_pct": 4.25,
-            "q1_mean_return_pct": -1.30,
-            "spread_pct": 5.55,
-            "pass_test": True
+            "status": "Quintile spread test completed",
+            "q1_mean_return_pct": round(q1_ret, 2),
+            "q5_mean_return_pct": round(q5_ret, 2),
+            "spread_pct": round(spread, 2),
+            "is_monotonic": bool(is_monotonic),
+            "pass_test": bool(spread > 0 and q5_ret > q1_ret),
+            "sample_size": len(logs),
+            "all_quintiles": {int(k): round(float(v), 2) for k, v in quintile_means.items()}
         }
 
     def evaluate_model_probation(self, new_model_id: str) -> Dict[str, Any]:
@@ -144,19 +178,28 @@ class ValidationService:
         Manages the 14-Day Shadow Probationary Period for newly retrained AI models.
         Only authorizes promotion from SHADOW mode to LIVE PRODUCTION if win-rate beats production over 14 days.
         """
-        # Query shadow log entries vs production entries over last 14 days
         probation_cutoff = datetime.utcnow() - timedelta(days=self.probation_days)
         
-        shadow_logs = self.db.query(ScorePredictionLog).filter_by(is_shadow=True, model_version_id=new_model_id).all()
+        shadow_logs = self.db.query(ScorePredictionLog).filter_by(
+            is_shadow=True, model_version_id=new_model_id
+        ).filter(ScorePredictionLog.realized_5d_return != None).all()
+        
+        prod_logs = self.db.query(ScorePredictionLog).filter_by(
+            is_shadow=False, model_version_id="production"
+        ).filter(
+            ScorePredictionLog.realized_5d_return != None,
+            ScorePredictionLog.date_evaluated >= probation_cutoff
+        ).all()
+
         if not shadow_logs:
             return {
                 "model_id": new_model_id,
                 "probation_status": "PROBATION_IN_PROGRESS",
-                "reason": f"New model entered 14-day shadow monitoring. Zero user signals will be emitted until safety verification concludes.",
+                "reason": "Shadow model has no resolved predictions yet. Zero user signals emitted.",
                 "promoted_to_live": False
             }
             
-        first_log_dt = min([s.date_evaluated for s in shadow_logs]) if shadow_logs else datetime.utcnow()
+        first_log_dt = min([s.date_evaluated for s in shadow_logs])
         days_tested = (datetime.utcnow() - first_log_dt).days
 
         if days_tested < self.probation_days:
@@ -169,10 +212,26 @@ class ValidationService:
                 "promoted_to_live": False
             }
 
-        # After 14 days, evaluate precision
+        def get_hit_rate(logs):
+            correct = sum(
+                1 for l in logs
+                if (l.prob_gain_5d and l.prob_gain_5d > 0.5 and l.realized_5d_return > 0) or
+                   (l.prob_gain_5d and l.prob_gain_5d <= 0.5 and l.realized_5d_return <= 0)
+            )
+            return (correct / len(logs)) if logs else 0.0
+
+        shadow_hr = get_hit_rate(shadow_logs)
+        prod_hr = get_hit_rate(prod_logs) if prod_logs else 0.50
+
+        should_promote = shadow_hr > prod_hr and len(shadow_logs) >= 20
+
         return {
             "model_id": new_model_id,
-            "probation_status": "PASSED_PROBATION",
-            "reason": f"Shadow model successfully verified over {self.probation_days} days outperforming baseline. Authorizing switch to production.",
-            "promoted_to_live": True
+            "probation_status": "PASSED_PROBATION" if should_promote else "FAILED_PROBATION",
+            "shadow_hit_rate": round(shadow_hr, 4),
+            "production_hit_rate": round(prod_hr, 4),
+            "shadow_sample_size": len(shadow_logs),
+            "production_sample_size": len(prod_logs),
+            "reason": f"Shadow HR ({shadow_hr:.2%}) vs Prod HR ({prod_hr:.2%}). {'Authorizing switch to production.' if should_promote else 'Retaining production model.'}",
+            "promoted_to_live": bool(should_promote)
         }

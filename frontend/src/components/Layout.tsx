@@ -10,6 +10,7 @@ import ShowChartIcon from '@mui/icons-material/ShowChart';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import BiotechIcon from '@mui/icons-material/Biotech';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { useThemeMode } from '../theme/ThemeContext';
@@ -47,6 +48,13 @@ const Layout: React.FC = () => {
       path: '/momentum',
       breadcrumb: 'Momentum & Attention / Real-Time Cross-Sectional Scanner',
       description: 'Real-time cross-sectional percentile rankings and anomaly attention tracker' 
+    },
+    { 
+      text: 'Hypothesis Lab (QHLM)', 
+      icon: <BiotechIcon sx={{ fontSize: 20 }} />, 
+      path: '/research',
+      breadcrumb: 'Hypothesis Lab / Deflated Sharpe & Autonomous AI Factor Discovery',
+      description: 'Quantitative Hypothesis Lifecycle Management & Bailey-Lopez de Prado statistical audit' 
     },
     { 
       text: 'Processes & Tasks', 

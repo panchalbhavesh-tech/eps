@@ -7,6 +7,7 @@ import Home from './pages/Home'
 import CompanyDetail from './pages/CompanyDetail'
 import TaskManager from './pages/TaskManager'
 import MomentumTracker from './pages/MomentumTracker'
+import HypothesisLaboratory from './pages/HypothesisLaboratory'
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -29,6 +30,7 @@ function App() {
           <Route path="momentum" element={<MomentumTracker />} />
           <Route path="companies/:id" element={<CompanyDetail />} />
           <Route path="tasks" element={<TaskManager />} />
+          <Route path="research" element={<HypothesisLaboratory />} />
         </Route>
       </Routes>
     </BrowserRouter>

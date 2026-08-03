@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, String, Float, Integer, Text, Boolean, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.infrastructure.database import Base
@@ -281,4 +281,42 @@ class ScorePredictionLog(Base):
     realized_5d_return = Column(Float, nullable=True)
     realized_10d_return = Column(Float, nullable=True)
     known_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ResearchHypothesis(Base):
+    __tablename__ = "research_hypotheses"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, nullable=False, unique=True, index=True)
+    author = Column(String, default="AI_RESEARCH_AGENT", nullable=False)
+    economic_mechanism = Column(String, nullable=False)  # 'BEHAVIORAL', 'RISK_PREMIUM', or 'MICROSTRUCTURE'
+    economic_rationale_text = Column(Text, nullable=False)
+    alpha_expression = Column(String, nullable=False)    # e.g., "rank(volatility_20) / adv_10"
+    target_universe = Column(String, default="NIFTY500")
+    holding_horizon_days = Column(Integer, default=5)
+    current_stage = Column(String, default="DRAFT_HYPOTHESIS", index=True) # FSM Stage
+    created_at = Column(DateTime, default=datetime.utcnow)
+    decommissioned_at = Column(DateTime, nullable=True)
+    decommission_reason = Column(String, nullable=True)
+    known_at = Column(DateTime, default=datetime.utcnow)
+    experiments = relationship("HypothesisExperiment", back_populates="hypothesis", cascade="all, delete-orphan")
+
+
+class HypothesisExperiment(Base):
+    __tablename__ = "hypothesis_experiments"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    hypothesis_id = Column(UUID(as_uuid=True), ForeignKey("research_hypotheses.id", ondelete="CASCADE"), nullable=False)
+    execution_date = Column(DateTime, default=datetime.utcnow)
+    test_window_start = Column(DateTime, nullable=True)
+    test_window_end = Column(DateTime, nullable=True)
+    total_trials_in_family = Column(Integer, default=1)       # Crucial for Deflated Sharpe Ratio calculation
+    classic_sharpe = Column(Float, nullable=True)
+    deflated_sharpe = Column(Float, nullable=True)
+    spearman_ic_mean = Column(Float, nullable=True)
+    spearman_ic_tstat = Column(Float, nullable=True)
+    max_drawdown_pct = Column(Float, nullable=True)
+    turnover_decay_penalty = Column(Float, nullable=True)
+    is_statistically_valid = Column(Boolean, default=False)
+    failure_mode_tag = Column(String, nullable=True)          # e.g., "HIGH_MULTIPLE_TESTING_PENALTY"
+    known_at = Column(DateTime, default=datetime.utcnow)
+    hypothesis = relationship("ResearchHypothesis", back_populates="experiments")
 

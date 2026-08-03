@@ -42,6 +42,22 @@ class QuantService:
                 
         return pd.DataFrame()
 
+    def fetch_from_cache(self, ticker: str, db: Any, years: int = 5) -> pd.DataFrame:
+        """
+        Attempts to fetch OHLCV from Postgres OHLCV cache first.
+        Falls back to direct yfinance call only on cache miss.
+        """
+        try:
+            from app.services.ohlcv_cache_service import OHLCVCacheService
+            cache_svc = OHLCVCacheService(db)
+            df = cache_svc.get_ohlcv(ticker)
+            if not df.empty and len(df) >= 20:
+                return df
+        except Exception as e:
+            print(f"OHLCV cache fallback for {ticker}: {e}")
+            
+        return self.fetch_historical_ohlcv(ticker, years=years)
+
     def calculate_technicals(self, df: pd.DataFrame) -> Dict[str, Any]:
         if df.empty or len(df) < 20:
             return {}
@@ -323,7 +339,7 @@ class QuantService:
             return None, None
 
         if not q_dates or len(q_dates) < 4:
-            q_dates = ['Jun-2025', 'Sep-2025', 'Dec-2025', 'Mar-2026']
+            return None, None
 
         mon_map = {
             'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
