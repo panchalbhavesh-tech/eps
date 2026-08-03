@@ -49,6 +49,7 @@ class Company(Base):
     financial_health_grade = Column(String, nullable=True)
     momentum_probability = Column(Float, nullable=True)
     avg_post_earnings_momentum = Column(Float, nullable=True)
+    post_release_return = Column(Float, nullable=True)
     
     # Fundamental Snapshot
     market_cap = Column(Float, nullable=True)
@@ -267,6 +268,7 @@ class ScorePredictionLog(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
     ticker = Column(String, index=True, nullable=False)
+    baseline_price = Column(Float, nullable=True)
     date_evaluated = Column(DateTime, default=datetime.utcnow, index=True)
     composite_score = Column(Float, nullable=True)
     prob_gain_3d = Column(Float, nullable=True)

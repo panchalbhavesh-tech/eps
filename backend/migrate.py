@@ -40,12 +40,38 @@ def upgrade_db():
         ("companies", "financial_health_grade", "VARCHAR"),
         ("companies", "momentum_probability", "FLOAT"),
         ("companies", "avg_post_earnings_momentum", "FLOAT"),
+        ("companies", "enterprise_value", "FLOAT"),
+        ("companies", "high_52w", "FLOAT"),
+        ("companies", "low_52w", "FLOAT"),
+        ("companies", "all_time_high", "FLOAT"),
+        ("companies", "all_time_low", "FLOAT"),
+        ("companies", "pe_ratio", "FLOAT"),
+        ("companies", "pb_ratio", "FLOAT"),
+        ("companies", "roe", "FLOAT"),
+        ("companies", "roce", "FLOAT"),
+        ("companies", "dividend_yield", "FLOAT"),
+        ("companies", "book_value", "FLOAT"),
+        ("companies", "debt_to_equity", "FLOAT"),
+        ("companies", "promoter_holding", "FLOAT"),
+        ("companies", "fii_holding", "FLOAT"),
+        ("companies", "dii_holding", "FLOAT"),
+        ("companies", "public_holding", "FLOAT"),
+        ("companies", "known_at", "TIMESTAMP"),
+        ("companies", "period_end", "TIMESTAMP"),
+        ("earnings_reports", "known_at", "TIMESTAMP"),
+        ("earnings_reports", "period_end", "TIMESTAMP"),
+        ("momentum_signals", "known_at", "TIMESTAMP"),
+        ("momentum_signals", "period_end", "TIMESTAMP"),
+        ("daily_bhavcopy", "known_at", "TIMESTAMP"),
+        ("bulk_block_deals", "known_at", "TIMESTAMP"),
+        ("surveillance_watchlist", "known_at", "TIMESTAMP"),
+        ("score_prediction_logs", "known_at", "TIMESTAMP"),
     ]
 
     for table, column, datatype in columns_to_add:
         try:
-            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {datatype};")
-            print(f"Added {column} to {table}")
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {datatype};")
+            print(f"Checked/Added {column} on {table}")
         except psycopg2.errors.DuplicateColumn:
             print(f"Column {column} already exists in {table}, skipping.")
         except Exception as e:
@@ -78,8 +104,8 @@ def upgrade_db():
     # Ensure Phase 2 columns exist on momentum_signals
     for col_name, col_type in [("smart_money_score", "FLOAT"), ("derivatives_score", "FLOAT")]:
         try:
-            cursor.execute(f"ALTER TABLE momentum_signals ADD COLUMN {col_name} {col_type};")
-            print(f"Added {col_name} to momentum_signals.")
+            cursor.execute(f"ALTER TABLE momentum_signals ADD COLUMN IF NOT EXISTS {col_name} {col_type};")
+            print(f"Checked/Added {col_name} on momentum_signals.")
         except psycopg2.errors.DuplicateColumn:
             conn.rollback()
             print(f"Column {col_name} already exists in momentum_signals, skipping.")

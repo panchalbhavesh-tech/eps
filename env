@@ -1,0 +1,10 @@
+DATABASE_URL=postgresql://qeps_user:qeps_password@postgres:5432/qeps_db
+REDIS_URL=redis://redis:6379/0
+JWT_SECRET=super_secret_jwt_key_change_in_production
+FMP_API_KEY=c18moUmnZwZ9Xt7kgS13uQSUXMqY9zY8
+GEMINI_API_KEY=AIzaSyB3cNd_2QHOIqKwXuwoFPHLGBRgm1uj5_M
+POSTGRES_DB=qeps_db
+POSTGRES_USER=qeps_user
+POSTGRES_PASSWORD=qeps_password
+PGADMIN_EMAIL=admin@example.com
+PGADMIN_PASSWORD=admin

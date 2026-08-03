@@ -31,10 +31,10 @@ class IntensiveBacktestEngine:
 
         # 1. Fetch historical stock OHLCV data
         df = self.quant.fetch_historical_ohlcv(ticker, years=years)
-        if df.empty or len(df) < 60:
+        if df.empty or len(df) < 20:
             return {
                 "ticker": ticker,
-                "status": f"Insufficient historical OHLCV rows ({len(df)} bars found)",
+                "status": f"Insufficient historical OHLCV rows ({len(df)} bars found, minimum 20 required)",
                 "event_strategies": [],
                 "momentum_performance": {}
             }
@@ -114,13 +114,14 @@ class IntensiveBacktestEngine:
         ml_total_predictions = 0
         brier_sum = 0.0
 
-        # Step through historical bars after warm-up window
-        for i in range(50, len(df) - 5):
+        # Step through historical bars after dynamic warm-up window
+        start_idx = min(50, max(15, len(df) // 4))
+        for i in range(start_idx, len(df) - 5):
             cur_bar = df.iloc[i]
             cur_price = cur_bar['Close']
-            sma50 = cur_bar['SMA50']
-            sma200 = cur_bar['SMA200']
-            vol_avg = cur_bar['Vol_Avg']
+            sma50 = cur_bar['SMA50'] if not pd.isna(cur_bar['SMA50']) else df['Close'].iloc[max(0, i-50):i+1].mean()
+            sma200 = cur_bar['SMA200'] if not pd.isna(cur_bar['SMA200']) else sma50
+            vol_avg = cur_bar['Vol_Avg'] if not pd.isna(cur_bar['Vol_Avg']) else df['Volume'].iloc[max(0, i-20):i+1].mean()
             atr = cur_bar['ATR'] if not pd.isna(cur_bar['ATR']) and cur_bar['ATR'] > 0 else cur_price * 0.02
             
             # Historical factor proxy calculation
@@ -184,7 +185,10 @@ class IntensiveBacktestEngine:
                 "max_drawdown_pct": 0.0,
                 "ml_hit_rate_pct": 0.0,
                 "brier_score": 0.25,
-                "alpha_vs_nifty_pct": round(-nifty_ret_total, 2)
+                "alpha_vs_nifty_pct": round(-nifty_ret_total, 2),
+                "expected_value": 0.0,
+                "profit_factor": 0.0,
+                "avg_trade_return_pct": 0.0
             }
 
         wins = [t['net_return_pct'] for t in trades if t['net_return_pct'] > 0]
@@ -220,6 +224,13 @@ class IntensiveBacktestEngine:
 
         alpha = round(net_total_return - nifty_ret_total, 2)
 
+        avg_gain = sum(wins) / len(wins) if wins else 0.0
+        avg_loss = sum(losses) / len(losses) if losses else 0.0
+        ev = ((win_rate / 100.0) * avg_gain) + ((1.0 - (win_rate / 100.0)) * avg_loss)
+        sum_win = sum(wins)
+        sum_loss = abs(sum(losses))
+        pf = sum_win / sum_loss if sum_loss > 0.0001 else (99.0 if sum_win > 0 else 0.0)
+
         return {
             "total_trades": total_trades,
             "win_rate_pct": round(float(win_rate), 2),
@@ -231,5 +242,6 @@ class IntensiveBacktestEngine:
             "brier_score": brier,
             "alpha_vs_nifty_pct": alpha,
             "avg_trade_return_pct": round(float(mean_ret * 100.0), 2),
-            "profit_factor": round(sum(wins) / abs(sum(losses)), 2) if len(losses) > 0 and sum(losses) != 0 else (99.0 if len(wins) > 0 else 0.0)
+            "expected_value": round(float(ev), 2),
+            "profit_factor": round(float(pf), 2)
         }

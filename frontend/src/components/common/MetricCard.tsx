@@ -3,106 +3,119 @@ import { Box, Typography, Paper, Tooltip } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
-import { saasTokens } from '../../theme/theme';
+import { useThemeMode } from '../../theme/ThemeContext';
 
 export interface MetricCardProps {
-  title: string;
+  title?: string;
+  label?: string;
   value: string | number;
   subtitle?: string;
-  trend?: number; // Positive or negative percentage trend
+  subtext?: string;
+  change?: string | number;
+  trend?: number | 'up' | 'down' | string;
   trendLabel?: string;
   icon?: React.ReactNode;
   tooltip?: string;
   onClick?: () => void;
   active?: boolean;
-  accentColor?: string;
   sx?: Record<string, any>;
 }
 
 export const MetricCard: React.FC<MetricCardProps> = ({
   title,
+  label,
   value,
   subtitle,
+  subtext,
+  change,
   trend,
   trendLabel,
   icon,
   tooltip,
   onClick,
   active = false,
-  accentColor = '#0f172a',
   sx = {},
 }) => {
-  const isPositiveTrend = trend !== undefined && trend >= 0;
-  const trendColor = isPositiveTrend ? saasTokens.status.success.main : saasTokens.status.error.main;
-  const trendBg = isPositiveTrend ? saasTokens.status.success.tint : saasTokens.status.error.tint;
+  const { tokens } = useThemeMode();
+  const displayLabel = label || title || '';
+  const displaySubtext = subtext || subtitle || (typeof change === 'string' ? change : undefined) || '';
+
+  let isPositiveTrend = true;
+  let trendDisplay: string | null = null;
+
+  if (typeof trend === 'number') {
+    isPositiveTrend = trend >= 0;
+    trendDisplay = `${isPositiveTrend ? '+' : ''}${trend.toFixed(1)}%`;
+  } else if (trend !== undefined) {
+    isPositiveTrend = trend !== 'down';
+    if (typeof change === 'number') {
+      trendDisplay = `${isPositiveTrend ? '+' : ''}${change}%`;
+    } else if (trend === 'up') {
+      trendDisplay = '▲ Bullish';
+    } else if (trend === 'down') {
+      trendDisplay = '▼ Bearish';
+    } else {
+      trendDisplay = trend;
+    }
+  }
+
+  const trendColor = isPositiveTrend ? tokens.status.success.main : tokens.status.error.main;
+  const trendBg = isPositiveTrend ? tokens.status.success.wash : tokens.status.error.wash;
 
   return (
     <Paper
       onClick={onClick}
       sx={{
-        p: 2.5,
-        borderRadius: 3,
-        bgcolor: active ? '#f8fafc' : saasTokens.background.card,
-        border: `1px solid ${active ? '#0f172a' : saasTokens.border.main}`,
-        boxShadow: active ? '0 4px 12px rgba(15, 23, 42, 0.06)' : '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
+        padding: '12px 16px',
+        borderRadius: '12px',
+        backgroundColor: active ? tokens.background.cardHover : tokens.background.card,
+        border: `1px solid ${active ? tokens.accent.main : tokens.border.main}`,
+        boxShadow: tokens.shadows.card,
         cursor: onClick ? 'pointer' : 'default',
-        transition: 'all 0.15s ease',
+        transition: 'all 0.15s ease-in-out',
         position: 'relative',
         overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
         '&:hover': {
-          bgcolor: onClick ? saasTokens.background.cardHover : undefined,
-          borderColor: onClick ? saasTokens.border.light : undefined,
+          backgroundColor: onClick ? tokens.background.cardHover : tokens.background.card,
+          borderColor: onClick ? tokens.border.light : tokens.border.main,
           transform: onClick ? 'translateY(-1px)' : undefined,
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+          boxShadow: tokens.shadows.subtle,
         },
         ...sx,
       }}
     >
-      {active && (
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '3px',
-            backgroundColor: accentColor || '#0f172a',
-          }}
-        />
-      )}
-      
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: '8px' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <Typography
             sx={{
-              color: saasTokens.text.secondary,
-              fontSize: '0.78rem',
+              color: tokens.text.secondary,
+              fontSize: '11px',
+              fontFamily: tokens.typography.fontFamily,
               fontWeight: 600,
-              letterSpacing: '0.04em',
+              letterSpacing: '0.5px',
               textTransform: 'uppercase',
+              lineHeight: '16px',
             }}
           >
-            {title}
+            {displayLabel}
           </Typography>
           {tooltip && (
             <Tooltip title={tooltip} placement="top">
-              <InfoOutlinedIcon sx={{ fontSize: '15px', color: saasTokens.text.secondary, cursor: 'help', opacity: 0.7, '&:hover': { opacity: 1 } }} />
+              <InfoOutlinedIcon sx={{ fontSize: '14px', color: tokens.text.tertiary, cursor: 'help' }} />
             </Tooltip>
           )}
         </Box>
-        
+
         {icon && (
           <Box
             sx={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: 38,
-              height: 38,
-              borderRadius: 2,
-              bgcolor: '#f1f5f9',
-              color: '#334155',
-              border: `1px solid ${saasTokens.border.main}`,
+              color: tokens.accent.main,
             }}
           >
             {icon}
@@ -110,53 +123,52 @@ export const MetricCard: React.FC<MetricCardProps> = ({
         )}
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
         <Typography
-          variant="h4"
+          className="mono-font tabular-nums"
           sx={{
-            fontSize: '1.85rem',
-            fontWeight: 700,
-            color: saasTokens.text.primary,
-            fontVariantNumeric: 'tabular-nums',
-            letterSpacing: '-0.02em',
+            fontSize: '18px',
+            fontWeight: 600,
+            color: tokens.text.primary,
+            lineHeight: '24px',
           }}
         >
           {value}
         </Typography>
 
-        {trend !== undefined && (
+        {trendDisplay && (
           <Box
+            className="mono-font tabular-nums"
             sx={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 0.25,
-              px: 1,
-              py: 0.25,
-              borderRadius: 1.5,
-              bgcolor: trendBg,
+              gap: '2px',
+              px: '6px',
+              py: '2px',
+              borderRadius: '6px',
+              backgroundColor: trendBg,
               color: trendColor,
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              fontVariantNumeric: 'tabular-nums',
+              fontSize: '11px',
+              fontWeight: 500,
             }}
           >
-            {isPositiveTrend ? <TrendingUpIcon sx={{ fontSize: '13px' }} /> : <TrendingDownIcon sx={{ fontSize: '13px' }} />}
-            {isPositiveTrend ? '+' : ''}{trend.toFixed(1)}% {trendLabel ? `(${trendLabel})` : ''}
+            {isPositiveTrend ? <TrendingUpIcon sx={{ fontSize: '12px' }} /> : <TrendingDownIcon sx={{ fontSize: '12px' }} />}
+            {trendDisplay} {trendLabel ? `(${trendLabel})` : ''}
           </Box>
         )}
       </Box>
 
-      {subtitle && (
+      {displaySubtext && (
         <Typography
           sx={{
-            color: saasTokens.text.secondary,
-            fontSize: '0.78rem',
-            mt: 1,
-            opacity: 0.9,
-            fontVariantNumeric: 'tabular-nums',
+            color: tokens.text.secondary,
+            fontSize: '11px',
+            lineHeight: '15px',
+            mt: '4px',
+            fontFamily: tokens.typography.fontFamily,
           }}
         >
-          {subtitle}
+          {displaySubtext}
         </Typography>
       )}
     </Paper>

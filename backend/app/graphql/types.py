@@ -178,6 +178,7 @@ class CompanyType:
     financial_health_grade: Optional[str] = None
     momentum_probability: Optional[float] = None
     avg_post_earnings_momentum: Optional[float] = None
+    post_release_return: Optional[float] = None
     
     # Fundamental Snapshot
     market_cap: Optional[float] = None

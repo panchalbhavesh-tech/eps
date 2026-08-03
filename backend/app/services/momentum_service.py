@@ -8,6 +8,10 @@ from sqlalchemy.orm import Session
 from app.infrastructure.models import Company, MomentumSignal
 from app.services.quant_service import QuantService
 import uuid
+import time
+
+_REGIME_CACHE: Dict[str, Any] = {}
+_REGIME_CACHE_TIME: float = 0
 
 class MomentumService:
     def __init__(self, db: Session):
@@ -18,8 +22,13 @@ class MomentumService:
     def get_market_regime() -> Dict[str, Any]:
         """
         Evaluates current Market Regime using Nifty 50 (^NSEI) real-time data.
-        Returns regime status, score, and explanation without artificial placeholders.
+        Uses a 15-minute TTL memory cache to prevent blocking API requests on repeated page loads.
         """
+        global _REGIME_CACHE, _REGIME_CACHE_TIME
+        now = time.time()
+        if _REGIME_CACHE and (now - _REGIME_CACHE_TIME < 900):
+            return _REGIME_CACHE
+
         try:
             nifty_df = yf.download('^NSEI', period='1y', progress=False)
             if not nifty_df.empty and len(nifty_df) > 50:
@@ -31,14 +40,19 @@ class MomentumService:
                 dma_200 = float(close_series.rolling(window=200).mean().iloc[-1]) if len(nifty_df) >= 200 else float(close_series.rolling(window=len(nifty_df)).mean().iloc[-1])
                 current_price = float(close_series.iloc[-1])
                 
+                res: Dict[str, Any]
                 if current_price > dma_200 and dma_50 >= dma_200:
-                    return {"status": "Bullish", "score": 90.0, "reason": "Nifty above 200 DMA with positive 50/200 DMA trend"}
+                    res = {"status": "Bullish", "score": 90.0, "reason": "Nifty above 200 DMA with positive 50/200 DMA trend"}
                 elif current_price > dma_200:
-                    return {"status": "Cautious Bullish", "score": 65.0, "reason": "Nifty above 200 DMA but momentum slowing"}
+                    res = {"status": "Cautious Bullish", "score": 65.0, "reason": "Nifty above 200 DMA but momentum slowing"}
                 elif current_price > dma_50:
-                    return {"status": "Neutral / Rebounding", "score": 50.0, "reason": "Nifty consolidating near 50 DMA"}
+                    res = {"status": "Neutral / Rebounding", "score": 50.0, "reason": "Nifty consolidating near 50 DMA"}
                 else:
-                    return {"status": "Bearish", "score": 20.0, "reason": "Nifty below major DMAs; cautionary regime gate active"}
+                    res = {"status": "Bearish", "score": 20.0, "reason": "Nifty below major DMAs; cautionary regime gate active"}
+                
+                _REGIME_CACHE = res
+                _REGIME_CACHE_TIME = now
+                return res
         except Exception as e:
             print(f"Failed to fetch real-time Nifty regime: {e}")
             
@@ -338,7 +352,8 @@ class MomentumService:
                 prob_3d=prob_gain_3d,
                 prob_5d=prob_gain_5d,
                 prob_10d=prob_gain_10d,
-                signal=signal
+                signal=signal,
+                baseline_price=cur_price
             )
 
             # Persist to DB with Point-in-Time discipline
@@ -366,7 +381,17 @@ class MomentumService:
                 self.db.add(sig_record)
                 
                 comp.current_price = cur_price
-                comp.momentum_probability = comp_score
+                try:
+                    q_dates = [getattr(comp, 'q1_date', None), getattr(comp, 'q2_date', None), getattr(comp, 'q3_date', None), getattr(comp, 'q4_date', None)]
+                    prob_val, avg_val = self.quant_service.calculate_post_earnings_momentum_stats(comp.ticker, q_dates, df)
+                    if prob_val is not None and avg_val is not None:
+                        comp.momentum_probability = prob_val
+                        comp.avg_post_earnings_momentum = avg_val
+                    pr_ret = self.quant_service.calculate_latest_post_release_return(comp.ticker, getattr(comp, 'upcoming_date', None), df)
+                    if pr_ret is not None:
+                        comp.post_release_return = pr_ret
+                except Exception as ex:
+                    print(f"Post-earnings momentum calc failed for {comp.ticker}: {ex}")
                 
                 processed_count += 1
             except Exception as e:

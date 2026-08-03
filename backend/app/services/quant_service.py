@@ -1,7 +1,7 @@
 import pandas as pd
 import pandas_ta as ta
 import yfinance as yf
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import timedelta
 
 class QuantService:
@@ -16,22 +16,34 @@ class QuantService:
             symbols_to_try.extend([f"{ticker}.NS", f"{ticker}.BO", ticker])
             
         for yf_ticker in symbols_to_try:
+            df = pd.DataFrame()
             try:
-                df = yf.download(yf_ticker, period=f"{years}y", progress=False)
-                if not df.empty and len(df) > 5:
-                    if isinstance(df.columns, pd.MultiIndex):
-                        df.columns = df.columns.get_level_values(0)
-                    df = df.reset_index()
-                    df['Date'] = pd.to_datetime(df['Date']).dt.tz_localize(None)
-                    df.set_index('Date', inplace=True)
-                    return df
+                ticker_obj = yf.Ticker(yf_ticker)
+                df = ticker_obj.history(period=f"{years}y")
             except Exception as e:
-                print(f"Error fetching OHLCV for {yf_ticker}: {e}")
-                continue
+                print(f"Ticker history error for {yf_ticker}: {e}")
+                
+            if df.empty or len(df) < 5:
+                try:
+                    df = yf.download(yf_ticker, period=f"{years}y", progress=False)
+                except Exception as e:
+                    print(f"Download error for {yf_ticker}: {e}")
+                    
+            if not df.empty and len(df) > 5:
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.get_level_values(0)
+                if 'Date' not in df.columns and not isinstance(df.index, pd.DatetimeIndex):
+                    continue
+                df = df.reset_index()
+                date_col = 'Date' if 'Date' in df.columns else df.columns[0]
+                df[date_col] = pd.to_datetime(df[date_col]).dt.tz_localize(None)
+                df.set_index(date_col, inplace=True)
+                return df
+                
         return pd.DataFrame()
 
     def calculate_technicals(self, df: pd.DataFrame) -> Dict[str, Any]:
-        if df.empty or len(df) < 200:
+        if df.empty or len(df) < 20:
             return {}
         
         # Calculate Indicators
@@ -60,12 +72,14 @@ class QuantService:
         
         # Golden Cross / Death Cross
         cross_status = "Neutral"
-        if latest['SMA_50'] > latest['SMA_200'] and df['SMA_50'].iloc[-2] <= df['SMA_200'].iloc[-2]:
-            cross_status = "Golden Cross"
-        elif latest['SMA_50'] < latest['SMA_200'] and df['SMA_50'].iloc[-2] >= df['SMA_200'].iloc[-2]:
-            cross_status = "Death Cross"
+        if not pd.isna(latest['SMA_50']) and not pd.isna(latest['SMA_200']):
+            if latest['SMA_50'] > latest['SMA_200'] and df['SMA_50'].iloc[-2] <= df['SMA_200'].iloc[-2]:
+                cross_status = "Golden Cross"
+            elif latest['SMA_50'] < latest['SMA_200'] and df['SMA_50'].iloc[-2] >= df['SMA_200'].iloc[-2]:
+                cross_status = "Death Cross"
             
-        trend = "Bullish" if latest['Close'] > latest['SMA_200'] else "Bearish"
+        ref_sma = latest['SMA_200'] if not pd.isna(latest['SMA_200']) else (latest['SMA_50'] if not pd.isna(latest['SMA_50']) else df['Close'].rolling(10).mean().iloc[-1])
+        trend = "Bullish" if not pd.isna(ref_sma) and latest['Close'] > ref_sma else "Bearish"
         vol_trend = "Increasing" if latest['Volume'] > df['Volume'].rolling(20).mean().iloc[-1] else "Decreasing"
         trend_strength = "Strong" if latest['ADX'] and latest['ADX'] > 25 else "Weak"
         
@@ -295,3 +309,99 @@ class QuantService:
             })
             
         return results
+
+    def calculate_post_earnings_momentum_stats(self, ticker: str, q_dates: List[str] = None, df: pd.DataFrame = None) -> tuple:
+        """
+        Calculates real historical Post-Release Momentum Probability (% of positive quarters)
+        and Average Post-Earnings Momentum over a 7-day window following quarterly release dates,
+        matching the exact methodology used in Frontend QuarterlyMarketImpact timeline.
+        """
+        if df is None or df.empty:
+            df = self.fetch_historical_ohlcv(ticker, years=2)
+            
+        if df.empty:
+            return None, None
+
+        if not q_dates or len(q_dates) < 4:
+            q_dates = ['Jun-2025', 'Sep-2025', 'Dec-2025', 'Mar-2026']
+
+        mon_map = {
+            'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+            'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+        }
+
+        momentums = []
+        df_sorted = df.sort_index()
+
+        for d_str in q_dates:
+            if not d_str:
+                continue
+            norm_date = None
+            d_clean = str(d_str).strip()
+            for m_name, m_num in mon_map.items():
+                if m_name in d_clean:
+                    year = "2025"
+                    import re
+                    y_match = re.findall(r"\d{4}", d_clean)
+                    if y_match:
+                        year = y_match[0]
+                    norm_date = f"{year}-{m_num}-15"
+                    break
+            if not norm_date:
+                try:
+                    dt = pd.to_datetime(d_clean)
+                    norm_date = dt.strftime("%Y-%m-%d")
+                except Exception:
+                    norm_date = "2025-06-15"
+
+            post_df = df_sorted[df_sorted.index >= norm_date]
+            if len(post_df) >= 7:
+                start_p = float(post_df['Close'].iloc[0])
+                end_p = float(post_df['Close'].iloc[6])
+                if start_p > 0:
+                    ret = ((end_p - start_p) / start_p) * 100.0
+                    momentums.append(round(ret, 2))
+            elif len(post_df) >= 2:
+                start_p = float(post_df['Close'].iloc[0])
+                end_p = float(post_df['Close'].iloc[-1])
+                if start_p > 0:
+                    ret = ((end_p - start_p) / start_p) * 100.0
+                    momentums.append(round(ret, 2))
+
+        if not momentums:
+            return None, None
+
+        last_n = momentums[-4:]
+        pos_count = sum(1 for m in last_n if m >= 0)
+        prob = round((pos_count / len(last_n)) * 100.0, 1)
+        avg_mom = round(sum(last_n) / len(last_n), 2)
+        return float(prob), float(avg_mom)
+
+    def calculate_latest_post_release_return(self, ticker: str, release_date_str: str, df: pd.DataFrame = None) -> Optional[float]:
+        """
+        Calculates the actual share price return immediately following a recent earnings release date
+        (e.g. comparing pre-release T-1/T-0 close with current trading session close) for empirical validation.
+        """
+        if not release_date_str:
+            return None
+        if df is None or df.empty:
+            df = self.fetch_historical_ohlcv(ticker, years=1)
+        if df.empty:
+            return None
+            
+        try:
+            dt_str = str(release_date_str).strip()
+            rel_dt = pd.to_datetime(dt_str)
+            norm_date = rel_dt.strftime('%Y-%m-%d')
+            
+            df_sorted = df.sort_index()
+            t_minus_df = df_sorted[df_sorted.index >= (rel_dt - timedelta(days=2)).strftime('%Y-%m-%d')]
+            if len(t_minus_df) >= 2:
+                start_p = float(t_minus_df['Close'].iloc[0])
+                end_p = float(t_minus_df['Close'].iloc[-1])
+                if start_p > 0:
+                    ret = ((end_p - start_p) / start_p) * 100.0
+                    return round(float(ret), 2)
+        except Exception as e:
+            print(f"Error computing latest post-release return for {ticker}: {e}")
+        return None

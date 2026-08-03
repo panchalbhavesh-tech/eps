@@ -12,7 +12,6 @@ def get_latest_momentum_type(c):
         try:
             sorted_sigs = sorted(c.momentum_signals, key=lambda s: str(s.date_calculated or ''), reverse=True)
             s = sorted_sigs[0]
-            from app.graphql.types import MomentumSignalType
             return MomentumSignalType(
                 id=str(s.id),
                 date_calculated=str(s.date_calculated),
@@ -203,6 +202,7 @@ class Query:
                     financial_health_grade=c.financial_health_grade,
                     momentum_probability=prob,
                     avg_post_earnings_momentum=avg_mom,
+                    post_release_return=getattr(c, "post_release_return", None),
                     latest_momentum=get_latest_momentum_type(c)
                 )
             )
@@ -293,6 +293,7 @@ class Query:
             financial_health_grade=c.financial_health_grade,
             momentum_probability=prob,
             avg_post_earnings_momentum=avg_mom,
+            post_release_return=getattr(c, "post_release_return", None),
             market_cap=c.market_cap,
             enterprise_value=c.enterprise_value,
             high_52w=c.high_52w,
@@ -410,6 +411,7 @@ class Query:
                     financial_health_grade=c.financial_health_grade,
                     momentum_probability=prob,
                     avg_post_earnings_momentum=avg_mom,
+                    post_release_return=getattr(c, "post_release_return", None),
                     latest_momentum=lat_mom
                 )
             )

@@ -10,15 +10,15 @@ from app.worker.celery_app import celery_app
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Ensure all columns exist via migration before initializing models
+    # Initialize database models first so new tables are created
+    Base.metadata.create_all(bind=engine)
+
+    # Ensure all columns exist on already-created tables via migration
     try:
         import migrate
         migrate.upgrade_db()
     except Exception as e:
         print(f"Automatic migration check failed or skipped: {e}")
-
-    # Initialize database models
-    Base.metadata.create_all(bind=engine)
     
     # Seed default admin user and Trigger Automated NSE Sync
     db = SessionLocal()
@@ -47,3 +47,14 @@ app.include_router(graphql_app, prefix="/graphql")
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+@app.get("/sentiment/{ticker}")
+@app.get("/api/sentiment/{ticker}")
+def get_company_sentiment(ticker: str, name: str = "", sector: str = ""):
+    from app.services.ai_analyst_service import AIAnalystService
+    service = AIAnalystService()
+    return service.evaluate_multi_source_sentiment(
+        ticker=ticker,
+        company_name=name or ticker,
+        sector=sector or "Indian Equities"
+    )

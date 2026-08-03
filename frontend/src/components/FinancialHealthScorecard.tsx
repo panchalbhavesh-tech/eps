@@ -10,6 +10,7 @@ import SecurityOutlinedIcon from '@mui/icons-material/SecurityOutlined';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
 import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { useThemeMode } from '../theme/ThemeContext';
 
 interface CategoryItem {
   category: string;
@@ -25,28 +26,21 @@ interface FinancialHealthScorecardProps {
   rawContent: string;
 }
 
-const getCategoryIcon = (category: string) => {
+const getCategoryIcon = (category: string, accentColor: string) => {
   const lower = category.toLowerCase();
   if (lower.includes('profitability') || lower.includes('returns')) return <ShowChartIcon sx={{ color: '#059669' }} />;
   if (lower.includes('debt') || lower.includes('solvency')) return <AccountBalanceWalletOutlinedIcon sx={{ color: '#0284c7' }} />;
   if (lower.includes('cash flow') || lower.includes('efficiency')) return <AutorenewOutlinedIcon sx={{ color: '#d97706' }} />;
-  if (lower.includes('growth') || lower.includes('expansion')) return <TimelineOutlinedIcon sx={{ color: '#0f172a' }} />;
+  if (lower.includes('growth') || lower.includes('expansion')) return <TimelineOutlinedIcon sx={{ color: accentColor }} />;
   if (lower.includes('valuation') || lower.includes('multiples')) return <MonetizationOnOutlinedIcon sx={{ color: '#b45309' }} />;
   if (lower.includes('stability') || lower.includes('price')) return <SecurityOutlinedIcon sx={{ color: '#475569' }} />;
   if (lower.includes('ownership') || lower.includes('promoter')) return <VerifiedUserOutlinedIcon sx={{ color: '#059669' }} />;
-  return <AssessmentOutlinedIcon sx={{ color: '#0f172a' }} />;
+  return <AssessmentOutlinedIcon sx={{ color: accentColor }} />;
 };
 
-const getScoreColor = (percentage: number) => {
-  if (percentage >= 75) return '#059669'; // Emerald Green
-  if (percentage >= 60) return '#0f172a'; // Slate Navy
-  if (percentage >= 45) return '#d97706'; // Amber
-  return '#e11d48'; // Rose Red
-};
-
-// Click-only Tooltip component for Normalization Math Formula
 const ClickableInfoTooltip: React.FC<{ formula: string }> = ({ formula }) => {
   const [open, setOpen] = useState(false);
+  const { tokens } = useThemeMode();
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -63,10 +57,10 @@ const ClickableInfoTooltip: React.FC<{ formula: string }> = ({ formula }) => {
         <Tooltip 
           title={
             <Box sx={{ p: 0.8, maxWidth: '290px' }}>
-              <Typography sx={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', mb: 0.5 }}>
+              <Typography sx={{ fontSize: '11px', color: tokens.text.secondary, fontWeight: 700, textTransform: 'uppercase', mb: 0.5 }}>
                 Normalization Math Formula:
               </Typography>
-              <Typography sx={{ fontFamily: 'monospace', fontSize: '0.78rem', color: '#ffffff', wordBreak: 'break-word', lineHeight: 1.4 }}>
+              <Typography sx={{ fontFamily: tokens.typography.fontFamily, fontSize: '12px', color: tokens.text.primary, wordBreak: 'break-word', lineHeight: 1.4 }} className="mono-font">
                 {formula}
               </Typography>
             </Box>
@@ -80,15 +74,15 @@ const ClickableInfoTooltip: React.FC<{ formula: string }> = ({ formula }) => {
           componentsProps={{
             tooltip: {
               sx: {
-                bgcolor: '#0f172a',
-                border: '1px solid #334155',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+                backgroundColor: tokens.background.card,
+                border: `1px solid ${tokens.border.main}`,
+                boxShadow: tokens.shadows.dropdown,
                 p: 1,
-                borderRadius: 2
+                borderRadius: '8px'
               }
             },
             arrow: {
-              sx: { color: '#0f172a' }
+              sx: { color: tokens.background.card }
             }
           }}
         >
@@ -96,14 +90,14 @@ const ClickableInfoTooltip: React.FC<{ formula: string }> = ({ formula }) => {
             size="small"
             onClick={handleClick}
             sx={{ 
-              color: open ? '#0f172a' : '#64748b', 
+              color: open ? tokens.text.primary : tokens.text.secondary, 
               p: 0.4,
-              bgcolor: open ? '#f1f5f9' : 'transparent',
+              backgroundColor: open ? tokens.background.cardHover : 'transparent',
               transition: 'all 0.2s',
-              '&:hover': { color: '#0f172a', bgcolor: '#f1f5f9' } 
+              '&:hover': { color: tokens.text.primary, backgroundColor: tokens.background.cardHover } 
             }}
           >
-            <InfoOutlinedIcon sx={{ fontSize: '1.05rem' }} />
+            <InfoOutlinedIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
       </Box>
@@ -112,7 +106,8 @@ const ClickableInfoTooltip: React.FC<{ formula: string }> = ({ formula }) => {
 };
 
 const FinancialHealthScorecard: React.FC<FinancialHealthScorecardProps> = ({ rawContent = '' }) => {
-  // 1. Parse Overall Score
+  const { tokens } = useThemeMode();
+
   let overallScore = 0;
   const scoreMatch = rawContent.match(/Overall Quantitative Score:\s*\**([\d.]+)\s*\/\s*100/i) ||
                      rawContent.match(/([\d.]+)\s*\/\s*100/);
@@ -120,14 +115,12 @@ const FinancialHealthScorecard: React.FC<FinancialHealthScorecardProps> = ({ raw
     overallScore = parseFloat(scoreMatch[1]);
   }
 
-  // 2. Parse Assessed Health Grade
   let assessedGrade = "Average (Grade C)";
   const gradeMatch = rawContent.match(/Assessed Health Grade:\s*\**([^*]+)\**/i);
   if (gradeMatch && gradeMatch[1]) {
     assessedGrade = gradeMatch[1].trim();
   }
 
-  // 3. Parse Categories from Table Rows
   const categories: CategoryItem[] = [];
   const lines = rawContent.split('\n');
   lines.forEach((line) => {
@@ -162,7 +155,6 @@ const FinancialHealthScorecard: React.FC<FinancialHealthScorecardProps> = ({ raw
     }
   });
 
-  // 4. Parse Bonus/Penalty Log
   let bonusLog = "No negative governance penalties applied (Promoter pledge within nominal threshold). Net adjustments: ±0.0 points.";
   const logMatch = rawContent.match(/Transparent Bonus \/ Penalty Log:\s*([^\n]+)/i);
   if (logMatch && logMatch[1]) {
@@ -170,24 +162,30 @@ const FinancialHealthScorecard: React.FC<FinancialHealthScorecardProps> = ({ raw
   }
 
   const overallPercentage = Math.min(100, Math.max(0, overallScore));
+  
+  const getScoreColor = (percentage: number) => {
+    if (percentage >= 75) return tokens.status.success.main;
+    if (percentage >= 50) return tokens.status.warning.main;
+    return tokens.status.error.main;
+  };
+
   const heroColor = getScoreColor(overallPercentage);
 
   return (
-    <Box sx={{ fontFamily: 'Inter, sans-serif' }}>
+    <Box sx={{ fontFamily: tokens.typography.fontFamily }}>
       {/* Top Header / Hero Scorecard */}
       <Paper elevation={0} sx={{
-        bgcolor: '#ffffff',
-        border: '1px solid #cbd5e1',
-        borderRadius: 3,
+        backgroundColor: tokens.background.paper,
+        border: `1px solid ${tokens.border.main}`,
+        borderRadius: '12px',
         p: { xs: 3, md: 4 },
         mb: 4,
-        background: 'none',
-        boxShadow: '0 4px 16px rgba(15, 23, 42, 0.04)'
+        boxShadow: tokens.shadows.card
       }}>
         <Grid container spacing={4} alignItems="center">
           <Grid item xs={12} md={5}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-              {/* Radial gauge analogue / Score Ring */}
+              {/* Radial Score Ring */}
               <Box sx={{
                 width: { xs: 110, sm: 130 },
                 height: { xs: 110, sm: 130 },
@@ -196,38 +194,39 @@ const FinancialHealthScorecard: React.FC<FinancialHealthScorecardProps> = ({ raw
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                bgcolor: '#f8fafc',
+                backgroundColor: tokens.background.card,
                 border: `4px solid ${heroColor}`,
-                boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
+                boxShadow: tokens.shadows.card,
                 flexShrink: 0
               }}>
-                <Typography sx={{ fontSize: { xs: '2rem', sm: '2.4rem' }, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
+                <Typography className="mono-font tabular-nums" sx={{ fontSize: { xs: '28px', sm: '32px' }, fontWeight: 700, color: tokens.text.primary, lineHeight: 1 }}>
                   {overallScore > 0 ? overallScore : (categories.reduce((a, b) => a + b.scoreVal, 0)).toFixed(1)}
                 </Typography>
-                <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', mt: 0.5, letterSpacing: '0.05em' }}>
+                <Typography sx={{ fontSize: '11px', fontWeight: 600, color: tokens.text.secondary, mt: 0.5, letterSpacing: '0.5px' }}>
                   OUT OF 100
                 </Typography>
               </Box>
 
               <Box>
-                <Typography sx={{ color: '#64748b', fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', mb: 1 }}>
+                <Typography sx={{ color: tokens.text.secondary, fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', mb: 1 }}>
                   Comprehensive Score
                 </Typography>
-                <Typography variant="h5" sx={{ color: '#0f172a', fontWeight: 800, mb: 1.5 }}>
+                <Typography variant="h5" sx={{ color: tokens.text.primary, fontWeight: 700, fontSize: '20px', mb: 1.5 }}>
                   Financial Health & Normalization
                 </Typography>
                 <Chip 
                   label={assessedGrade} 
                   size="small"
                   sx={{
-                    bgcolor: '#f1f5f9',
+                    backgroundColor: tokens.background.cardHover,
                     color: heroColor,
                     border: `1px solid ${heroColor}`,
-                    fontWeight: 800,
-                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    fontSize: '12px',
                     px: 1,
                     py: 0.5,
-                    height: '30px'
+                    height: '28px',
+                    borderRadius: '6px'
                   }} 
                 />
               </Box>
@@ -235,22 +234,22 @@ const FinancialHealthScorecard: React.FC<FinancialHealthScorecardProps> = ({ raw
           </Grid>
 
           <Grid item xs={12} md={7}>
-            <Box sx={{ pl: { xs: 0, md: 3 }, borderLeft: { xs: 'none', md: '1px solid #cbd5e1' } }}>
-              <Typography sx={{ fontSize: '0.95rem', color: '#334155', lineHeight: 1.6, mb: 2 }}>
+            <Box sx={{ pl: { xs: 0, md: 3 }, borderLeft: { xs: 'none', md: `1px solid ${tokens.border.main}` } }}>
+              <Typography sx={{ fontSize: '13px', color: tokens.text.secondary, lineHeight: 1.6, mb: 2 }}>
                 To guarantee total analytical transparency and complete reproducibility, every categorical financial component is normalized across historical industry benchmarks using measurable mathematical thresholds without hidden weight adjustments.
               </Typography>
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                <Box sx={{ bgcolor: '#f8fafc', px: 2, py: 1.2, borderRadius: 1.5, border: '1px solid #cbd5e1', flexGrow: 1 }}>
-                  <Typography sx={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Evaluation Categories</Typography>
-                  <Typography sx={{ fontSize: '1.25rem', color: '#0f172a', fontWeight: 800, mt: 0.2 }}>{categories.length || 7} Sectors</Typography>
+                <Box sx={{ backgroundColor: tokens.background.card, px: 2, py: 1.2, borderRadius: '8px', border: `1px solid ${tokens.border.main}`, flexGrow: 1 }}>
+                  <Typography sx={{ fontSize: '11px', color: tokens.text.secondary, textTransform: 'uppercase', fontWeight: 600 }}>Evaluation Categories</Typography>
+                  <Typography className="mono-font tabular-nums" sx={{ fontSize: '18px', color: tokens.text.primary, fontWeight: 700, mt: 0.2 }}>{categories.length || 7} Sectors</Typography>
                 </Box>
-                <Box sx={{ bgcolor: '#f8fafc', px: 2, py: 1.2, borderRadius: 1.5, border: '1px solid #cbd5e1', flexGrow: 1 }}>
-                  <Typography sx={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Total Assigned Weight</Typography>
-                  <Typography sx={{ fontSize: '1.25rem', color: '#0f172a', fontWeight: 800, mt: 0.2 }}>100.0 Pts</Typography>
+                <Box sx={{ backgroundColor: tokens.background.card, px: 2, py: 1.2, borderRadius: '8px', border: `1px solid ${tokens.border.main}`, flexGrow: 1 }}>
+                  <Typography sx={{ fontSize: '11px', color: tokens.text.secondary, textTransform: 'uppercase', fontWeight: 600 }}>Total Assigned Weight</Typography>
+                  <Typography className="mono-font tabular-nums" sx={{ fontSize: '18px', color: tokens.text.primary, fontWeight: 700, mt: 0.2 }}>100.0 Pts</Typography>
                 </Box>
-                <Box sx={{ bgcolor: '#f8fafc', px: 2, py: 1.2, borderRadius: 1.5, border: '1px solid #cbd5e1', flexGrow: 1 }}>
-                  <Typography sx={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Governance Penalties</Typography>
-                  <Typography sx={{ fontSize: '1.25rem', color: '#059669', fontWeight: 800, mt: 0.2 }}>±0.0 Pts</Typography>
+                <Box sx={{ backgroundColor: tokens.background.card, px: 2, py: 1.2, borderRadius: '8px', border: `1px solid ${tokens.border.main}`, flexGrow: 1 }}>
+                  <Typography sx={{ fontSize: '11px', color: tokens.text.secondary, textTransform: 'uppercase', fontWeight: 600 }}>Governance Penalties</Typography>
+                  <Typography className="mono-font tabular-nums" sx={{ fontSize: '18px', color: tokens.status.success.main, fontWeight: 700, mt: 0.2 }}>±0.0 Pts</Typography>
                 </Box>
               </Box>
             </Box>
@@ -259,40 +258,40 @@ const FinancialHealthScorecard: React.FC<FinancialHealthScorecardProps> = ({ raw
       </Paper>
 
       {/* Categorical Breakdown Title */}
-      <Typography sx={{ color: '#0f172a', fontSize: '1.1rem', fontWeight: 800, mb: 2.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-        <AssessmentOutlinedIcon sx={{ color: '#0f172a' }} /> Categorical Weighted Breakdown & Transparent Formula Architecture
+      <Typography sx={{ color: tokens.text.primary, fontSize: '16px', fontWeight: 700, mb: 2.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <AssessmentOutlinedIcon sx={{ color: tokens.accent.main }} /> Categorical Weighted Breakdown & Transparent Formula Architecture
       </Typography>
 
       {/* Cards Grid */}
-      <Grid container spacing={3} mb={4}>
+      <Grid container spacing={2} mb={4}>
         {categories.length > 0 ? categories.map((cat, idx) => {
           const color = getScoreColor(cat.percentage);
           return (
             <Grid item xs={12} sm={6} md={4} key={idx}>
               <Paper elevation={0} sx={{
-                bgcolor: '#ffffff',
-                border: '1px solid #cbd5e1',
-                borderRadius: 2.5,
+                backgroundColor: tokens.background.paper,
+                border: `1px solid ${tokens.border.main}`,
+                borderRadius: '12px',
                 p: 2.5,
                 height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)',
+                boxShadow: tokens.shadows.card,
                 transition: 'all 0.2s ease',
                 '&:hover': {
-                  transform: 'translateY(-4px)',
-                  borderColor: '#94a3b8',
-                  boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)'
+                  transform: 'translateY(-3px)',
+                  borderColor: tokens.border.light,
+                  boxShadow: tokens.shadows.dropdown
                 }
               }}>
                 <Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, flexGrow: 1 }}>
-                      <Box sx={{ p: 1, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 1.5, display: 'flex' }}>
-                        {getCategoryIcon(cat.category)}
+                      <Box sx={{ p: 1, backgroundColor: tokens.background.card, border: `1px solid ${tokens.border.main}`, borderRadius: '8px', display: 'flex' }}>
+                        {getCategoryIcon(cat.category, tokens.accent.main)}
                       </Box>
-                      <Typography sx={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', maxWidth: '160px', lineHeight: 1.3 }}>
+                      <Typography sx={{ fontSize: '14px', fontWeight: 700, color: tokens.text.primary, maxWidth: '160px', lineHeight: 1.3 }}>
                         {cat.category}
                       </Typography>
                     </Box>
@@ -302,15 +301,14 @@ const FinancialHealthScorecard: React.FC<FinancialHealthScorecardProps> = ({ raw
                         label={cat.weight}
                         size="small" 
                         sx={{ 
-                          bgcolor: '#f1f5f9', 
-                          border: '1px solid #cbd5e1',
-                          color: '#0f172a', 
-                          fontSize: '0.7rem', 
-                          fontWeight: 700,
-                          borderRadius: 1
+                          backgroundColor: tokens.background.cardHover, 
+                          border: `1px solid ${tokens.border.main}`,
+                          color: tokens.text.primary, 
+                          fontSize: '11px', 
+                          fontWeight: 600,
+                          borderRadius: '6px'
                         }} 
                       />
-                      {/* Click-only Info Tooltip Icon */}
                       <ClickableInfoTooltip formula={cat.formula} />
                     </Box>
                   </Box>
@@ -318,10 +316,10 @@ const FinancialHealthScorecard: React.FC<FinancialHealthScorecardProps> = ({ raw
                   {/* Score Display & Progress Bar */}
                   <Box sx={{ mb: 1 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1 }}>
-                      <Typography sx={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>
+                      <Typography className="mono-font tabular-nums" sx={{ fontSize: '20px', fontWeight: 700, color: tokens.text.primary }}>
                         {cat.scoreText}
                       </Typography>
-                      <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: color }}>
+                      <Typography className="mono-font tabular-nums" sx={{ fontSize: '12px', fontWeight: 600, color: color }}>
                         {cat.percentage.toFixed(0)}% Efficiency
                       </Typography>
                     </Box>
@@ -329,12 +327,12 @@ const FinancialHealthScorecard: React.FC<FinancialHealthScorecardProps> = ({ raw
                       variant="determinate" 
                       value={cat.percentage} 
                       sx={{
-                        height: 8,
-                        borderRadius: 4,
-                        bgcolor: '#e2e8f0',
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: tokens.border.main,
                         '& .MuiLinearProgress-bar': {
-                          bgcolor: color,
-                          borderRadius: 4
+                          backgroundColor: color,
+                          borderRadius: 3
                         }
                       }} 
                     />
@@ -345,8 +343,8 @@ const FinancialHealthScorecard: React.FC<FinancialHealthScorecardProps> = ({ raw
           );
         }) : (
           <Grid item xs={12}>
-            <Paper elevation={0} sx={{ p: 4, bgcolor: '#ffffff', border: '1px solid #cbd5e1', textAlign: 'center', borderRadius: 2 }}>
-              <Typography sx={{ color: '#64748b' }}>No detailed categorical metrics generated yet for this stock.</Typography>
+            <Paper elevation={0} sx={{ p: 4, backgroundColor: tokens.background.paper, border: `1px solid ${tokens.border.main}`, textAlign: 'center', borderRadius: '12px' }}>
+              <Typography sx={{ color: tokens.text.secondary }}>No detailed categorical metrics generated yet for this stock.</Typography>
             </Paper>
           </Grid>
         )}
@@ -354,23 +352,22 @@ const FinancialHealthScorecard: React.FC<FinancialHealthScorecardProps> = ({ raw
 
       {/* Transparent Bonus / Penalty Footer */}
       <Paper elevation={0} sx={{
-        bgcolor: '#f0fdf4',
-        border: '1px solid #86efac',
-        borderLeft: '4px solid #15803d',
-        borderRadius: 2,
+        backgroundColor: tokens.status.success.pillBg,
+        border: `1px solid ${tokens.status.success.border}`,
+        borderRadius: '12px',
         p: 2.5,
         display: 'flex',
         alignItems: 'center',
         gap: 2
       }}>
-        <Box sx={{ p: 1, bgcolor: '#ffffff', border: '1px solid #86efac', borderRadius: 1.5, color: '#15803d', display: 'flex' }}>
+        <Box sx={{ p: 1, backgroundColor: tokens.background.paper, border: `1px solid ${tokens.status.success.border}`, borderRadius: '8px', color: tokens.status.success.main, display: 'flex' }}>
           <GavelOutlinedIcon />
         </Box>
         <Box>
-          <Typography sx={{ fontSize: '0.85rem', color: '#15803d', fontWeight: 800, textTransform: 'uppercase' }}>
+          <Typography sx={{ fontSize: '11px', color: tokens.status.success.main, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Transparent Bonus & Governance Penalty Log
           </Typography>
-          <Typography sx={{ fontSize: '0.9rem', color: '#166534', fontWeight: 500, mt: 0.3 }}>
+          <Typography sx={{ fontSize: '13px', color: tokens.text.primary, fontWeight: 500, mt: 0.3 }}>
             {bonusLog}
           </Typography>
         </Box>

@@ -1,0 +1,156 @@
+{
+  "timestamp": "2026-07-31 14:41:53.900128+00:00",
+  "status": "100% Verified",
+  "market_regime": {
+    "status": "Neutral / Rebounding",
+    "score": 50.0,
+    "reason": "Nifty consolidating near 50 DMA"
+  },
+  "data_pipeline_verification": {
+    "bhavcopy_synced": {
+      "status": "Resilient Fallback Synced",
+      "records_synced": 764,
+      "date": "2026-07-30"
+    },
+    "surveillance_synced": {
+      "status": "Surveillance Watchlist Updated",
+      "new_exclusions_added": 0
+    }
+  },
+  "strategy_backtest_audit": [
+    {
+      "ticker": "RELIANCE",
+      "trades": 12,
+      "win_rate": 50.0,
+      "net_return": 14.6,
+      "sharpe": 0.83,
+      "ev_pct": 1.22,
+      "profit_factor": 2.26,
+      "nifty_alpha": 16.88
+    },
+    {
+      "ticker": "TCS",
+      "trades": 16,
+      "win_rate": 12.5,
+      "net_return": -22.66,
+      "sharpe": -4.15,
+      "ev_pct": -1.57,
+      "profit_factor": 0.16,
+      "nifty_alpha": -20.38
+    },
+    {
+      "ticker": "HDFCBANK",
+      "trades": 17,
+      "win_rate": 35.29,
+      "net_return": 3.17,
+      "sharpe": -0.27,
+      "ev_pct": 0.22,
+      "profit_factor": 1.25,
+      "nifty_alpha": 5.44
+    },
+    {
+      "ticker": "INFY",
+      "trades": 22,
+      "win_rate": 22.73,
+      "net_return": -29.37,
+      "sharpe": -3.04,
+      "ev_pct": -1.53,
+      "profit_factor": 0.26,
+      "nifty_alpha": -27.1
+    },
+    {
+      "ticker": "ICICIBANK",
+      "trades": 25,
+      "win_rate": 20.0,
+      "net_return": -10.36,
+      "sharpe": -1.27,
+      "ev_pct": -0.4,
+      "profit_factor": 0.65,
+      "nifty_alpha": -8.09
+    },
+    {
+      "ticker": "HINDUNILVR",
+      "trades": 20,
+      "win_rate": 20.0,
+      "net_return": -30.59,
+      "sharpe": -4.28,
+      "ev_pct": -1.79,
+      "profit_factor": 0.14,
+      "nifty_alpha": -28.32
+    }
+  ],
+  "sentiment_and_reddit_analysis": [
+    {
+      "ticker": "RELIANCE",
+      "company_name": "Reliance Industries Ltd",
+      "sector": "Energy & Oil",
+      "news_sentiment_score": 78.0,
+      "news_summary": "News headline density is above average driven by strong capital expenditure orders, government infrastructure momentum, and expanding operating profit margins in Energy & Oil.",
+      "reddit_discussion_score": 75.0,
+      "reddit_sentiment_summary": "Retail discussion intensity on r/IndianStreetBets is elevated, driven by momentum breakouts and bullish technical charting patterns among active traders.",
+      "smart_money_divergence_status": "Balanced Momentum",
+      "divergence_summary": "Both institutional delivery percentages and retail social velocity are moving in tandem. While momentum is strong, trailing ATR volatility stop-losses are recommended to guard against sudden pullbacks.",
+      "composite_sentiment_index": 76.5
+    },
+    {
+      "ticker": "TCS",
+      "company_name": "Tata Consultancy Services",
+      "sector": "Information Technology",
+      "news_sentiment_score": 72.0,
+      "news_summary": "Financial press reports emphasize stable operational cash flows and steady credit/revenue expansions across Information Technology. Regulatory compliance remains robust with no governance red flags.",
+      "reddit_discussion_score": 58.0,
+      "reddit_sentiment_summary": "Discussion threads across r/IndiaInvestments and community investing groups reflect measured long-term institutional trust with low speculative hype or options gambling activity.",
+      "smart_money_divergence_status": "Prime Early Accumulation",
+      "divergence_summary": "Institutional Block Deal tracking reveals steady systemic FII/DII net buying while retail forums display low emotional FOMO, forming an optimal low-risk accumulation profile.",
+      "composite_sentiment_index": 68.0
+    },
+    {
+      "ticker": "HDFCBANK",
+      "company_name": "HDFC Bank Limited",
+      "sector": "Banking & Finance",
+      "news_sentiment_score": 72.0,
+      "news_summary": "Financial press reports emphasize stable operational cash flows and steady credit/revenue expansions across Banking & Finance. Regulatory compliance remains robust with no governance red flags.",
+      "reddit_discussion_score": 58.0,
+      "reddit_sentiment_summary": "Discussion threads across r/IndiaInvestments and community investing groups reflect measured long-term institutional trust with low speculative hype or options gambling activity.",
+      "smart_money_divergence_status": "Prime Early Accumulation",
+      "divergence_summary": "Institutional Block Deal tracking reveals steady systemic FII/DII net buying while retail forums display low emotional FOMO, forming an optimal low-risk accumulation profile.",
+      "composite_sentiment_index": 68.0
+    },
+    {
+      "ticker": "INFY",
+      "company_name": "Infosys Limited",
+      "sector": "Information Technology",
+      "news_sentiment_score": 72.0,
+      "news_summary": "Financial press reports emphasize stable operational cash flows and steady credit/revenue expansions across Information Technology. Regulatory compliance remains robust with no governance red flags.",
+      "reddit_discussion_score": 58.0,
+      "reddit_sentiment_summary": "Discussion threads across r/IndiaInvestments and community investing groups reflect measured long-term institutional trust with low speculative hype or options gambling activity.",
+      "smart_money_divergence_status": "Prime Early Accumulation",
+      "divergence_summary": "Institutional Block Deal tracking reveals steady systemic FII/DII net buying while retail forums display low emotional FOMO, forming an optimal low-risk accumulation profile.",
+      "composite_sentiment_index": 68.0
+    },
+    {
+      "ticker": "ICICIBANK",
+      "company_name": "ICICI Bank Limited",
+      "sector": "Banking & Finance",
+      "news_sentiment_score": 72.0,
+      "news_summary": "Financial press reports emphasize stable operational cash flows and steady credit/revenue expansions across Banking & Finance. Regulatory compliance remains robust with no governance red flags.",
+      "reddit_discussion_score": 58.0,
+      "reddit_sentiment_summary": "Discussion threads across r/IndiaInvestments and community investing groups reflect measured long-term institutional trust with low speculative hype or options gambling activity.",
+      "smart_money_divergence_status": "Prime Early Accumulation",
+      "divergence_summary": "Institutional Block Deal tracking reveals steady systemic FII/DII net buying while retail forums display low emotional FOMO, forming an optimal low-risk accumulation profile.",
+      "composite_sentiment_index": 68.0
+    },
+    {
+      "ticker": "HINDUNILVR",
+      "company_name": "Hindustan Unilever Ltd",
+      "sector": "FMCG & Consumer Goods",
+      "news_sentiment_score": 64.0,
+      "news_summary": "Recent quarterly filings demonstrate steady YoY operational earnings consistency within FMCG & Consumer Goods, matching broader Nifty benchmark trajectories.",
+      "reddit_discussion_score": 52.0,
+      "reddit_sentiment_summary": "Community discussion velocity is stable with balanced discussions around valuation multiples and upcoming quarterly earnings guidance.",
+      "smart_money_divergence_status": "Neutral Equilibrium",
+      "divergence_summary": "No alarming emotional divergence detected between retail forum chatter and exchange delivery percentages.",
+      "composite_sentiment_index": 60.0
+    }
+  ]
+}

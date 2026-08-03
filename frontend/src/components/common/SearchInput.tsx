@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, InputBase, IconButton } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
-import { saasTokens } from '../../theme/theme';
+import { useThemeMode } from '../../theme/ThemeContext';
 
 export interface SearchInputProps {
   value: string;
@@ -19,6 +19,9 @@ export const SearchInput: React.FC<SearchInputProps> = ({
   width = 300,
   sx = {},
 }) => {
+  const { mode, tokens } = useThemeMode();
+  const isDark = mode === 'dark';
+
   return (
     <Box
       sx={{
@@ -27,34 +30,34 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         px: 1.5,
         height: 38,
         width,
-        bgcolor: '#f8fafc',
-        border: `1px solid ${saasTokens.border.main}`,
+        bgcolor: tokens.background.card,
+        border: `1px solid ${tokens.border.main}`,
         borderRadius: 2.5,
         transition: 'all 0.15s ease',
         '&:hover': {
-          borderColor: saasTokens.border.light,
-          bgcolor: '#ffffff',
+          borderColor: tokens.border.light,
+          bgcolor: tokens.background.cardHover,
         },
         '&:focus-within': {
-          borderColor: saasTokens.border.focus,
-          boxShadow: '0 0 0 2px rgba(15, 23, 42, 0.08)',
-          bgcolor: '#ffffff',
+          borderColor: tokens.border.focus,
+          boxShadow: isDark ? '0 0 0 2px rgba(61, 255, 162, 0.12)' : '0 0 0 2px rgba(15, 23, 42, 0.08)',
+          bgcolor: tokens.background.cardHover,
         },
         ...sx,
       }}
     >
-      <SearchIcon sx={{ color: saasTokens.text.secondary, mr: 1, fontSize: 19 }} />
+      <SearchIcon sx={{ color: tokens.text.secondary, mr: 1, fontSize: 19 }} />
       <InputBase
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         sx={{
           flex: 1,
-          color: saasTokens.text.primary,
+          color: tokens.text.primary,
           fontSize: '0.85rem',
           fontVariantNumeric: 'tabular-nums',
           '& ::placeholder': {
-            color: saasTokens.text.secondary,
+            color: tokens.text.secondary,
             opacity: 0.8,
           },
         }}
@@ -63,7 +66,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         <IconButton
           size="small"
           onClick={() => onChange('')}
-          sx={{ color: saasTokens.text.secondary, p: 0.5, '&:hover': { color: saasTokens.text.primary } }}
+          sx={{ color: tokens.text.secondary, p: 0.5, '&:hover': { color: tokens.text.primary } }}
         >
           <CloseIcon sx={{ fontSize: 16 }} />
         </IconButton>
@@ -72,9 +75,9 @@ export const SearchInput: React.FC<SearchInputProps> = ({
           component="span"
           sx={{
             fontSize: '0.7rem',
-            color: saasTokens.text.secondary,
-            bgcolor: '#f1f5f9',
-            border: `1px solid ${saasTokens.border.main}`,
+            color: tokens.text.secondary,
+            bgcolor: tokens.background.header,
+            border: `1px solid ${tokens.border.main}`,
             borderRadius: 1,
             px: 0.6,
             py: 0.1,

@@ -1,9 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ApolloProvider } from '@apollo/client'
-import { ThemeProvider, CssBaseline } from '@mui/material'
 import { client } from './graphql/client'
-import theme from './theme/theme'
+import { ThemeModeProvider } from './theme/ThemeContext'
 import { AuthProvider } from './store/AuthContext'
 import App from './App.tsx'
 import './index.css'
@@ -11,12 +10,11 @@ import './index.css'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ApolloProvider client={client}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+      <ThemeModeProvider>
         <AuthProvider>
           <App />
         </AuthProvider>
-      </ThemeProvider>
+      </ThemeModeProvider>
     </ApolloProvider>
   </StrictMode>,
 )

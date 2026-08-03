@@ -30,7 +30,8 @@ class ValidationService:
         prob_10d: float,
         signal: str,
         model_version: str = "production",
-        is_shadow: bool = False
+        is_shadow: bool = False,
+        baseline_price: Optional[float] = None
     ) -> bool:
         """
         Persists daily point-in-time algorithmic evaluation scores for later forward return validation and IC tracking.
@@ -40,6 +41,7 @@ class ValidationService:
                 id=uuid.uuid4(),
                 company_id=company_id,
                 ticker=ticker,
+                baseline_price=round(float(baseline_price), 2) if baseline_price is not None else None,
                 date_evaluated=datetime.utcnow(),
                 composite_score=round(float(composite_score), 2),
                 prob_gain_3d=round(float(prob_3d), 3),
@@ -78,11 +80,11 @@ class ValidationService:
                 if not comp or not comp.current_price:
                     continue
                     
-                # Calculate actual percentage change
+                # Calculate actual percentage change against historical baseline price at prediction time
                 days_elapsed = (now - rec.date_evaluated).days
                 if days_elapsed >= 5:
-                    # In production we query exact historical OHLCV on T+5; here we compute against current live price
-                    ret_5d = ((float(comp.current_price) - float(rec.composite_score or comp.current_price)) / max(0.1, float(rec.composite_score or comp.current_price))) * 100.0
+                    base_p = float(rec.baseline_price or comp.current_price or 1.0)
+                    ret_5d = ((float(comp.current_price) - base_p) / max(0.01, base_p)) * 100.0
                     rec.realized_5d_return = round(min(50.0, max(-50.0, ret_5d)), 2)
                     resolved_count += 1
             except Exception:

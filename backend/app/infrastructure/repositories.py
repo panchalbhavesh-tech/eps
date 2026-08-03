@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from app.infrastructure.models import User, Company
 from typing import Optional, List
 
@@ -24,7 +24,14 @@ class CompanyRepository:
         self.db = db
 
     def get_all(self) -> List[Company]:
-        return self.db.query(Company).all()
+        return (
+            self.db.query(Company)
+            .options(
+                selectinload(Company.event_studies),
+                selectinload(Company.momentum_signals)
+            )
+            .all()
+        )
 
     def get_by_ticker(self, ticker: str) -> Optional[Company]:
         return self.db.query(Company).filter(Company.ticker == ticker).first()
