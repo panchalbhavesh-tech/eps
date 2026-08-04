@@ -11,6 +11,7 @@ import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import BiotechIcon from '@mui/icons-material/Biotech';
+import ScheduleIcon from '@mui/icons-material/Schedule';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { useThemeMode } from '../theme/ThemeContext';
@@ -62,6 +63,13 @@ const Layout: React.FC = () => {
       path: '/tasks',
       breadcrumb: 'Processes & Tasks / Background Celery Workers',
       description: 'Background Celery Workers & Automated AI Analysis Queue' 
+    },
+    { 
+      text: 'Celery Schedules', 
+      icon: <ScheduleIcon sx={{ fontSize: 20 }} />, 
+      path: '/schedules',
+      breadcrumb: 'Celery Schedules / Beat Timers & Automated Research Workflows',
+      description: 'Inspect all scheduled Celery Beat tasks, intervals, and automated execution loops' 
     },
   ];
 

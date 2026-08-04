@@ -179,6 +179,15 @@ class Mutation:
         _log_queued_task(info.context.db, task.id, "app.worker.tasks.run_automated_hypothesis_research_task")
         return f"Automated AI hypothesis research task {task.id} started in background."
 
+    @strawberry.mutation
+    def trigger_celery_task(self, info: Info[Context, None], task_name: str) -> str:
+        try:
+            task = celery_app.send_task(task_name)
+            _log_queued_task(info.context.db, task.id, task_name)
+            return f"Successfully queued task '{task_name}' in background (ID: {task.id})."
+        except Exception as e:
+            return f"Failed to queue task '{task_name}': {str(e)}"
+
 def _log_queued_task(db, task_id: str, name: str):
     from app.infrastructure.models import BackgroundJob
     job = BackgroundJob(celery_task_id=task_id, task_name=name, status="QUEUED")

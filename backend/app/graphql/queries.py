@@ -1,7 +1,7 @@
 import strawberry
 from typing import List, Optional
 from strawberry.types import Info
-from app.graphql.types import CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType
+from app.graphql.types import CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType
 from app.services.company_service import CompanyService
 from app.graphql.context import Context
 import uuid
@@ -509,6 +509,102 @@ class Query:
                     decommissioned_at=h.decommissioned_at.isoformat() if h.decommissioned_at else None,
                     decommission_reason=h.decommission_reason,
                     experiments=exps
+                )
+            )
+        return result
+
+    @strawberry.field
+    def celery_schedules(self, info: Info[Context, None]) -> List[CeleryScheduleType]:
+        from app.worker.celery_app import celery_app
+        from app.infrastructure.models import BackgroundJob
+        db = info.context.db
+        
+        schedule_metadata = {
+            'sync-nse-daily': {
+                'category': 'Market Data Sync',
+                'description': 'Daily synchronization of NSE corporate events, earnings calendar, and market action fixtures.'
+            },
+            'sync-nse-market-data-daily': {
+                'category': 'Market Data Sync',
+                'description': 'Overnight ingestion of NSE Bhavcopy daily price volume snapshots and exchange surveillance indicators.'
+            },
+            'scan-nse-momentum-daily': {
+                'category': 'Quant Analytics',
+                'description': 'Post-market daily execution of cross-sectional momentum anomaly scanner across NIFTY universe.'
+            },
+            'resolve-realized-forward-returns-daily': {
+                'category': 'Quant Analytics',
+                'description': 'Daily backfill and attribution calculation of realized forward returns and rolling Information Coefficient (IC).'
+            },
+            'retrain-momentum-ml-model-weekly': {
+                'category': 'ML & AI Engine',
+                'description': 'Weekly walk-forward supervised retraining of machine learning momentum classification weights.'
+            },
+            'audit-shadow-model-probation-weekly': {
+                'category': 'ML & AI Engine',
+                'description': 'Weekly automated review and evaluation of 14-day shadow probation performance for candidate models.'
+            },
+            'sync-ohlcv-cache-daily': {
+                'category': 'Market Data Sync',
+                'description': 'Nightly high-performance incremental synchronization of historical OHLCV candlestick cache.'
+            },
+            'run-automated-hypothesis-research-daily': {
+                'category': 'AI Factor Discovery',
+                'description': 'Autonomous nightly QHLM FSM statistical evaluation, deflated Sharpe audit, and AI factor discovery loop.'
+            },
+        }
+        
+        beat_schedule = getattr(celery_app.conf, "beat_schedule", {}) or {}
+        
+        jobs = db.query(BackgroundJob).order_by(BackgroundJob.queued_at.desc()).limit(200).all()
+        job_map = {}
+        for j in jobs:
+            if j.task_name and j.task_name not in job_map:
+                job_map[j.task_name] = j
+
+        result = []
+        for sched_name, config in beat_schedule.items():
+            task_name = config.get("task", "")
+            interval = float(config.get("schedule", 0.0))
+            
+            if interval == 86400.0:
+                human_interval = "Daily (24 hours)"
+            elif interval == 604800.0:
+                human_interval = "Weekly (7 days)"
+            elif interval > 3600.0:
+                human_interval = f"Every {round(interval / 3600.0, 1)} hours"
+            elif interval >= 60.0:
+                human_interval = f"Every {round(interval / 60.0, 1)} minutes"
+            else:
+                human_interval = f"Every {int(interval)} seconds"
+
+            meta = schedule_metadata.get(sched_name, {
+                "category": "Scheduled Worker",
+                "description": f"Automated recurring execution of {task_name}."
+            })
+
+            last_run_at = None
+            last_run_status = "NEVER_RUN"
+            last_run_duration = None
+            
+            if task_name in job_map:
+                latest_job = job_map[task_name]
+                last_run_at = str(latest_job.started_at or latest_job.queued_at or "")
+                last_run_status = str(latest_job.status or "QUEUED")
+                if latest_job.started_at and latest_job.finished_at:
+                    last_run_duration = (latest_job.finished_at - latest_job.started_at).total_seconds()
+
+            result.append(
+                CeleryScheduleType(
+                    name=sched_name,
+                    task_name=task_name,
+                    interval_seconds=interval,
+                    human_readable_interval=human_interval,
+                    category=meta.get("category", "Scheduled Worker"),
+                    description=meta.get("description", ""),
+                    last_run_at=last_run_at,
+                    last_run_status=last_run_status,
+                    last_run_duration=last_run_duration
                 )
             )
         return result

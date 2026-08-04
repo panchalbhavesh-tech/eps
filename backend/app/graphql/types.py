@@ -267,3 +267,16 @@ class ResearchHypothesisType:
     decommissioned_at: Optional[str] = None
     decommission_reason: Optional[str] = None
     experiments: Optional[List[HypothesisExperimentType]] = None
+
+
+@strawberry.type
+class CeleryScheduleType:
+    name: str
+    task_name: str
+    interval_seconds: float
+    human_readable_interval: str
+    category: str
+    description: str
+    last_run_at: Optional[str] = None
+    last_run_status: Optional[str] = None
+    last_run_duration: Optional[float] = None
