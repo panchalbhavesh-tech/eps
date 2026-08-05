@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days
     FMP_API_KEY: str = os.environ.get("FMP_API_KEY", "")
     GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
+    QHLM_LIVE_TRADING_ENABLED: bool = os.environ.get("QHLM_LIVE_TRADING_ENABLED", "False").lower() in ("true", "1", "yes")
     
     class Config:
         env_file = ".env"

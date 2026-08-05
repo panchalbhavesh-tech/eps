@@ -1,7 +1,7 @@
 import strawberry
 from typing import List, Optional
 from strawberry.types import Info
-from app.graphql.types import CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType
+from app.graphql.types import CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType, HypothesisSignalType
 from app.services.company_service import CompanyService
 from app.graphql.context import Context
 import uuid
@@ -97,6 +97,23 @@ class Query:
         if not user:
             return None
         return UserType(id=str(user.id), email=user.email, is_active=user.is_active)
+
+    @strawberry.field
+    def latest_live_signals(self, info: Info[Context, None]) -> List[HypothesisSignalType]:
+        db = info.context.db
+        from app.infrastructure.models import HypothesisSignal
+        signals = db.query(HypothesisSignal).order_by(HypothesisSignal.trade_date.desc()).limit(100).all()
+        return [
+            HypothesisSignalType(
+                id=str(s.id),
+                hypothesis_id=str(s.hypothesis_id),
+                ticker=s.ticker,
+                trade_date=str(s.trade_date),
+                factor_score=s.factor_score,
+                rank_percentile=s.rank_percentile,
+                direction=s.direction
+            ) for s in signals
+        ]
 
     @strawberry.field
     def historical_prices(self, info: Info[Context, None], ticker: str, years: int = 2) -> List[HistoricalPriceType]:
@@ -514,7 +531,7 @@ class Query:
         return result
 
     @strawberry.field
-    def celery_schedules(self, info: Info[Context, None]) -> List[CeleryScheduleType]:
+    def celery_schedules(self, info: Info[Context, None]) -> List[CeleryScheduleType, HypothesisSignalType]:
         from app.worker.celery_app import celery_app
         from app.infrastructure.models import BackgroundJob
         db = info.context.db
@@ -595,7 +612,7 @@ class Query:
                     last_run_duration = (latest_job.finished_at - latest_job.started_at).total_seconds()
 
             result.append(
-                CeleryScheduleType(
+                CeleryScheduleType, HypothesisSignalType(
                     name=sched_name,
                     task_name=task_name,
                     interval_seconds=interval,

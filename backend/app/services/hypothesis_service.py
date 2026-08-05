@@ -126,7 +126,7 @@ class HypothesisService:
             self.db.rollback()
             return {"status": "Error", "message": f"Failed to save hypothesis: {e}"}
 
-    def evaluate_hypothesis(self, hypothesis_id: str, trials_in_family: int = 1) -> Dict[str, Any]:
+    def evaluate_hypothesis(self, hypothesis_id: str) -> Dict[str, Any]:
         """
         Stage 2: Statistical In-Sample Audit.
         Executes Purged Walk-Forward evaluating alpha expressions across cached daily OHLCV series.
@@ -137,55 +137,100 @@ class HypothesisService:
         if not hyp:
             return {"status": "Error", "message": "Hypothesis not found."}
 
+        # Track global trial count for DSR
+        trial_record = self.db.query(TotalHypothesisTrials).first()
+        if not trial_record:
+            trial_record = TotalHypothesisTrials(id=1, total_count=0)
+            self.db.add(trial_record)
+            self.db.commit()
+            
+        trial_record.total_count += 1
+        current_trial_count = trial_record.total_count
+        self.db.commit()
+
         try:
             # Query representative liquid symbols from cache
             companies = self.db.query(Company).limit(50).all()
             tickers = [c.ticker for c in companies]
             
-            all_scores = []
-            all_returns = []
-            strategy_daily_returns = []
+            # Fetch all rows for these tickers
+            rows = self.db.query(DailyBhavcopy).filter(DailyBhavcopy.ticker.in_(tickers)).order_by(DailyBhavcopy.trade_date.asc()).all()
+            
+            if not rows:
+                raise ValueError("No historical cache bars available.")
 
-            for ticker in tickers:
-                rows = self.db.query(DailyBhavcopy).filter(DailyBhavcopy.ticker == ticker).order_by(DailyBhavcopy.trade_date.asc()).all()
-                if len(rows) < 60:
-                    continue
-
-                df = pd.DataFrame([{
-                    "Close": r.close_price,
-                    "Volume": r.volume,
-                    "High": r.high_price,
-                    "Low": r.low_price
-                } for r in rows])
-
-                # Simple tokenized factor parsing without dangerous eval()
+            df_data = [{
+                "Date": r.trade_date,
+                "Ticker": r.ticker,
+                "close": r.close_price,
+                "volume": r.volume,
+                "high": r.high_price,
+                "low": r.low_price
+            } for r in rows]
+            
+            df = pd.DataFrame(df_data)
+            df.set_index(['Date', 'Ticker'], inplace=True)
+            df.sort_index(inplace=True)
+            
+            # Precompute required variables
+            grouped = df.groupby(level='Ticker')
+            df['volume_5d'] = grouped['volume'].transform(lambda x: x.rolling(5).mean())
+            df['volatility_20d'] = grouped['close'].transform(lambda x: x.pct_change().rolling(20).std())
+            df['volatility_20'] = df['volatility_20d'] # alias
+            df['high_low_spread_10d'] = (df['high'] - df['low']).groupby(level='Ticker').transform(lambda x: x.rolling(10).mean())
+            df['adv_10'] = grouped['volume'].transform(lambda x: x.rolling(10).mean())
+            
+            # Forward returns
+            horizon = hyp.holding_horizon_days
+            df['fwd_ret'] = grouped['close'].transform(lambda x: x.shift(-horizon) / x - 1.0)
+            
+            # Safely evaluate alpha expression
+            ev = SafeASTEvaluator(df)
+            try:
                 expr = hyp.alpha_expression.lower()
-                if "volume" in expr and "close" in expr:
-                    df['factor'] = df['Volume'].pct_change(5) / (df['Close'].pct_change(20).abs() + 0.0001)
-                elif "volatility" in expr or "high" in expr:
-                    df['factor'] = (df['High'] - df['Low']) / df['Close']
-                else:
-                    # Default momentum drift expression
-                    df['factor'] = df['Close'].pct_change(5)
-
-                df['fwd_ret'] = df['Close'].shift(-hyp.holding_horizon_days) / df['Close'] - 1.0
-                clean = df.dropna(subset=['factor', 'fwd_ret'])
-                if len(clean) > 20:
-                    all_scores.extend(clean['factor'].tolist())
-                    all_returns.extend(clean['fwd_ret'].tolist())
-                    
-                    # Compute pseudo strategy returns (long when factor in top 30%)
-                    threshold = np.percentile(clean['factor'], 70)
-                    longs = clean[clean['factor'] >= threshold]
-                    strategy_daily_returns.extend(longs['fwd_ret'].tolist())
-
-            sample_length = len(strategy_daily_returns)
-            if sample_length < 30:
+                df['factor'] = ev.evaluate(expr)
+            except Exception as parse_err:
+                raise ValueError(f"Failed to parse alpha expression: {parse_err}")
+                
+            clean = df.dropna(subset=['factor', 'fwd_ret']).copy()
+            if len(clean) < 100:
                 failure_tag = "INSUFFICIENT_HISTORICAL_CACHE_BARS"
                 exp = HypothesisExperiment(
                     id=uuid.uuid4(),
                     hypothesis_id=hyp.id,
-                    total_trials_in_family=trials_in_family,
+                    total_trials_in_family=current_trial_count,
+                    is_statistically_valid=False,
+                    failure_mode_tag=failure_tag
+                )
+                hyp.current_stage = "ARCHIVE_FAILED"
+                hyp.decommission_reason = failure_tag
+                self.db.add(exp)
+                self.db.commit()
+                return {"status": "Failed", "stage": "ARCHIVE_FAILED", "reason": failure_tag}
+
+            # Evaluate cross-sectional performance
+            # For each date, go long top decile
+            def calc_daily_ret(group):
+                threshold = np.percentile(group['factor'], 90)
+                longs = group[group['factor'] >= threshold]
+                if not longs.empty:
+                    return longs['fwd_ret'].mean()
+                return 0.0
+                
+            daily_returns = clean.groupby(level='Date').apply(calc_daily_ret)
+            
+            # Filter zero returns which might skew std
+            strategy_daily_returns = daily_returns[daily_returns != 0.0].tolist()
+            all_scores = clean['factor'].tolist()
+            all_returns = clean['fwd_ret'].tolist()
+
+            sample_length = len(strategy_daily_returns)
+            if sample_length < 30:
+                failure_tag = "INSUFFICIENT_SIGNALS_GENERATED"
+                exp = HypothesisExperiment(
+                    id=uuid.uuid4(),
+                    hypothesis_id=hyp.id,
+                    total_trials_in_family=current_trial_count,
                     is_statistically_valid=False,
                     failure_mode_tag=failure_tag
                 )
@@ -207,7 +252,7 @@ class HypothesisService:
 
             dsr = self.calculate_deflated_sharpe(
                 classic_sharpe=classic_sharpe,
-                total_trials=trials_in_family,
+                total_trials=current_trial_count,
                 sample_length_periods=sample_length,
                 skewness=skew,
                 kurtosis=kurt
@@ -215,13 +260,14 @@ class HypothesisService:
 
             ic, ic_tstat = self.compute_spearman_ic_stats(all_scores, all_returns)
 
+            # Global IC Threshold is 0.015
             is_valid = (dsr >= 0.85) and (ic >= 0.015) and (ic_tstat >= 1.96)
             failure_tag = None if is_valid else ("LOW_DEFLATED_SHARPE_PENALTY" if dsr < 0.85 else "INSIGNIFICANT_SPEARMAN_IC")
 
             exp = HypothesisExperiment(
                 id=uuid.uuid4(),
                 hypothesis_id=hyp.id,
-                total_trials_in_family=trials_in_family,
+                total_trials_in_family=current_trial_count,
                 classic_sharpe=round(classic_sharpe, 4),
                 deflated_sharpe=round(dsr, 4),
                 spearman_ic_mean=round(ic, 4),
@@ -232,7 +278,12 @@ class HypothesisService:
             self.db.add(exp)
 
             if is_valid:
-                hyp.current_stage = "OUT_OF_SAMPLE_SHADOW"
+                if hyp.current_stage == "OUT_OF_SAMPLE_SHADOW":
+                    hyp.current_stage = "LIVE_ALPHA_STREAM"
+                elif hyp.current_stage == "LIVE_ALPHA_STREAM":
+                    pass # Stay live
+                else:
+                    hyp.current_stage = "OUT_OF_SAMPLE_SHADOW"
             else:
                 hyp.current_stage = "ARCHIVE_FAILED"
                 hyp.decommission_reason = failure_tag
@@ -255,18 +306,19 @@ class HypothesisService:
             logger.error(f"Error evaluating hypothesis {hyp.name}: {e}")
             return {"status": "Error", "message": str(e)}
 
+
     def check_and_evolve_all_hypotheses(self) -> Dict[str, int]:
         """
         Scheduled daily job:
-        1. Evaluates DRAFT hypotheses into IN_SAMPLE_AUDIT.
-        2. Promotes OUT_OF_SAMPLE_SHADOW to LIVE_ALPHA_STREAM after 14 days of sustained performance.
+        1. Evaluates DRAFT hypotheses into IN_SAMPLE_AUDIT (OUT_OF_SAMPLE_SHADOW).
+        2. Promotes OUT_OF_SAMPLE_SHADOW to LIVE_ALPHA_STREAM after 150 days of sustained performance.
         3. Checks LIVE_ALPHA_STREAM factors for Alpha Decay and retires them to ALPHA_DECAY_ARCHIVE if IC fails.
         """
         counts = {"evaluated": 0, "promoted_live": 0, "decommissioned_decay": 0}
         try:
             drafts = self.db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage == "DRAFT_HYPOTHESIS").all()
             for d in drafts:
-                res = self.evaluate_hypothesis(str(d.id), trials_in_family=len(d.experiments) + 1)
+                res = self.evaluate_hypothesis(str(d.id))
                 if res.get("status") == "Success":
                     counts["evaluated"] += 1
 
@@ -274,20 +326,23 @@ class HypothesisService:
             shadows = self.db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage == "OUT_OF_SAMPLE_SHADOW").all()
             for s in shadows:
                 days_tested = (now - (s.created_at or now)).days
-                if days_tested >= 14:
-                    s.current_stage = "LIVE_ALPHA_STREAM"
-                    counts["promoted_live"] += 1
+                if days_tested >= 150:
+                    # Re-evaluate over full history (including the 150 out-of-sample days)
+                    res = self.evaluate_hypothesis(str(s.id))
+                    if res.get("is_valid") and res.get("stage") == "LIVE_ALPHA_STREAM":
+                        counts["promoted_live"] += 1
 
             # Check alpha decay for live stream
             lives = self.db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage == "LIVE_ALPHA_STREAM").all()
             for l in lives:
-                # Periodic re-evaluation of trailing IC
-                if l.experiments and l.experiments[-1].spearman_ic_mean is not None:
-                    if l.experiments[-1].spearman_ic_mean < 0.005:
-                        l.current_stage = "ALPHA_DECAY_ARCHIVE"
-                        l.decommissioned_at = datetime.utcnow()
-                        l.decommission_reason = "EXHAUSTED_ALPHA_HALF_LIFE"
-                        counts["decommissioned_decay"] += 1
+                # Periodic re-evaluation of trailing IC by evaluating full history
+                res = self.evaluate_hypothesis(str(l.id))
+                if not res.get("is_valid") or (l.experiments and l.experiments[0].spearman_ic_mean is not None and l.experiments[0].spearman_ic_mean < 0.005):
+                    l.current_stage = "ALPHA_DECAY_ARCHIVE"
+                    l.decommissioned_at = datetime.utcnow()
+                    l.decommission_reason = "EXHAUSTED_ALPHA_HALF_LIFE"
+                    counts["decommissioned_decay"] += 1
+                self.db.commit()
 
             self.db.commit()
         except Exception as e:

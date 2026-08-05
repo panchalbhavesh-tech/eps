@@ -291,6 +291,7 @@ class ResearchHypothesis(Base):
     economic_mechanism = Column(String, nullable=False)  # 'BEHAVIORAL', 'RISK_PREMIUM', or 'MICROSTRUCTURE'
     economic_rationale_text = Column(Text, nullable=False)
     alpha_expression = Column(String, nullable=False)    # e.g., "rank(volatility_20) / adv_10"
+    normalized_expression = Column(String, unique=True, index=True, nullable=True)
     target_universe = Column(String, default="NIFTY500")
     holding_horizon_days = Column(Integer, default=5)
     current_stage = Column(String, default="DRAFT_HYPOTHESIS", index=True) # FSM Stage
@@ -298,7 +299,7 @@ class ResearchHypothesis(Base):
     decommissioned_at = Column(DateTime, nullable=True)
     decommission_reason = Column(String, nullable=True)
     known_at = Column(DateTime, default=datetime.utcnow)
-    experiments = relationship("HypothesisExperiment", back_populates="hypothesis", cascade="all, delete-orphan")
+    experiments = relationship("HypothesisExperiment", back_populates="hypothesis", cascade="all, delete-orphan", order_by="desc(HypothesisExperiment.execution_date)")
 
 
 class HypothesisExperiment(Base):
@@ -320,3 +321,20 @@ class HypothesisExperiment(Base):
     known_at = Column(DateTime, default=datetime.utcnow)
     hypothesis = relationship("ResearchHypothesis", back_populates="experiments")
 
+
+class TotalHypothesisTrials(Base):
+    __tablename__ = "total_hypothesis_trials"
+    id = Column(Integer, primary_key=True, default=1)
+    total_count = Column(Integer, default=0, nullable=False)
+
+
+class HypothesisSignal(Base):
+    __tablename__ = "hypothesis_signals"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    hypothesis_id = Column(UUID(as_uuid=True), ForeignKey("research_hypotheses.id", ondelete="CASCADE"), nullable=False, index=True)
+    ticker = Column(String, index=True, nullable=False)
+    trade_date = Column(DateTime, nullable=False, index=True)
+    factor_score = Column(Float, nullable=True)
+    rank_percentile = Column(Float, nullable=True)
+    direction = Column(String, nullable=False) # 'LONG' or 'SHORT'
+    hypothesis = relationship("ResearchHypothesis")

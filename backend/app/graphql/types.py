@@ -280,3 +280,13 @@ class CeleryScheduleType:
     last_run_at: Optional[str] = None
     last_run_status: Optional[str] = None
     last_run_duration: Optional[float] = None
+
+@strawberry.type
+class HypothesisSignalType:
+    id: str
+    hypothesis_id: str
+    ticker: str
+    trade_date: str
+    factor_score: Optional[float] = None
+    rank_percentile: Optional[float] = None
+    direction: str

@@ -70,11 +70,35 @@ const REGISTER_RESEARCH_HYPOTHESIS = gql`
   }
 `;
 
+const GET_LIVE_SIGNALS = gql`
+  query GetLiveSignals {
+    latestLiveSignals {
+      id
+      hypothesisId
+      ticker
+      tradeDate
+      factorScore
+      rankPercentile
+      direction
+    }
+  }
+`;
+
 const TRIGGER_AI_HYPOTHESIS_RESEARCH = gql`
   mutation TriggerAutomatedHypothesisResearch {
     triggerAutomatedHypothesisResearch
   }
 `;
+
+interface HypothesisSignal {
+  id: string;
+  hypothesisId: string;
+  ticker: string;
+  tradeDate: string;
+  factorScore: number;
+  rankPercentile: number;
+  direction: string;
+}
 
 interface HypothesisExperiment {
   id: string;
@@ -134,6 +158,9 @@ const HypothesisLaboratory: React.FC = () => {
     }
   });
 
+  const { data: signalsData } = useQuery(GET_LIVE_SIGNALS, { pollInterval: 15000, fetchPolicy: 'network-only' });
+  const liveSignals: HypothesisSignal[] = signalsData?.latestLiveSignals || [];
+  const [openSignalsModal, setOpenSignalsModal] = useState(false);
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [selectedHypothesis, setSelectedHypothesis] = useState<ResearchHypothesis | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -447,6 +474,20 @@ const HypothesisLaboratory: React.FC = () => {
           </Button>
           <Button
             variant="contained"
+            onClick={() => setOpenSignalsModal(true)}
+            sx={{ 
+              textTransform: 'none', 
+              background: isDark ? '#047857' : '#059669',
+              color: '#ffffff', 
+              fontWeight: 700,
+              height: 40,
+              '&:hover': { background: isDark ? '#065f46' : '#047857' }
+            }}
+          >
+            Live Signals ({liveSignals.length})
+          </Button>
+          <Button
+            variant="contained"
             onClick={() => setOpenCreateModal(true)}
             startIcon={<AddCircleOutlineIcon />}
             sx={{ 
@@ -616,6 +657,38 @@ const HypothesisLaboratory: React.FC = () => {
           }}
         />
       </Paper>
+
+      {/* Live Signals Modal */}
+      <Dialog open={openSignalsModal} onClose={() => setOpenSignalsModal(false)} maxWidth="lg" fullWidth PaperProps={{
+        sx: { bgcolor: tokens.background.paper, border: `1px solid ${tokens.border.main}`, borderRadius: 3, height: '80vh' }
+      }}>
+        <DialogTitle sx={{ fontWeight: 800, fontSize: '18px', color: tokens.text.primary, borderBottom: `1px solid ${tokens.border.main}` }}>
+          Live Alpha Stream Signals
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          <DataGrid
+            rows={liveSignals}
+            columns={[
+              { field: 'ticker', headerName: 'Ticker', width: 120 },
+              { field: 'direction', headerName: 'Direction', width: 120, renderCell: (params) => (
+                <Chip size="small" label={params.value} sx={{ bgcolor: params.value === 'LONG' ? '#22c55e' : '#ef4444', color: '#fff', fontWeight: 'bold' }} />
+              )},
+              { field: 'rankPercentile', headerName: 'Rank', width: 120, valueFormatter: (params) => params.value?.toFixed(3) },
+              { field: 'factorScore', headerName: 'Factor Score', width: 150, valueFormatter: (params) => params.value?.toFixed(4) },
+              { field: 'tradeDate', headerName: 'Trade Date', width: 200, valueFormatter: (params) => new Date(params.value).toLocaleDateString() },
+              { field: 'hypothesisId', headerName: 'Hypothesis ID', width: 300 }
+            ]}
+            rowHeight={48}
+            disableRowSelectionOnClick
+            sx={{ border: 0, color: tokens.text.primary }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: `1px solid ${tokens.border.main}` }}>
+          <Button onClick={() => setOpenSignalsModal(false)} variant="contained" sx={{ textTransform: 'none' }}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Create New Hypothesis Modal */}
       <Dialog open={openCreateModal} onClose={() => setOpenCreateModal(false)} maxWidth="md" fullWidth PaperProps={{

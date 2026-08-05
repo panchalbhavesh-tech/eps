@@ -519,16 +519,8 @@ You MUST output strictly valid JSON with the following exact keys:
             if cand["name"] not in existing_names:
                 return cand
 
-        # If all predefined have been tested, generate evolutionary parameterized variant
-        import uuid as _uuid
-        idx = len(existing_names) + 1
-        return {
-            "name": f"Adaptive Orthogonal Momentum Multiplier V{idx}",
-            "economic_mechanism": "MICROSTRUCTURE",
-            "economic_rationale_text": f"Automated evolutionary generation {idx} exploring multi-timeframe volume dispersal differentials against market microstructure friction.",
-            "alpha_expression": "rank(volume_5d) / (volatility_20d + 0.01)",
-            "holding_horizon_days": 5
-        }
+        # If all predefined have been tested, stop to avoid infinite duplication
+        raise Exception("All predefined fallback orthogonal hypotheses have been exhausted.")
 
 
 

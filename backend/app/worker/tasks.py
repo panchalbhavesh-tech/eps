@@ -548,6 +548,8 @@ def run_automated_hypothesis_research_task():
     from app.services.hypothesis_service import HypothesisService
     from app.services.ai_analyst_service import AIAnalystService
     from app.infrastructure.models import ResearchHypothesis
+    import re
+    
     db = SessionLocal()
     try:
         svc = HypothesisService(db)
@@ -559,32 +561,140 @@ def run_automated_hypothesis_research_task():
             ResearchHypothesis.current_stage.in_(["DRAFT_HYPOTHESIS", "OUT_OF_SAMPLE_SHADOW", "LIVE_ALPHA_STREAM"])
         ).count()
         
-        ai_msg = "No new generation required."
-        if active_count < 5:
-            failed = db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage == "ARCHIVE_FAILED").limit(20).all()
-            active = db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage != "ARCHIVE_FAILED").limit(20).all()
-            
-            failed_list = [{"name": f.name, "alpha_expression": f.alpha_expression, "decommission_reason": f.decommission_reason} for f in failed]
-            active_list = [{"name": a.name, "alpha_expression": a.alpha_expression} for a in active]
-            
+        TARGET_PIPELINE_DEPTH = 15
+        ai_msg = []
+        
+        if active_count < TARGET_PIPELINE_DEPTH:
             ai_svc = AIAnalystService()
-            proposal = ai_svc.generate_orthogonal_hypothesis(failed_list, active_list)
-            if proposal and proposal.get("name"):
-                reg = svc.register_hypothesis(
-                    name=proposal["name"],
-                    economic_mechanism=proposal["economic_mechanism"],
-                    economic_rationale_text=proposal["economic_rationale_text"],
-                    alpha_expression=proposal["alpha_expression"],
-                    author="GEMINI_AI_QUANT",
-                    target_universe="NIFTY500",
-                    holding_horizon_days=int(proposal.get("holding_horizon_days", 5))
-                )
-                if reg.get("status") == "Success":
-                    eval_res = svc.evaluate_hypothesis(reg["hypothesis_id"])
-                    ai_msg = f"Generated and evaluated new hypothesis '{proposal['name']}': {eval_res.get('stage')} (DSR: {eval_res.get('deflated_sharpe')})"
-                else:
-                    ai_msg = f"Proposal skipped: {reg.get('message')}"
+            for _ in range(TARGET_PIPELINE_DEPTH - active_count):
+                failed = db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage == "ARCHIVE_FAILED").order_by(ResearchHypothesis.created_at.desc()).limit(50).all()
+                active = db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage.in_(["DRAFT_HYPOTHESIS", "OUT_OF_SAMPLE_SHADOW", "LIVE_ALPHA_STREAM"])).order_by(ResearchHypothesis.created_at.desc()).limit(50).all()
+                
+                failed_list = [{"name": f.name, "alpha_expression": f.alpha_expression, "decommission_reason": f.decommission_reason} for f in failed]
+                active_list = [{"name": a.name, "alpha_expression": a.alpha_expression} for a in active]
+                
+                try:
+                    proposal = ai_svc.generate_orthogonal_hypothesis(failed_list, active_list)
+                except Exception as e:
+                    ai_msg.append(f"AI Generation halted: {e}")
+                    break
+                    
+                if proposal and proposal.get("name"):
+                    expr = proposal.get("alpha_expression", "")
+                    normalized = re.sub(r'\s+', '', expr.lower())
+                    
+                    # Deduplication check
+                    dup = db.query(ResearchHypothesis).filter(ResearchHypothesis.normalized_expression == normalized).first()
+                    if dup:
+                        ai_msg.append(f"Skipped duplicate expression: {expr}")
+                        continue
 
-        return f"Automated QHLM FSM Research Cycle complete: {res} | AI Action: {ai_msg}"
+                    reg = svc.register_hypothesis(
+                        name=proposal["name"],
+                        economic_mechanism=proposal["economic_mechanism"],
+                        economic_rationale_text=proposal["economic_rationale_text"],
+                        alpha_expression=expr,
+                        author="GEMINI_AI_QUANT",
+                        target_universe="NIFTY500",
+                        holding_horizon_days=int(proposal.get("holding_horizon_days", 5))
+                    )
+                    
+                    if reg.get("status") == "Success":
+                        hyp_id = reg["hypothesis_id"]
+                        # Set normalized expression
+                        new_hyp = db.query(ResearchHypothesis).filter(ResearchHypothesis.id == hyp_id).first()
+                        new_hyp.normalized_expression = normalized
+                        db.commit()
+                        
+                        eval_res = svc.evaluate_hypothesis(hyp_id)
+                        ai_msg.append(f"Generated {proposal['name']}: {eval_res.get('stage')} (DSR: {eval_res.get('deflated_sharpe')})")
+                    else:
+                        ai_msg.append(f"Proposal skipped: {reg.get('message')}")
+                        
+        return f"Automated QHLM FSM Research Cycle complete: {res} | AI Action: {' | '.join(ai_msg)}"
+    finally:
+        db.close()
+
+@shared_task
+def generate_live_signals_task():
+    from app.core.config import settings
+    if not settings.QHLM_LIVE_TRADING_ENABLED:
+        return "Live trading feature flag QHLM_LIVE_TRADING_ENABLED is disabled. Skipping."
+        
+    from app.services.hypothesis_service import HypothesisService, SafeASTEvaluator
+    from app.infrastructure.models import ResearchHypothesis, HypothesisSignal, Company, DailyBhavcopy
+    import pandas as pd
+    import uuid
+    import numpy as np
+    
+    db = SessionLocal()
+    try:
+        lives = db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage == "LIVE_ALPHA_STREAM").all()
+        if not lives:
+            return "No LIVE_ALPHA_STREAM hypotheses found."
+            
+        companies = db.query(Company).limit(50).all()
+        tickers = [c.ticker for c in companies]
+        
+        # Load recent bars for rolling calcs
+        rows = db.query(DailyBhavcopy).filter(DailyBhavcopy.ticker.in_(tickers)).order_by(DailyBhavcopy.trade_date.asc()).all()
+        if not rows:
+            return "No price data."
+            
+        df = pd.DataFrame([{
+            "Date": r.trade_date,
+            "Ticker": r.ticker,
+            "close": r.close_price,
+            "volume": r.volume,
+            "high": r.high_price,
+            "low": r.low_price
+        } for r in rows])
+        df.set_index(['Date', 'Ticker'], inplace=True)
+        df.sort_index(inplace=True)
+        
+        grouped = df.groupby(level='Ticker')
+        df['volume_5d'] = grouped['volume'].transform(lambda x: x.rolling(5).mean())
+        df['volatility_20d'] = grouped['close'].transform(lambda x: x.pct_change().rolling(20).std())
+        df['volatility_20'] = df['volatility_20d']
+        df['high_low_spread_10d'] = (df['high'] - df['low']).groupby(level='Ticker').transform(lambda x: x.rolling(10).mean())
+        df['adv_10'] = grouped['volume'].transform(lambda x: x.rolling(10).mean())
+        
+        last_date = df.index.get_level_values('Date').max()
+        
+        generated = 0
+        for hyp in lives:
+            ev = SafeASTEvaluator(df)
+            try:
+                df['factor'] = ev.evaluate(hyp.alpha_expression.lower())
+                factors_today = df.xs(last_date, level='Date')['factor'].dropna()
+                if factors_today.empty:
+                    continue
+                    
+                pct_ranks = factors_today.rank(pct=True)
+                for ticker, score in factors_today.items():
+                    rank = pct_ranks[ticker]
+                    if rank >= 0.90:
+                        direction = 'LONG'
+                    elif rank <= 0.10:
+                        direction = 'SHORT'
+                    else:
+                        continue
+                        
+                    sig = HypothesisSignal(
+                        id=uuid.uuid4(),
+                        hypothesis_id=hyp.id,
+                        ticker=ticker,
+                        trade_date=last_date,
+                        factor_score=float(score),
+                        rank_percentile=float(rank),
+                        direction=direction
+                    )
+                    db.add(sig)
+                    generated += 1
+            except Exception as e:
+                print(f"Error evaluating live hypothesis {hyp.name}: {e}")
+                
+        db.commit()
+        return f"Generated {generated} live signals for {last_date}"
     finally:
         db.close()

@@ -2,7 +2,7 @@ import pandas as pd
 import pandas_ta as ta
 import yfinance as yf
 from typing import List, Dict, Any, Optional, Tuple
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 class QuantService:
     def __init__(self):
@@ -408,6 +408,11 @@ class QuantService:
         try:
             dt_str = str(release_date_str).strip()
             rel_dt = pd.to_datetime(dt_str)
+            
+            # If the release date is in the future, do not calculate post-release return yet
+            if rel_dt.date() > datetime.utcnow().date():
+                return None
+                
             norm_date = rel_dt.strftime('%Y-%m-%d')
             
             df_sorted = df.sort_index()

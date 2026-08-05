@@ -171,10 +171,10 @@ Engineered to resolve data throughput bottlenecks and ensure instantaneous dashb
 ### 4.13 Quantitative Hypothesis Laboratory (QHLM) & Deflated Sharpe Verification (`HypothesisLaboratory.tsx`)
 An interactive quantitative terminal screen (`/research`) dedicated to rigorous algorithmic factor discovery, lifecycle management, and defense against statistical P-Hacking:
 - **Five-Stage FSM Pipeline Tracker**: Governs every alpha proposal through strict operational states: `DRAFT_HYPOTHESIS`, `IN_SAMPLE_AUDIT`, `OUT_OF_SAMPLE_SHADOW` (probation), `LIVE_ALPHA_STREAM` (capital deployment), and `ALPHA_DECAY_ARCHIVE` or `ARCHIVE_FAILED` (false discovery rejection).
-- **Bailey & Lopez de Prado Deflated Sharpe Ratio (DSR)**: To prevent data dredging and multiple testing bias, the backtest audit engine (`HypothesisService.py`) computes empirical Deflated Sharpe Ratios ($DSR \ge 0.85$ confidence threshold). It explicitly penalizes factors based on family trial counts ($N$), variance of trial Sharpe ratios, and non-normal kurtosis/skewness of candidate return distributions.
-- **Spearman Rank Information Coefficient (IC) & Significance**: Evaluates linear cross-sectional predictability against forward returns, requiring student-$t$ statistic significance ($|t| \ge 1.96$) alongside DSR validation before allowing promotion to active shadow probation.
-- **A Priori Economic Mechanism Enforcement**: To prevent curve-fitting, manual quant submissions and autonomous AI proposals are mandated to provide an explicit institutional economic rationale (minimum 20 characters) mapped to valid anomalies (`MICROSTRUCTURE`, `BEHAVIORAL`, `RISK_PREMIUM`) prior to empirical return execution.
-- **Interactive Executive KPI Dash & Deep Inspect Drawers**: Tracks live counts of False Discoveries Avoided and Mean DSR across experiments. Clicking `Deep Inspect` expands an audit modal showcasing empirical trial history, statistical student-$t$ metrics, and original economic hypotheses.
+- **150-Day Authentic Out-of-Sample Shadow Probation**: Factors passing the initial audit must survive a strict 150-trading-day walk-forward observation period before being computationally re-evaluated for out-of-sample edge stability.
+- **Bailey & Lopez de Prado Deflated Sharpe Ratio (DSR)**: To prevent data dredging, the backtest audit engine computes empirical Deflated Sharpe Ratios ($DSR \ge 0.85$ confidence threshold). It leverages a global `TotalHypothesisTrials` counter to explicitly penalize factors based on cumulative family trial variance and non-normal kurtosis/skewness of candidate return distributions.
+- **Secure AST Vector Evaluation**: Uses a restricted `SafeASTEvaluator` to dynamically parse factor expressions into secure Pandas vectorized operations, supporting robust cross-sectional operations like `rank(pct=True)` and rolling `delta` offsets without invoking dangerous `eval()`.
+- **Live Per-Stock Signal Engine**: Fully verified models emitting from the `LIVE_ALPHA_STREAM` generate daily directional (`LONG`/`SHORT`) percentile-ranked trade signals for individual equities, accessible via the **Live Signals** data grid. Strategies whose trailing Spearman IC drops below `0.005` are forcefully retired to `ALPHA_DECAY_ARCHIVE`.
 
 ---
 
@@ -225,10 +225,9 @@ A containerized batch simulation script designed for large-scale multi-year hist
 
 ### 5.10 Autonomous AI Factor Discovery & FSM Research Loop (`run_automated_hypothesis_research_task`)
 Scheduled daily by Celery Beat and directly deployable via the `/research` UI (`Deploy Gemini Quant Agent`):
-- **Automated FSM Transitions**: Promotes audited hypotheses ($DSR \ge 0.85$, $|t| \ge 1.96$) from `IN_SAMPLE_AUDIT` to `OUT_OF_SAMPLE_SHADOW` and eventually `LIVE_ALPHA_STREAM`, while retiring degrading signals to `ALPHA_DECAY_ARCHIVE`.
-- **Autonomous Gemini Quant Generation**: When live and candidate factor density dips below operational thresholds ($<5$), the worker calls `AIAnalystService.generate_orthogonal_hypothesis()`. It injects previously failed factors as negative context and prompts Google Gemini to formulate novel, mathematically orthogonal vector alpha equations paired with valid economic mechanisms.
-- **Deterministic Offline Continuity**: Equipped with an institutional fallback equation registry to ensure zero-latency factor discovery even during network disconnections.
-- **Automated Evaluation Loop**: Instantly executes candidate expressions against cached daily OHLCV bars, computing Deflated Sharpe and Spearman student-$t$ statistics automatically upon proposal.
+- **Automated FSM Transitions**: Promotes audited hypotheses from `IN_SAMPLE_AUDIT` to `OUT_OF_SAMPLE_SHADOW` (following the 150-day wait) and eventually `LIVE_ALPHA_STREAM`, while continuously scoring and retiring degrading signals.
+- **Autonomous Batch Formulation & Deduplication**: The AI automatically formulates orthogonal vector equations until the active pipeline (`DRAFT` + `SHADOW` + `LIVE`) reaches a `TARGET_PIPELINE_DEPTH` of 15. All equations undergo whitespace-stripped `normalized_expression` checks to prevent identical proposals, backed by a circuit-breaker to halt infinite loops upon fallback exhaustion.
+- **Secure Evaluation Loop**: Instantly executes candidate expressions against cached daily OHLCV multi-index DataFrames, computing Deflated Sharpe and Spearman student-$t$ statistics automatically upon proposal using `SafeASTEvaluator`.
 
 ---
 
@@ -249,6 +248,8 @@ Scheduled daily by Celery Beat and directly deployable via the `/research` UI (`
 - `AIAnalysisReport`: Persisted storage for LLM-generated qualitative analytical narratives, news catalyst sentiments, and markdown commentary.
 - `ResearchHypothesis`: Stores institutional quant factors with author identification (`AI_RESEARCH_AGENT` vs `HUMAN_QUANT_ANALYST`), A Priori economic mechanisms, vector alpha expressions, target universes, holding horizons, and current FSM lifecycle stages.
 - `HypothesisExperiment`: Records empirical evaluation audit runs, capturing family trial counts ($N$), classic vs. deflated Sharpe ratios (DSR), Spearman IC mean/student-$t$ statistics, and statistical rejection tags to shield against P-Hacking.
+- `TotalHypothesisTrials`: Global monotonically increasing state counter. Crucial for Bailey-Lopez de Prado Deflated Sharpe Ratio penalty scaling, keeping memory of all historical failed tests to prevent long-term data dredging.
+- `HypothesisSignal`: Daily point-in-time trade directives (LONG/SHORT), percentile rankings, and raw algorithmic factor scores generated specifically by active `LIVE_ALPHA_STREAM` hypotheses on an individual stock basis.
 
 ---
 
