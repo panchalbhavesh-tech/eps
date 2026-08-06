@@ -162,8 +162,12 @@ class IntensiveBacktestEngine:
                 # EXIT on trailing stop triggered or bearish momentum reversal
                 if cur_bar['Low'] <= stop_loss or cur_price < sma50:
                     exit_price = stop_loss if cur_bar['Low'] <= stop_loss else cur_price
-                    # Calculate net trade return minus 0.20% round-trip Indian market friction
-                    trade_ret = (((exit_price - entry_price) / entry_price) * 100.0) - 0.20
+                    # Calculate net trade return minus dynamic slippage and Indian market friction
+                    volatility = (df.iloc[max(0, i-14):i+1]['High'] - df.iloc[max(0, i-14):i+1]['Low']).mean() / cur_price
+                    transaction_cost = self.quant.estimate_transaction_cost(exit_price, cur_bar['Volume'], vol_avg, volatility)
+                    total_friction = (transaction_cost * 2 * 100.0) # Round trip %
+                    
+                    trade_ret = (((exit_price - entry_price) / entry_price) * 100.0) - total_friction
                     holding_days = max(1, (df.index[i] - entry_date).days if entry_date else (i - 5))
                     trades.append({
                         "entry_date": str(entry_date),
@@ -208,16 +212,34 @@ class IntensiveBacktestEngine:
         net_total_return = float(((eq_array[-1] - eq_array[0]) / eq_array[0]) * 100.0)
 
         # Sharpe & Sortino Ratio estimation (assuming risk-free yield = 6.5% p.a.)
+        excess_returns = []
+        for t in trades:
+            holding_days = t.get('holding_days', 15)
+            rf_for_trade = 0.065 / (252.0 / max(1, holding_days))
+            excess_returns.append((t['net_return_pct'] / 100.0) - rf_for_trade)
+            
+        excess_returns_series = np.array(excess_returns)
+        mean_excess_ret = np.mean(excess_returns_series)
+        std_excess_ret = np.std(excess_returns_series) if len(excess_returns_series) > 1 else 0.001
+        
         returns_series = np.array([t['net_return_pct'] / 100.0 for t in trades])
         mean_ret = np.mean(returns_series)
-        std_ret = np.std(returns_series) if len(returns_series) > 1 else 0.001
-        rf_per_trade = 0.065 / (252.0 / 15.0) # Assuming ~15 day avg holding duration
-
-        sharpe = round(float((mean_ret - rf_per_trade) / std_ret * math.sqrt(252.0 / 15.0)), 2) if std_ret > 0.0001 else 0.0
         
-        downside_returns = returns_series[returns_series < 0]
+        avg_holding_days = np.mean([t.get('holding_days', 15) for t in trades]) if trades else 15
+        periods_per_year = 252.0 / max(1, avg_holding_days)
+        annualization_factor = math.sqrt(periods_per_year)
+        
+        # Calculate Sharpe CI using the new service
+        from app.services.statistical_testing_service import StatisticalTestingService
+        sharpe_res = StatisticalTestingService.sharpe_ci(excess_returns_series, n_boot=1000, periods_per_year=periods_per_year)
+        sharpe = round(sharpe_res["point"], 2)
+        sharpe_ci_lower = round(sharpe_res["ci_lower"], 2)
+        sharpe_ci_upper = round(sharpe_res["ci_upper"], 2)
+        sharpe_pvalue = sharpe_res["pvalue"]
+        
+        downside_returns = excess_returns_series[excess_returns_series < 0]
         downside_std = np.std(downside_returns) if len(downside_returns) > 1 else 0.001
-        sortino = round(float((mean_ret - rf_per_trade) / downside_std * math.sqrt(252.0 / 15.0)), 2) if downside_std > 0.0001 else sharpe
+        sortino = round(float(mean_excess_ret / downside_std * annualization_factor), 2) if downside_std > 0.0001 else sharpe
 
         ml_hit_rate = round((ml_correct_predictions / ml_total_predictions) * 100.0, 2) if ml_total_predictions > 0 else 50.0
         brier = round(brier_sum / ml_total_predictions, 4) if ml_total_predictions > 0 else 0.25
@@ -236,6 +258,9 @@ class IntensiveBacktestEngine:
             "win_rate_pct": round(float(win_rate), 2),
             "net_total_return_pct": round(net_total_return, 2),
             "sharpe_ratio": sharpe,
+            "sharpe_ci_lower": sharpe_ci_lower,
+            "sharpe_ci_upper": sharpe_ci_upper,
+            "sharpe_pvalue": sharpe_pvalue,
             "sortino_ratio": sortino,
             "max_drawdown_pct": round(max_drawdown, 2),
             "ml_hit_rate_pct": ml_hit_rate,

@@ -63,7 +63,7 @@ The platform implements a containerized microservices architecture orchestrated 
 - **Database & Migrations**: SQLAlchemy 2.0 Core/ORM paired with PostgreSQL and Alembic database migrations.
 - **Task Orchestration**: Celery distributed task queue connected to Redis and Postgres result backend.
 - **Data Engineering & Finance**: `pandas`, `pandas-ta`, `numpy`, `yfinance` (Yahoo Finance extraction engine), custom NSE website web scrapers (`NSEService`).
-- **Machine Learning & Predictive Modeling**: `lightgbm`, `xgboost`, `scikit-learn`, `shap` (SHapley Additive exPlanations) for probability calibration, feature attribution, Purged Walk-Forward Cross-Validation, and PCA trajectory compression.
+- **Machine Learning & Predictive Modeling**: `lightgbm`, `xgboost`, `scikit-learn`, `shap` (SHapley Additive exPlanations) for probability calibration, feature attribution, **Purged Walk-Forward Cross-Validation (Combinatorial Embargoing)**, **Triple-Barrier Labeling**, and PCA trajectory compression. Zero-leakage `scikit-learn` Pipelines ensure strict point-in-time adherence.
 - **Artificial Intelligence**: Google Gemini API via `AIAnalystService` structured prompting for institutional evaluation and catalyst sentiment scoring.
 - **Security & Authentication**: JSON Web Tokens (JWT) via `python-jose` and cryptographic hashing with `bcrypt`.
 
@@ -127,8 +127,9 @@ A specialized interactive visualizer engineered to conduct event study backtests
 
 ### 4.7 Intensive Strategy & Momentum Backtesting Engine (`IntensiveBacktestEngine`)
 An interactive quantitative simulation module directly accessible from the momentum grid via an executive dashboard modal:
-- **Net-of-Friction Accuracy Calculation**: Automatically subtracts a **0.20% round-trip transaction friction deduction** (accounting for Indian Securities Transaction Tax [STT], Stamp Duty, GST, brokerage fees, and market impact slippage) from every simulated trade return, guaranteeing authentic edge reporting.
+- **Dynamic Transaction Cost Estimation**: Incorporates real-time modeled liquidity friction based on bid-ask spreads, volume pressure, and Indian Securities Transaction Tax [STT] simulation to ensure zero-illusion edge reporting.
 - **Executive Portfolio Analytics**: Computes strict **Net Win Rates**, **Expected Value (EV)** per trade ($\text{EV} = (\text{Win Rate} \times \text{Avg Gain}) + (\text{Loss Rate} \times \text{Avg Loss})$), **Profit Factor** ($\frac{\sum \text{Winning Gains}}{|\sum \text{Losing Losses}|}$), **Sharpe & Sortino Ratios**, and **Nifty 50 Alpha (%)** across customizable 1-Year, 3-Year, and 5-Year historical windows.
+- **Factor Attribution Service**: Isolates alpha by stripping out beta through **Fama-French 3-Factor** and **CAPM** models, proving if backtest performance is authentic idiosyncratic edge or disguised market momentum.
 
 ### 4.8 Native NSE Hybrid Data & Surveillance Pipeline (`NseDataService`)
 Engineered to deliver institutional precision by supplementing global price feeds with authentic Indian market parameters:
@@ -138,15 +139,18 @@ Engineered to deliver institutional precision by supplementing global price feed
 
 ### 4.9 Institutional Portfolio Risk Engine & Emergency Kill Switch (`RiskEngine`)
 An enterprise-grade risk defense layer integrated into the algorithmic evaluation loop to guard capital against drawdown events:
-- **Emergency Algorithmic Kill Switch**: Monitors trailing portfolio drawdowns across all live and simulated recommendations. If rolling maximum drawdown crosses **-15.0%** (or during a systemic market crash), the **Kill Switch automatically trips**. While active, all new directional `BUY` signals are immediately suppressed across the app (downgraded to `WATCHLIST` or `EXIT`) until an analyst verifies market recovery and executes a manual reset.
-- **Strict Concurrency & Concentration Ceilings**: Caps active portfolio exposure at a maximum of **15 concurrent long recommendations**, enforces a **30% maximum capital allocation per industry sector**, and caps individual position weighting at 20% max (adjusted dynamically via ATR volatility sizing).
-- **Correlation Gating & Event-Risk Blackouts**: Rejects candidate BUY recommendations if their trailing 180-day daily price returns exhibit a Pearson correlation $>0.78$ with existing portfolio holdings, and enforces a protective 3-day trading blackout window prior to upcoming corporate earnings announcements.
+- **Hierarchical Risk Parity (HRP) Position Sizing**: Discards naive equal-weight allocations, dynamically sizing capital using clustered correlation hierarchies to eliminate embedded risk concentrations.
+- **Emergency Algorithmic Kill Switch (Dynamic CVaR)**: Monitors trailing portfolio drawdowns across all live and simulated recommendations using **Conditional Value at Risk (CVaR)** bounding. Drawdown limits automatically tighten (e.g. to -10%) during bearish market regimes.
+- **Strict Concurrency & Leverage Constraints**: Caps active portfolio exposure at a maximum of **15 concurrent long recommendations**, enforces a **25% maximum capital allocation per industry sector**, and restricts total gross leverage dynamically.
+- **Spearman Correlation Gating**: Rejects candidate BUY recommendations if their trailing rank correlation against existing portfolio holdings exceeds 0.78.
+- **Systematic Stress Testing**: Auto-simulates portfolio exposure against historical crashes (COVID-19, 2008 GFC, Taper Tantrum) to gauge maximum tail-risk vulnerability.
 
 ### 4.10 Validation Suite, IC Tracking & Model Shadow Probation (`ValidationService`)
 A continuous real-world verification infrastructure guaranteeing AI quantitative integrity:
-- **14-Day Shadow Model Probationary Controller ("Shadow Mode")**: Whenever walk-forward automated workers retrain a new AI/ML predictive machine learning model, it is strictly prohibited from taking immediate control of live trading recommendations. Instead, it enters **Shadow Mode**—an automated probationary testing period where it calculates predictions silently in the background alongside our active production model for **14 days**. Only if the new shadow model statistically proves a superior forward win-rate accuracy over those 14 days will the system promote it into active production.
+- **252-Day Authentic Out-of-Sample Probation ("Shadow Mode")**: Whenever walk-forward automated workers retrain a new AI/ML model, it enters an automated probationary period alongside production for a strict 252-day window. A formal **Student's t-test** must mathematically prove superiority over the active model before automated promotion occurs.
+- **Benjamini-Hochberg False Discovery Rate (FDR)**: Rejects statistical anomalies by strictly controlling the family-wise error rate across thousands of parallel model streams.
+- **White's Reality Check (SPA)**: Validates out-of-sample trading performance against a proxy risk-free threshold via randomized bootstrapping to ensure predictive edge is not a byproduct of random chance.
 - **Rolling Information Coefficient (IC) Tracking**: Calculates daily Spearman rank correlations between composite momentum scores and actual realized price returns across the universe, ensuring persistent statistical edge ($IC > 0.03$).
-- **Quintile Spread Monotonicity Audit**: Monthly automated audit sorting all scored equities into 5 quintile buckets to verify that Quintile 5 (top momentum ranks) monotonically outperforms Quintile 1 (laggard ranks).
 
 ### 4.11 Interactive Behavioral Matrix & Social Sentiment Deck (`SocialSentimentCard.tsx`)
 An advanced interactive quant research tool on the stock detail dashboard synthesizing financial press narratives, retail forum hype, and institutional fund flows:

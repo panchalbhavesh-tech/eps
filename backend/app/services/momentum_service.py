@@ -165,7 +165,13 @@ class MomentumService:
         Applies liquidity universe filter, computes percentile ranks across active names,
         identifies attention required triggers, and persists results to Postgres.
         """
-        companies = self.db.query(Company).all()
+        from app.services.universe_service import UniverseService
+        from datetime import datetime
+        universe_svc = UniverseService(self.db)
+        # Using NIFTY500 as the baseline universe for the scan
+        tickers = universe_svc.get_pit_universe("NIFTY500", datetime.utcnow())
+        
+        companies = self.db.query(Company).filter(Company.ticker.in_(tickers)).all()
         if limit:
             companies = companies[:limit]
 
@@ -231,13 +237,17 @@ class MomentumService:
         m_df['derivatives_score'] = m_df[[f"{c}_rank" for c in deriv_cols]].mean(axis=1)
         m_df['regime_score'] = regime_score
 
-        # Composite Score incorporating Phase 2 factors
+        # Composite Score incorporating Phase 2 factors dynamically
+        from app.services.weight_learning_service import WeightLearningService
+        weight_svc = WeightLearningService(self.db)
+        w = weight_svc.load_weights()
+        
         m_df['composite_score'] = (
-            0.35 * m_df['technical_score'] + 
-            0.25 * m_df['fundamental_score'] + 
-            0.15 * m_df['smart_money_score'] + 
-            0.10 * m_df['derivatives_score'] + 
-            0.15 * m_df['regime_score']
+            w['technical_score'] * m_df['technical_score'] + 
+            w['fundamental_score'] * m_df['fundamental_score'] + 
+            w['smart_money_score'] * m_df['smart_money_score'] + 
+            w['derivatives_score'] * m_df['derivatives_score'] + 
+            w['regime_score'] * m_df['regime_score']
         ).round(2)
 
         processed_count = 0
@@ -397,6 +407,10 @@ class MomentumService:
                 print(f"Failed to save momentum signal for {comp.ticker}: {e}")
 
         self.db.commit()
+        
+        # Apply HRP position sizing to newly generated BUY signals
+        self._apply_hrp_post_processing()
+
         return {
             "status": "Success",
             "analyzed": processed_count,
@@ -405,3 +419,68 @@ class MomentumService:
             "attention_flagged": attention_count,
             "market_regime": regime
         }
+
+    def _apply_hrp_post_processing(self):
+        """
+        Gathers today's BUY signals, builds covariance matrix, calculates HRP weights,
+        applies dynamic sector constraints, and updates the database.
+        """
+        from datetime import datetime, date
+        from app.services.portfolio_construction_service import PortfolioConstructionService
+        
+        today = date.today()
+        # Get all BUY signals from today
+        signals = self.db.query(MomentumSignal).filter(
+            MomentumSignal.signal == "BUY",
+            # We filter by today's date
+        ).all()
+        
+        # Filter for today only using Python to avoid complex DB date extraction logic depending on DB dialect
+        today_signals = [s for s in signals if s.date_calculated.date() == today]
+        if not today_signals:
+            return
+            
+        tickers = []
+        sectors = {}
+        for s in today_signals:
+            comp = self.db.query(Company).filter(Company.id == s.company_id).first()
+            if comp:
+                tickers.append(comp.ticker)
+                sectors[comp.ticker] = comp.sector or "Unknown"
+                
+        if len(tickers) < 2:
+            return
+            
+        # Fetch returns for covariance
+        import yfinance as yf
+        # We need historical returns for HRP. 252 days is standard.
+        try:
+            data = yf.download(tickers, period="1y", progress=False)['Close']
+            if len(tickers) == 1:
+                data = pd.DataFrame(data)
+                data.columns = tickers
+            returns = data.pct_change().dropna()
+            if returns.empty:
+                return
+                
+            cov_matrix = returns.cov() * 252 # Annualized covariance
+            
+            pcs = PortfolioConstructionService(self.db)
+            hrp_weights = pcs.get_hrp_weights(cov_matrix)
+            
+            # Apply sector constraints (max 25% per sector)
+            final_weights = pcs.apply_sector_constraints(hrp_weights, sectors, max_sector_weight=0.25)
+            
+            # Update DB with final weights
+            for s in today_signals:
+                comp = self.db.query(Company).filter(Company.id == s.company_id).first()
+                if comp and comp.ticker in final_weights:
+                    # HRP returns weights sum to 1. We allocate 100% of the portfolio.
+                    # Represent as percentage (0-100)
+                    w_pct = round(final_weights[comp.ticker] * 100.0, 2)
+                    s.position_size_pct = w_pct
+                    
+            self.db.commit()
+        except Exception as e:
+            print(f"HRP Post-processing failed: {e}")
+

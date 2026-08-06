@@ -40,7 +40,7 @@ class AIAnalystService:
                 prompt = self._build_prompt(ticker, quantitative_data)
                 payload = {
                     "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.2, "topK": 40, "topP": 0.95}
+                    "generationConfig": {"temperature": 0.0, "topK": 40, "topP": 0.95}
                 }
                 headers = {"Content-Type": "application/json"}
                 response = requests.post(self.model_url, headers=headers, json=payload, timeout=20)

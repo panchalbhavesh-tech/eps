@@ -10,6 +10,53 @@ from app.infrastructure.models import ResearchHypothesis, HypothesisExperiment, 
 
 logger = logging.getLogger(__name__)
 
+import ast
+import operator
+
+class SafeASTEvaluator:
+    def __init__(self, df: pd.DataFrame):
+        self.df = df
+        self.allowed_operators = {
+            ast.Add: operator.add,
+            ast.Sub: operator.sub,
+            ast.Mult: operator.mul,
+            ast.Div: operator.truediv,
+            ast.USub: operator.neg,
+        }
+        self.allowed_functions = {
+            'abs': np.abs,
+            'log': np.log,
+            'sqrt': np.sqrt,
+            'rolling_mean': lambda x, w: x.rolling(int(w)).mean(),
+            'rolling_std': lambda x, w: x.rolling(int(w)).std(),
+            'rank': lambda x: x.rank(pct=True)
+        }
+
+    def _eval(self, node):
+        if isinstance(node, ast.Num):
+            return node.n
+        elif isinstance(node, ast.Name):
+            if node.id in self.df.columns:
+                return self.df[node.id]
+            raise ValueError(f"Unknown variable: {node.id}")
+        elif isinstance(node, ast.BinOp):
+            left = self._eval(node.left)
+            right = self._eval(node.right)
+            return self.allowed_operators[type(node.op)](left, right)
+        elif isinstance(node, ast.UnaryOp):
+            operand = self._eval(node.operand)
+            return self.allowed_operators[type(node.op)](operand)
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id in self.allowed_functions:
+                args = [self._eval(arg) for arg in node.args]
+                return self.allowed_functions[node.func.id](*args)
+            raise ValueError(f"Unknown or forbidden function: {node.func.id if isinstance(node.func, ast.Name) else node.func}")
+        else:
+            raise TypeError(node)
+
+    def evaluate(self, expr: str):
+        tree = ast.parse(expr, mode='eval').body
+        return self._eval(tree)
 
 class HypothesisService:
     """
@@ -193,6 +240,23 @@ class HypothesisService:
                 raise ValueError(f"Failed to parse alpha expression: {parse_err}")
                 
             clean = df.dropna(subset=['factor', 'fwd_ret']).copy()
+            
+            # Factor Orthogonalization: Regress out the cross-sectional market mean 
+            # (which proxies the market factor) to obtain pure idiosyncratic alpha.
+            def orthogonalize(group):
+                if len(group) > 5:
+                    import statsmodels.api as sm
+                    y = group['factor']
+                    X = sm.add_constant(np.ones(len(y))) # In absence of market return, we remove the mean
+                    try:
+                        res = sm.OLS(y, X).fit()
+                        group['factor'] = res.resid
+                    except:
+                        pass
+                return group
+                
+            clean = clean.groupby(level='Date').apply(orthogonalize)
+            
             if len(clean) < 100:
                 failure_tag = "INSUFFICIENT_HISTORICAL_CACHE_BARS"
                 exp = HypothesisExperiment(
@@ -259,10 +323,24 @@ class HypothesisService:
             )
 
             ic, ic_tstat = self.compute_spearman_ic_stats(all_scores, all_returns)
+            
+            from app.services.multiple_testing_service import MultipleTestingService
+            # We proxy the benchmark returns as 0.0 or a constant risk-free rate if Nifty is not fetched in this scope
+            benchmark_returns = np.zeros_like(s_arr) + 0.0002 # proxy 0.02% daily RF
+            reality_check_pval = MultipleTestingService.whites_reality_check(s_arr, benchmark_returns)
 
-            # Global IC Threshold is 0.015
-            is_valid = (dsr >= 0.85) and (ic >= 0.015) and (ic_tstat >= 1.96)
-            failure_tag = None if is_valid else ("LOW_DEFLATED_SHARPE_PENALTY" if dsr < 0.85 else "INSIGNIFICANT_SPEARMAN_IC")
+            # Global IC Threshold is 0.015, DSR > 0.85, and Reality Check p-value < 0.05
+            is_valid = (dsr >= 0.85) and (ic >= 0.015) and (ic_tstat >= 1.96) and (reality_check_pval < 0.05)
+            
+            if not is_valid:
+                if dsr < 0.85:
+                    failure_tag = "LOW_DEFLATED_SHARPE_PENALTY"
+                elif reality_check_pval >= 0.05:
+                    failure_tag = "FAILED_WHITES_REALITY_CHECK"
+                else:
+                    failure_tag = "INSIGNIFICANT_SPEARMAN_IC"
+            else:
+                failure_tag = None
 
             exp = HypothesisExperiment(
                 id=uuid.uuid4(),
@@ -343,6 +421,33 @@ class HypothesisService:
                     l.decommission_reason = "EXHAUSTED_ALPHA_HALF_LIFE"
                     counts["decommissioned_decay"] += 1
                 self.db.commit()
+
+            # Apply Benjamini-Hochberg FDR Control across all active hypotheses
+            active_hyps = self.db.query(ResearchHypothesis).filter(
+                ResearchHypothesis.current_stage.in_(["LIVE_ALPHA_STREAM", "OUT_OF_SAMPLE_SHADOW"])
+            ).all()
+            
+            p_values = []
+            hyp_ids = []
+            for h in active_hyps:
+                exp = h.experiments[0] if h.experiments else None
+                if exp and exp.spearman_ic_tstat is not None:
+                    from scipy.stats import norm
+                    # Convert t-stat to p-value (approximate with normal if large N, or t distribution)
+                    pval = 2 * (1 - norm.cdf(abs(exp.spearman_ic_tstat)))
+                    p_values.append(pval)
+                    hyp_ids.append(h)
+                    
+            if p_values:
+                from app.services.multiple_testing_service import MultipleTestingService
+                reject_null = MultipleTestingService.benjamini_hochberg_fdr(np.array(p_values), alpha=0.05)
+                for i, h in enumerate(hyp_ids):
+                    if not reject_null[i]:
+                        # Discovered as a false positive under FDR
+                        h.current_stage = "ARCHIVE_FAILED"
+                        h.decommission_reason = "FAILED_FDR_CONTROL"
+                        h.decommissioned_at = datetime.utcnow()
+                        counts["decommissioned_decay"] += 1
 
             self.db.commit()
         except Exception as e:

@@ -15,6 +15,28 @@ import time
 import pandas as pd
 
 @shared_task
+def pre_warm_ohlcv_cache_task():
+    """
+    Runs overnight to refresh OHLCV cache before the morning momentum scan, 
+    preventing API rate limits and long delays during market hours.
+    """
+    db = SessionLocal()
+    try:
+        from app.services.ohlcv_cache_service import OHLCVCacheService
+        cache_svc = OHLCVCacheService(db)
+        
+        # Get active universe
+        companies = db.query(Company).all()
+        for comp in companies:
+            try:
+                # This fetches and caches
+                cache_svc.get_ohlcv(comp.ticker)
+            except Exception as e:
+                pass
+    finally:
+        db.close()
+
+@shared_task
 def sync_nse_calendar_task():
     db = SessionLocal()
     try:
@@ -449,11 +471,30 @@ def run_nse_momentum_scan_task(limit: int = None):
 @shared_task
 def retrain_momentum_ml_model_task(force_retrain: bool = True):
     from app.services.ml_service import MomentumMLService
+    from app.infrastructure.models import ScorePredictionLog
+    from datetime import datetime, timedelta
     db = SessionLocal()
     try:
         ml_service = MomentumMLService(db)
+        
+        cutoff = datetime.utcnow() - timedelta(days=60)
+        logs = db.query(ScorePredictionLog).filter(
+            ScorePredictionLog.date_evaluated >= cutoff,
+            ScorePredictionLog.composite_score != None
+        ).order_by(ScorePredictionLog.date_evaluated.desc()).all()
+        
+        psi_val = 0.0
+        if len(logs) > 200:
+            half = len(logs) // 2
+            current_scores = [float(l.composite_score) for l in logs[:half]]
+            expected_scores = [float(l.composite_score) for l in logs[half:]]
+            psi_val = ml_service.calculate_psi_drift(expected_scores, current_scores)
+            
+            if psi_val < 0.20 and not force_retrain:
+                return f"No drift detected (PSI: {psi_val:.4f}). Skipping retrain."
+        
         model = ml_service.train_or_load_model(force_retrain=force_retrain)
-        return f"Phase 3 ML Model Retrained: {model is not None}"
+        return f"Phase 3 ML Model Retrained: {model is not None} (PSI: {psi_val:.4f})"
     except Exception as e:
         print(f"Error during ML model retraining: {e}")
         raise e

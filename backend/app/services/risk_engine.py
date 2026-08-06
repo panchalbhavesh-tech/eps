@@ -18,6 +18,7 @@ class RiskEngine:
         self.max_concurrent_positions = 15
         self.max_sector_weight = 0.30  # 30% per sector
         self.max_single_stock_weight = 0.20  # 20% max position
+        self.max_gross_leverage = 1.0        # No margin allowed (100% max)
         self.mdd_kill_switch_threshold = -15.0  # -15% drawdown limit
         self._kill_switch_active = None
 
@@ -39,10 +40,32 @@ class RiskEngine:
                 ScorePredictionLog.realized_5d_return != None
             ).all()
             if logs:
-                returns = [float(l.realized_5d_return) for l in logs]
-                cumulative_return = sum(returns) / len(returns)
-                if cumulative_return < self.mdd_kill_switch_threshold:
-                    self._kill_switch_active = (True, f"Emergency Kill Switch Tripped: Live recommendation trailing return ({cumulative_return:.1f}%) breached {self.mdd_kill_switch_threshold}% safety boundary.")
+                returns = np.array([float(l.realized_5d_return) / 100.0 for l in logs])
+                # Compute cumulative equity curve to calculate true drawdown
+                equity_curve = np.cumprod(1 + returns)
+                peak = np.maximum.accumulate(equity_curve)
+                drawdown = (equity_curve - peak) / peak
+                max_dd = np.min(drawdown) * 100.0 if len(drawdown) > 0 else 0.0
+
+                # Determine dynamic threshold using regime
+                from app.services.momentum_service import MomentumMLService
+                ml_svc = MomentumMLService(self.db)
+                regime = ml_svc.get_market_regime()
+                regime_status = regime.get("status", "Neutral")
+                
+                dynamic_threshold = self.mdd_kill_switch_threshold
+                if regime_status == "Bearish":
+                    # Tighten stop loss
+                    dynamic_threshold = -10.0
+                    
+                # Compute CVaR as additional check
+                sorted_rets = np.sort(returns)
+                var_95_idx = int(0.05 * len(sorted_rets))
+                cvar_95 = np.mean(sorted_rets[:var_95_idx]) * 100.0 if var_95_idx > 0 else 0.0
+                
+                # If CVaR is worse than dynamic threshold OR max drawdown is worse, kill switch
+                if max_dd < dynamic_threshold or (cvar_95 < dynamic_threshold and len(returns) >= 20):
+                    self._kill_switch_active = (True, f"Emergency Kill Switch Tripped: Max Drawdown ({max_dd:.1f}%) or CVaR ({cvar_95:.1f}%) breached dynamic safety boundary ({dynamic_threshold}%).")
                     return self._kill_switch_active
         except Exception as e:
             print(f"Error checking kill switch status: {e}")
@@ -118,9 +141,9 @@ class RiskEngine:
                 # Align dates to calculate accurate correlation
                 combined = pd.concat([cand_rets, ex_rets], axis=1, join='inner')
                 if len(combined) >= 20:
-                    corr = combined.iloc[:, 0].corr(combined.iloc[:, 1], method='pearson')
+                    corr = combined.iloc[:, 0].corr(combined.iloc[:, 1], method='spearman')
                     if corr > 0.78:
-                        return True, f"🔗 Correlation Gate Rejected: Pearson correlation ({corr:.2f}) with existing holding {ex_ticker} exceeds 0.78 diversity cap."
+                        return True, f"🔗 Correlation Gate Rejected: Spearman correlation ({corr:.2f}) with existing holding {ex_ticker} exceeds 0.78 diversity cap."
         except Exception as e:
             print(f"Error executing correlation gate check for {ticker}: {e}")
 
@@ -151,7 +174,12 @@ class RiskEngine:
         if len(active_buys) >= self.max_concurrent_positions:
             final_signal = "WATCHLIST"
             reasons.append(f"📦 Portfolio Concurrency Cap Reached ({self.max_concurrent_positions} active longs). Signal downgraded to WATCHLIST.")
-
+        # 2b. Leverage Constraint
+        # Assuming each active buy has an average allocation based on max_concurrent_positions
+        current_gross_leverage = len(active_buys) * (1.0 / self.max_concurrent_positions)
+        if current_gross_leverage >= self.max_gross_leverage:
+            final_signal = "WATCHLIST"
+            reasons.append(f"⚖️ Maximum Gross Leverage Reached (>{self.max_gross_leverage}x). Signal downgraded to WATCHLIST.")
         # 3. Sector Concentration Gate
         if self.check_sector_exposure_cap(company.sector, current_active_signals):
             final_signal = "WATCHLIST"

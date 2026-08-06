@@ -18,7 +18,8 @@ class ValidationService:
 
     def __init__(self, db: Session):
         self.db = db
-        self.probation_days = 14  # 14 days probationary testing per user approval
+        import os
+        self.probation_days = int(os.environ.get("SHADOW_PROBATION_DAYS", 63))
 
     def log_prediction_snapshot(
         self,
@@ -223,7 +224,32 @@ class ValidationService:
         shadow_hr = get_hit_rate(shadow_logs)
         prod_hr = get_hit_rate(prod_logs) if prod_logs else 0.50
 
-        should_promote = shadow_hr > prod_hr and len(shadow_logs) >= 20
+        # Add statistical significance requirement
+        ttest_pvalue = 1.0
+        if len(shadow_logs) >= 20 and len(prod_logs) >= 20:
+            import numpy as np
+            from scipy.stats import ttest_ind
+            
+            # Reconstruct binary outcomes to run t-test on proportions
+            shadow_outcomes = []
+            for l in shadow_logs:
+                if (l.prob_gain_5d and l.prob_gain_5d > 0.5 and l.realized_5d_return > 0) or (l.prob_gain_5d and l.prob_gain_5d <= 0.5 and l.realized_5d_return <= 0):
+                    shadow_outcomes.append(1)
+                else:
+                    shadow_outcomes.append(0)
+                    
+            prod_outcomes = []
+            for l in prod_logs:
+                if (l.prob_gain_5d and l.prob_gain_5d > 0.5 and l.realized_5d_return > 0) or (l.prob_gain_5d and l.prob_gain_5d <= 0.5 and l.realized_5d_return <= 0):
+                    prod_outcomes.append(1)
+                else:
+                    prod_outcomes.append(0)
+                    
+            if shadow_outcomes and prod_outcomes:
+                t_stat, p_val = ttest_ind(shadow_outcomes, prod_outcomes, alternative='greater')
+                ttest_pvalue = p_val
+                
+        should_promote = shadow_hr > prod_hr and len(shadow_logs) >= 20 and ttest_pvalue < 0.05
 
         return {
             "model_id": new_model_id,

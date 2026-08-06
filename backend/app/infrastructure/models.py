@@ -135,6 +135,12 @@ class EventStudyResult(Base):
     ret_10d = Column(Float, nullable=True)
     ret_20d = Column(Float, nullable=True)
     ret_30d = Column(Float, nullable=True)
+    ar_1d = Column(Float, nullable=True)
+    ar_5d = Column(Float, nullable=True)
+    ar_10d = Column(Float, nullable=True)
+    ar_30d = Column(Float, nullable=True)
+    car_30d = Column(Float, nullable=True)
+    car_pvalue = Column(Float, nullable=True)
     max_gain = Column(Float, nullable=True)
     max_drawdown = Column(Float, nullable=True)
     company = relationship("Company", back_populates="event_studies")
@@ -154,6 +160,10 @@ class StrategyBacktest(Base):
     max_drawdown = Column(Float, nullable=True)
     expected_value = Column(Float, nullable=True)
     profit_factor = Column(Float, nullable=True)
+    sharpe_ratio = Column(Float, nullable=True)
+    sharpe_ci_lower = Column(Float, nullable=True)
+    sharpe_ci_upper = Column(Float, nullable=True)
+    sharpe_pvalue = Column(Float, nullable=True)
     company = relationship("Company", back_populates="backtests")
 
 class TechnicalSnapshot(Base):
@@ -306,6 +316,7 @@ class HypothesisExperiment(Base):
     __tablename__ = "hypothesis_experiments"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     hypothesis_id = Column(UUID(as_uuid=True), ForeignKey("research_hypotheses.id", ondelete="CASCADE"), nullable=False)
+    hypothesis = relationship("ResearchHypothesis", back_populates="experiments")
     execution_date = Column(DateTime, default=datetime.utcnow)
     test_window_start = Column(DateTime, nullable=True)
     test_window_end = Column(DateTime, nullable=True)
@@ -317,9 +328,18 @@ class HypothesisExperiment(Base):
     max_drawdown_pct = Column(Float, nullable=True)
     turnover_decay_penalty = Column(Float, nullable=True)
     is_statistically_valid = Column(Boolean, default=False)
-    failure_mode_tag = Column(String, nullable=True)          # e.g., "HIGH_MULTIPLE_TESTING_PENALTY"
+    failure_mode_tag = Column(String, nullable=True)
+
+class HypothesisAuditLog(Base):
+    __tablename__ = "hypothesis_audit_logs"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    hypothesis_id = Column(UUID(as_uuid=True), ForeignKey("research_hypotheses.id"))
+    author = Column(String, index=True)
+    action = Column(String)  # e.g., 'CREATED', 'EVALUATED', 'PROMOTED', 'DECOMMISSIONED'
+    details = Column(String, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
     known_at = Column(DateTime, default=datetime.utcnow)
-    hypothesis = relationship("ResearchHypothesis", back_populates="experiments")
+    hypothesis = relationship("ResearchHypothesis")
 
 
 class TotalHypothesisTrials(Base):
@@ -327,6 +347,27 @@ class TotalHypothesisTrials(Base):
     id = Column(Integer, primary_key=True, default=1)
     total_count = Column(Integer, default=0, nullable=False)
 
+
+class FamaFrenchFactor(Base):
+    __tablename__ = "fama_french_factors"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    trade_date = Column(DateTime, nullable=False, unique=True, index=True)
+    mkt_rf = Column(Float)
+    smb = Column(Float)
+    hml = Column(Float)
+    rf = Column(Float)
+    known_at = Column(DateTime, default=datetime.utcnow)
+
+
+class HistoricalConstituent(Base):
+    __tablename__ = "historical_constituents"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    index_name = Column(String, index=True)
+    ticker = Column(String, index=True)
+    added_date = Column(DateTime)
+    removed_date = Column(DateTime, nullable=True)
+    removal_reason = Column(String, nullable=True)
+    known_at = Column(DateTime, default=datetime.utcnow)
 
 class HypothesisSignal(Base):
     __tablename__ = "hypothesis_signals"

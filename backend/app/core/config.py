@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     FMP_API_KEY: str = os.environ.get("FMP_API_KEY", "")
     GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
     QHLM_LIVE_TRADING_ENABLED: bool = os.environ.get("QHLM_LIVE_TRADING_ENABLED", "False").lower() in ("true", "1", "yes")
+    SHADOW_PROBATION_DAYS: int = int(os.environ.get("SHADOW_PROBATION_DAYS", "252"))
     
     class Config:
         env_file = ".env"

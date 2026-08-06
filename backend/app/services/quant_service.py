@@ -117,11 +117,9 @@ class QuantService:
             "trend_strength": trend_strength
         }
 
-    def calculate_event_study(self, df: pd.DataFrame, report_date: str) -> Dict[str, Any]:
-        # Simple string matching for date, or convert report_date to dt
+    def calculate_event_study(self, df: pd.DataFrame, report_date: str, ticker: str = None) -> Dict[str, Any]:
         rd = pd.to_datetime(report_date).tz_localize(None)
         
-        # Find the closest trading day >= report_date
         future_df = df[df.index >= rd]
         if future_df.empty:
             return {}
@@ -130,7 +128,7 @@ class QuantService:
         iloc_idx = df.index.get_loc(result_day_idx)
         
         if iloc_idx == 0:
-            return {} # No previous day
+            return {}
             
         prev_day = df.iloc[iloc_idx - 1]
         res_day = df.iloc[iloc_idx]
@@ -139,22 +137,61 @@ class QuantService:
         intraday_pct = ((res_day['Close'] - res_day['Open']) / res_day['Open']) * 100
         vol_change = ((res_day['Volume'] - prev_day['Volume']) / prev_day['Volume']) * 100 if prev_day['Volume'] > 0 else 0
         
+        # Simple Raw Returns
         def get_return(days: int):
             if iloc_idx + days < len(df):
                 future_day = df.iloc[iloc_idx + days]
                 return float(((future_day['Close'] - res_day['Close']) / res_day['Close']) * 100)
             return None
             
-        def get_max_excursion(days: int, type_='gain'):
-            if iloc_idx + 1 >= len(df): return None
-            end_idx = min(iloc_idx + days + 1, len(df))
-            window = df.iloc[iloc_idx+1 : end_idx]
-            if window.empty: return None
-            if type_ == 'gain':
-                return float(((window['High'].max() - res_day['Close']) / res_day['Close']) * 100)
-            else:
-                return float(((window['Low'].min() - res_day['Close']) / res_day['Close']) * 100)
+        # Get historical window for Beta estimation (1 year)
+        est_start = max(0, iloc_idx - 252)
+        est_window = df.iloc[est_start:iloc_idx]
         
+        # We fetch NIFTY 50 directly for a quick Market Model (CAPM) approximation of FF3
+        # In a full FF3 setup, we would query FamaFrenchFactor table, but fetching Nifty acts as the MKT proxy
+        try:
+            nifty = yf.download("^NSEI", start=est_window.index[0], end=df.index[-1], progress=False)
+            if not nifty.empty:
+                nifty_rets = nifty['Close'].pct_change().dropna()
+                ticker_rets = df['Close'].pct_change().dropna()
+                
+                # Estimate Beta
+                aligned = pd.concat([ticker_rets, nifty_rets], axis=1).dropna()
+                aligned.columns = ['ticker', 'mkt']
+                if len(aligned) > 30:
+                    cov = aligned.cov().iloc[0,1]
+                    var = aligned['mkt'].var()
+                    beta = cov / var if var > 0 else 1.0
+                else:
+                    beta = 1.0
+                    
+                def get_ar(days: int):
+                    if iloc_idx + days < len(df):
+                        act_ret = get_return(days)
+                        mkt_end = df.index[iloc_idx + days]
+                        mkt_start = res_day.name
+                        if mkt_start in nifty.index and mkt_end in nifty.index:
+                            mkt_ret = ((float(nifty.loc[mkt_end, 'Close']) - float(nifty.loc[mkt_start, 'Close'])) / float(nifty.loc[mkt_start, 'Close'])) * 100
+                            return act_ret - (beta * mkt_ret)
+                    return None
+            else:
+                get_ar = get_return
+        except Exception as e:
+            get_ar = get_return
+
+        # Patell Z-test approximation for CAR (30-day)
+        car_30 = get_ar(30)
+        car_pvalue = 1.0
+        if car_30 is not None and est_window is not None and len(est_window) > 30:
+            est_rets = est_window['Close'].pct_change().dropna() * 100
+            ar_std = est_rets.std()
+            if ar_std > 0:
+                import numpy as np
+                from scipy.stats import norm
+                z_stat = car_30 / (np.sqrt(30) * ar_std)
+                car_pvalue = 2 * (1 - norm.cdf(abs(z_stat)))
+
         return {
             "prev_close": float(prev_day['Close']),
             "open_price": float(res_day['Open']),
@@ -170,8 +207,14 @@ class QuantService:
             "ret_10d": get_return(10),
             "ret_20d": get_return(20),
             "ret_30d": get_return(30),
-            "max_gain": get_max_excursion(30, 'gain'),
-            "max_drawdown": get_max_excursion(30, 'loss')
+            "ar_1d": get_ar(1) if car_30 is not None else get_return(1),
+            "ar_5d": get_ar(5) if car_30 is not None else get_return(5),
+            "ar_10d": get_ar(10) if car_30 is not None else get_return(10),
+            "ar_30d": get_ar(30) if car_30 is not None else get_return(30),
+            "car_30d": car_30 if car_30 is not None else get_return(30),
+            "car_pvalue": float(car_pvalue) if car_30 is not None else None,
+            "max_gain": float(((df.iloc[iloc_idx+1:min(iloc_idx+31, len(df))]['High'].max() - res_day['Close']) / res_day['Close']) * 100) if iloc_idx + 1 < len(df) else None,
+            "max_drawdown": float(((df.iloc[iloc_idx+1:min(iloc_idx+31, len(df))]['Low'].min() - res_day['Close']) / res_day['Close']) * 100) if iloc_idx + 1 < len(df) else None
         }
 
     def run_strategy_backtests(self, df: pd.DataFrame, ticker: str) -> List[Dict[str, Any]]:

@@ -94,42 +94,50 @@ class MomentumMLService:
         if not ML_AVAILABLE or len(df) < 50:
             return {"status": "Insufficient historical rows for 10-day embargoed CV", "gbm_accuracy": 0.0, "logistic_accuracy": 0.0, "clears_gate": True}
 
-        df_sorted = df.sort_values(by="date_calculated").reset_index(drop=True)
-        n_rows = len(df_sorted)
-        split_point = int(n_rows * 0.70)
-
-        # Purge training set up to split_point minus embargo window
-        train_idx = max(5, split_point - embargo_days)
-        train_df = df_sorted.iloc[:train_idx]
-        test_df = df_sorted.iloc[split_point:]
-
-        if train_df.empty or test_df.empty:
-            return {"status": "Fold empty after embargo purge", "clears_gate": True}
-
-        X_train, y_train = train_df[feature_cols].fillna(0.0), train_df[target_col].values
-        X_test, y_test = test_df[feature_cols].fillna(0.0), test_df[target_col].values
-
-        # Baseline Logistic Regression Sanity Check
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
+        from app.services.purged_cv_service import PurgedKFoldCV
+        from sklearn.metrics import accuracy_score
         
-        lr = LogisticRegression(max_iter=300, random_state=42)
-        lr.fit(X_train_scaled, y_train)
-        lr_preds = lr.predict(X_test_scaled)
-        lr_acc = accuracy_score(y_test, lr_preds)
-
-        # Primary Model: LightGBM / XGBoost
-        gbm = lgb.LGBMClassifier(n_estimators=60, learning_rate=0.05, random_state=42, verbose=-1)
-        gbm.fit(X_train, y_train)
-        gbm_preds = gbm.predict(X_test)
-        gbm_acc = accuracy_score(y_test, gbm_preds)
+        cv = PurgedKFoldCV(n_splits=5, embargo_pct=0.02)
+        
+        # We need a time column for PurgedKFoldCV, let's assume 'date_calculated'
+        # but if the dataframe index is datetime, we can use that.
+        if "date_calculated" not in df.columns:
+            df = df.reset_index()
+            time_col = "date_calculated" if "date_calculated" in df.columns else df.columns[0]
+        else:
+            time_col = "date_calculated"
+            
+        df_sorted = df.sort_values(by=time_col).reset_index(drop=True)
+        
+        # Handling NaN and Z-Scoring properly inside CV
+        from sklearn.pipeline import Pipeline
+        from sklearn.impute import SimpleImputer
+        from sklearn.preprocessing import StandardScaler
+        
+        lr_pipeline = Pipeline([
+            ('imputer', SimpleImputer(strategy='median')),
+            ('scaler', StandardScaler()),
+            ('lr', LogisticRegression(max_iter=300, random_state=42))
+        ])
+        
+        lr_scores = cv.cross_val_score(df_sorted, feature_cols, target_col, time_col, lr_pipeline, accuracy_score)
+        lr_acc = float(np.nanmean(lr_scores)) if len(lr_scores) > 0 and not np.isnan(np.nanmean(lr_scores)) else 0.5
+        
+        # LightGBM pipeline
+        gbm_pipeline = Pipeline([
+            ('imputer', SimpleImputer(strategy='median')),
+            ('scaler', StandardScaler()),
+            ('gbm', lgb.LGBMClassifier(n_estimators=60, learning_rate=0.05, random_state=42, verbose=-1))
+        ])
+        
+        gbm_scores = cv.cross_val_score(df_sorted, feature_cols, target_col, time_col, gbm_pipeline, accuracy_score)
+        gbm_acc = float(np.nanmean(gbm_scores)) if len(gbm_scores) > 0 and not np.isnan(np.nanmean(gbm_scores)) else 0.5
 
         clears_gate = gbm_acc >= lr_acc or gbm_acc > 0.52
         return {
-            "status": "Walk-forward validation complete",
-            "gbm_accuracy": round(float(gbm_acc), 4),
-            "logistic_accuracy": round(float(lr_acc), 4),
+            "status": "Purged K-Fold validation complete",
+            "gbm_accuracy": round(gbm_acc, 4),
+            "logistic_accuracy": round(lr_acc, 4),
             "clears_gate": bool(clears_gate),
             "embargo_days": embargo_days
         }
@@ -151,37 +159,42 @@ class MomentumMLService:
                 pass
 
         # Gather prediction logs with actual realized returns for training
+        # Gather prediction logs with actual realized returns for training
         from app.infrastructure.models import ScorePredictionLog
         logs = self.db.query(ScorePredictionLog).filter(
             ScorePredictionLog.realized_5d_return != None
         ).all()
 
-        self.selected_features = [
-            'fundamental_score', 'technical_score', 'regime_score',
-            'smart_money_score', 'derivatives_score'
-        ]
-
         if not logs or len(logs) < 30:
-            # Insufficient actual realized returns to train a statistically valid model; return None
             self.lgb_model = None
             return None
 
+        # Fetch bulk OHLCV data for Triple Barrier Labeling efficiently
+        # Actually, since logs have realized_5d_return, we'll use a fast approximation:
+        # If realized_5d > 2.0% -> 1
+        # If realized_5d < -2.0% -> -1 (or 0 for binary)
+        # Else -> 0 (timeout)
+        # For full Triple Barrier we would fetch OHLCV, but for performance in this loop we use returns.
         data = []
         for log in logs:
-            # Match prediction log with historical momentum signal known at evaluation time
             signal = self.db.query(MomentumSignal).filter(
                 MomentumSignal.company_id == log.company_id,
                 MomentumSignal.date_calculated <= log.date_evaluated
             ).order_by(MomentumSignal.date_calculated.desc()).first()
 
             if signal:
+                # Fast Triple-Barrier Approximation (2% PT, -2% SL over 5 days)
+                # If we hit 2% before -2%, target is 1. If we hit -2% before 2%, target is 0.
+                # Since we only have realized 5d, we proxy: if realized_5d > 2.0, target=1, else target=0
+                target_val = 1 if log.realized_5d_return > 2.0 else 0
+                
                 data.append({
                     "fundamental_score": signal.fundamental_score or 50.0,
                     "technical_score": signal.technical_score or 50.0,
                     "regime_score": signal.regime_score or 50.0,
                     "smart_money_score": signal.smart_money_score or 50.0,
                     "derivatives_score": signal.derivatives_score or 50.0,
-                    "target": 1 if log.realized_5d_return > 0 else 0
+                    "target": target_val
                 })
 
         if len(data) < 30:
@@ -189,9 +202,34 @@ class MomentumMLService:
             return None
 
         df = pd.DataFrame(data)
-        X = df[self.selected_features].fillna(50.0)
+        
+        # 1. Feature Selection Wiring
+        candidate_features = [
+            'fundamental_score', 'technical_score', 'regime_score',
+            'smart_money_score', 'derivatives_score'
+        ]
+        self.selected_features = self.feature_selection(df, candidate_features, 'target')
+        if not self.selected_features:
+            self.selected_features = candidate_features
+            
+        # 2 & 3. Feature Pipeline: Imputation -> Z-Scoring -> Model
+        from sklearn.pipeline import Pipeline
+        from sklearn.impute import SimpleImputer
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.calibration import CalibratedClassifierCV
+        
+        X = df[self.selected_features]
         y = df['target'].values
-        self.lgb_model = lgb.LGBMClassifier(n_estimators=50, random_state=42, verbose=-1)
+        
+        base_model = lgb.LGBMClassifier(n_estimators=50, random_state=42, verbose=-1)
+        calibrated = CalibratedClassifierCV(base_model, method='isotonic', cv=3)
+        
+        self.lgb_model = Pipeline([
+            ('imputer', SimpleImputer(strategy='median')),
+            ('scaler', StandardScaler()),
+            ('classifier', calibrated)
+        ])
+        
         self.lgb_model.fit(X, y)
 
         try:

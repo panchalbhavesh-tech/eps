@@ -67,6 +67,15 @@ def upgrade_db():
         ("bulk_block_deals", "known_at", "TIMESTAMP"),
         ("surveillance_watchlist", "known_at", "TIMESTAMP"),
         ("score_prediction_logs", "known_at", "TIMESTAMP"),
+        ("event_studies", "ar_1d", "FLOAT"),
+        ("event_studies", "ar_5d", "FLOAT"),
+        ("event_studies", "ar_10d", "FLOAT"),
+        ("event_studies", "ar_30d", "FLOAT"),
+        ("event_studies", "car_30d", "FLOAT"),
+        ("event_studies", "car_pvalue", "FLOAT"),
+        ("event_studies", "max_gain", "FLOAT"),
+        ("event_studies", "max_drawdown", "FLOAT"),
+        ("research_hypotheses", "normalized_expression", "VARCHAR(500)"),
     ]
 
     for table, column, datatype in columns_to_add:
@@ -133,6 +142,7 @@ def upgrade_db():
                 economic_mechanism VARCHAR(100) NOT NULL,
                 economic_rationale_text TEXT NOT NULL,
                 alpha_expression VARCHAR(500) NOT NULL,
+                normalized_expression VARCHAR(500) UNIQUE,
                 target_universe VARCHAR(100) DEFAULT 'NIFTY500',
                 holding_horizon_days INTEGER DEFAULT 5,
                 current_stage VARCHAR(50) DEFAULT 'DRAFT_HYPOTHESIS',
