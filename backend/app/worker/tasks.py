@@ -1,4 +1,4 @@
-from celery import shared_task
+from celery import shared_task, group
 from sqlalchemy.exc import IntegrityError
 from app.infrastructure.database import SessionLocal
 from app.services.prediction_service import PredictionService
@@ -507,24 +507,36 @@ def audit_shadow_model_performance_task(model_id: str = "latest_shadow"):
         db.close()
 
 
-@shared_task
-def sync_ohlcv_cache_task():
-    """Nightly task: incrementally update OHLCV cache for all tracked tickers."""
+@shared_task(time_limit=60)
+def sync_single_ohlcv_task(ticker: str):
+    """Sub-task to sync OHLCV for a single ticker with a strict 60s kill switch."""
     from app.services.ohlcv_cache_service import OHLCVCacheService
     db = SessionLocal()
     try:
         svc = OHLCVCacheService(db)
+        rows = svc.sync_ticker(ticker)
+        return {"ticker": ticker, "rows_synced": rows}
+    except Exception as e:
+        print(f"OHLCV cache sync failed for {ticker}: {e}")
+        return {"ticker": ticker, "rows_synced": 0, "error": str(e)}
+    finally:
+        db.close()
+
+
+@shared_task(time_limit=300)
+def sync_ohlcv_cache_task():
+    """Nightly master task: Fans out OHLCV sync to individual micro-tasks."""
+    db = SessionLocal()
+    try:
         companies = db.query(Company).all()
-        synced = 0
-        for c in companies:
-            try:
-                rows = svc.sync_ticker(c.ticker)
-                if rows > 0:
-                    synced += 1
-                time.sleep(0.5)  # Rate limit
-            except Exception as e:
-                print(f"OHLCV cache sync failed for {c.ticker}: {e}")
-        return f"OHLCV cache updated for {synced} tickers."
+        tickers = [c.ticker for c in companies]
+        
+        # Dispatch individual celery tasks
+        if tickers:
+            job = group(sync_single_ohlcv_task.s(ticker) for ticker in tickers)
+            job.apply_async()
+            
+        return f"Dispatched {len(tickers)} OHLCV sync sub-tasks to the worker pool."
     finally:
         db.close()
 

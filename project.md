@@ -229,6 +229,12 @@ Scheduled daily by Celery Beat and directly deployable via the `/research` UI (`
 - **Autonomous Batch Formulation & Deduplication**: The AI automatically formulates orthogonal vector equations until the active pipeline (`DRAFT` + `SHADOW` + `LIVE`) reaches a `TARGET_PIPELINE_DEPTH` of 15. All equations undergo whitespace-stripped `normalized_expression` checks to prevent identical proposals, backed by a circuit-breaker to halt infinite loops upon fallback exhaustion.
 - **Secure Evaluation Loop**: Instantly executes candidate expressions against cached daily OHLCV multi-index DataFrames, computing Deflated Sharpe and Spearman student-$t$ statistics automatically upon proposal using `SafeASTEvaluator`.
 
+### 5.11 Nightly OHLCV Cache Fan-Out Synchronization (`sync_ohlcv_cache_task`)
+Scheduled daily by Celery Beat (`sync-ohlcv-cache-daily`):
+- **Master-Worker Fan-Out Architecture**: The master task queries the active equities universe and dispatches individual `sync_single_ohlcv_task` micro-tasks using Celery `group()`. This parallelizes downloads and prevents monolithic single-thread worker blocking.
+- **Strict Process & Network Kill Switches**: Sub-tasks implement a strict `timeout=10` on `yfinance` network sockets and a Celery `@shared_task(time_limit=60)` hard kill switch to gracefully terminate and recycle frozen worker processes.
+- **Incremental PostgreSQL Storage**: Uses `OHLCVCacheService` to incrementally synchronize daily bars into the `DailyBhavcopy` cache table, skipping redundant history to minimize network latency.
+
 ---
 
 ## 6. Database Schema Core Entities & GraphQL Mappings

@@ -531,7 +531,7 @@ class Query:
         return result
 
     @strawberry.field
-    def celery_schedules(self, info: Info[Context, None]) -> List[CeleryScheduleType, HypothesisSignalType]:
+    def celery_schedules(self, info: Info[Context, None]) -> List[CeleryScheduleType]:
         from app.worker.celery_app import celery_app
         from app.infrastructure.models import BackgroundJob
         db = info.context.db
@@ -612,7 +612,7 @@ class Query:
                     last_run_duration = (latest_job.finished_at - latest_job.started_at).total_seconds()
 
             result.append(
-                CeleryScheduleType, HypothesisSignalType(
+                CeleryScheduleType(
                     name=sched_name,
                     task_name=task_name,
                     interval_seconds=interval,

@@ -41,10 +41,10 @@ class OHLCVCacheService:
                 now_date = datetime.utcnow().strftime('%Y-%m-%d')
                 if start_date >= now_date:
                     return 0
-                df = yf.download(yf_ticker, start=start_date, progress=False)
+                df = yf.download(yf_ticker, start=start_date, progress=False, timeout=10)
             else:
                 # Full download
-                df = yf.download(yf_ticker, period=f"{years}y", progress=False)
+                df = yf.download(yf_ticker, period=f"{years}y", progress=False, timeout=10)
 
             if df.empty or len(df) == 0:
                 return 0
