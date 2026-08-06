@@ -9,6 +9,7 @@ class QuantService:
         pass
 
     def fetch_historical_ohlcv(self, ticker: str, years: int = 5) -> pd.DataFrame:
+        import time
         symbols_to_try = []
         if ticker.startswith("^") or ticker.endswith(".NS") or ticker.endswith(".BO"):
             symbols_to_try.append(ticker)
@@ -17,17 +18,35 @@ class QuantService:
             
         for yf_ticker in symbols_to_try:
             df = pd.DataFrame()
-            try:
-                ticker_obj = yf.Ticker(yf_ticker)
-                df = ticker_obj.history(period=f"{years}y")
-            except Exception as e:
-                print(f"Ticker history error for {yf_ticker}: {e}")
+            splits = pd.Series(dtype=float)
+            
+            # Exponential Backoff Retry Loop
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    ticker_obj = yf.Ticker(yf_ticker)
+                    df = ticker_obj.history(period=f"{years}y")
+                    try:
+                        splits = ticker_obj.splits
+                    except Exception:
+                        pass
+                    break
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        print(f"Ticker history error for {yf_ticker} after {max_retries} attempts: {e}")
+                    else:
+                        time.sleep(2 ** attempt)
                 
             if df.empty or len(df) < 5:
-                try:
-                    df = yf.download(yf_ticker, period=f"{years}y", progress=False)
-                except Exception as e:
-                    print(f"Download error for {yf_ticker}: {e}")
+                for attempt in range(max_retries):
+                    try:
+                        df = yf.download(yf_ticker, period=f"{years}y", progress=False)
+                        break
+                    except Exception as e:
+                        if attempt == max_retries - 1:
+                            print(f"Download error for {yf_ticker} after {max_retries} attempts: {e}")
+                        else:
+                            time.sleep(2 ** attempt)
                     
             if not df.empty and len(df) > 5:
                 if isinstance(df.columns, pd.MultiIndex):
@@ -36,8 +55,46 @@ class QuantService:
                     continue
                 df = df.reset_index()
                 date_col = 'Date' if 'Date' in df.columns else df.columns[0]
-                df[date_col] = pd.to_datetime(df[date_col]).dt.tz_localize(None)
+                
+                # Timezone safety: Explicit Asia/Kolkata
+                dt_col = pd.to_datetime(df[date_col])
+                if dt_col.dt.tz is not None:
+                    df[date_col] = dt_col.dt.tz_convert('Asia/Kolkata').dt.tz_localize(None)
+                else:
+                    df[date_col] = dt_col
+
                 df.set_index(date_col, inplace=True)
+                
+                # Corporate action verification & backward adjustment
+                df['pct_ret'] = df['Close'].pct_change()
+                anomalies = df[df['pct_ret'].abs() > 0.3]
+                
+                if not anomalies.empty:
+                    # Convert splits index to naive for matching
+                    if not splits.empty:
+                        if splits.index.tz is not None:
+                            splits.index = splits.index.tz_convert('Asia/Kolkata').tz_localize(None)
+                    
+                    for idx, row in anomalies.iterrows():
+                        gap_date = idx
+                        # If we have a known split near this date
+                        split_ratio = 0
+                        if not splits.empty:
+                            # Check within +/- 2 days
+                            mask = (splits.index >= gap_date - timedelta(days=2)) & (splits.index <= gap_date + timedelta(days=2))
+                            if mask.any():
+                                split_ratio = splits[mask].iloc[0]
+                                
+                        if split_ratio > 0 and split_ratio != 1.0:
+                            # Backward adjust
+                            df.loc[df.index < gap_date, ['Open', 'High', 'Low', 'Close']] /= split_ratio
+                            df.loc[df.index < gap_date, 'Volume'] *= split_ratio
+                            print(f"Adjusted corporate action (split {split_ratio}) for {yf_ticker} on {gap_date.date()}")
+                        else:
+                            print(f"Warning: Unadjusted corporate action jump ({row['pct_ret']:.2f}) detected for {yf_ticker} on {gap_date.date()}.")
+                            
+                df.drop(columns=['pct_ret'], inplace=True)
+                
                 return df
                 
         return pd.DataFrame()
@@ -58,164 +115,8 @@ class QuantService:
             
         return self.fetch_historical_ohlcv(ticker, years=years)
 
-    def calculate_technicals(self, df: pd.DataFrame) -> Dict[str, Any]:
-        if df.empty or len(df) < 20:
-            return {}
-        
-        # Calculate Indicators
-        df['SMA_50'] = ta.sma(df['Close'], length=50)
-        df['SMA_100'] = ta.sma(df['Close'], length=100)
-        df['SMA_200'] = ta.sma(df['Close'], length=200)
-        df['RSI'] = ta.rsi(df['Close'], length=14)
-        
-        macd = ta.macd(df['Close'])
-        df['MACD'] = macd['MACD_12_26_9'] if macd is not None and not macd.empty else None
-        
-        adx = ta.adx(df['High'], df['Low'], df['Close'])
-        df['ADX'] = adx['ADX_14'] if adx is not None and not adx.empty else None
-        
-        # Pivot Points for Support/Resistance
-        last_high = df['High'].iloc[-2]
-        last_low = df['Low'].iloc[-2]
-        last_close = df['Close'].iloc[-2]
-        pivot = (last_high + last_low + last_close) / 3
-        imm_support = (2 * pivot) - last_high
-        maj_support = pivot - (last_high - last_low)
-        imm_resistance = (2 * pivot) - last_low
-        maj_resistance = pivot + (last_high - last_low)
-        
-        latest = df.iloc[-1]
-        
-        # Golden Cross / Death Cross
-        cross_status = "Neutral"
-        if not pd.isna(latest['SMA_50']) and not pd.isna(latest['SMA_200']):
-            if latest['SMA_50'] > latest['SMA_200'] and df['SMA_50'].iloc[-2] <= df['SMA_200'].iloc[-2]:
-                cross_status = "Golden Cross"
-            elif latest['SMA_50'] < latest['SMA_200'] and df['SMA_50'].iloc[-2] >= df['SMA_200'].iloc[-2]:
-                cross_status = "Death Cross"
-            
-        ref_sma = latest['SMA_200'] if not pd.isna(latest['SMA_200']) else (latest['SMA_50'] if not pd.isna(latest['SMA_50']) else df['Close'].rolling(10).mean().iloc[-1])
-        trend = "Bullish" if not pd.isna(ref_sma) and latest['Close'] > ref_sma else "Bearish"
-        vol_trend = "Increasing" if latest['Volume'] > df['Volume'].rolling(20).mean().iloc[-1] else "Decreasing"
-        trend_strength = "Strong" if latest['ADX'] and latest['ADX'] > 25 else "Weak"
-        
-        return {
-            "imm_support": float(imm_support),
-            "maj_support": float(maj_support),
-            "imm_resistance": float(imm_resistance),
-            "maj_resistance": float(maj_resistance),
-            "trend": trend,
-            "dma_50": float(latest['SMA_50']) if not pd.isna(latest['SMA_50']) else None,
-            "dma_100": float(latest['SMA_100']) if not pd.isna(latest['SMA_100']) else None,
-            "dma_200": float(latest['SMA_200']) if not pd.isna(latest['SMA_200']) else None,
-            "cross_status": cross_status,
-            "rsi": float(latest['RSI']) if not pd.isna(latest['RSI']) else None,
-            "macd": float(latest['MACD']) if not pd.isna(latest['MACD']) else None,
-            "adx": float(latest['ADX']) if not pd.isna(latest['ADX']) else None,
-            "volume_trend": vol_trend,
-            "vwap_position": "N/A", # Intraday VWAP needs intraday data
-            "trend_strength": trend_strength
-        }
-
-    def calculate_event_study(self, df: pd.DataFrame, report_date: str, ticker: str = None) -> Dict[str, Any]:
-        rd = pd.to_datetime(report_date).tz_localize(None)
-        
-        future_df = df[df.index >= rd]
-        if future_df.empty:
-            return {}
-            
-        result_day_idx = future_df.index[0]
-        iloc_idx = df.index.get_loc(result_day_idx)
-        
-        if iloc_idx == 0:
-            return {}
-            
-        prev_day = df.iloc[iloc_idx - 1]
-        res_day = df.iloc[iloc_idx]
-        
-        gap_pct = ((res_day['Open'] - prev_day['Close']) / prev_day['Close']) * 100
-        intraday_pct = ((res_day['Close'] - res_day['Open']) / res_day['Open']) * 100
-        vol_change = ((res_day['Volume'] - prev_day['Volume']) / prev_day['Volume']) * 100 if prev_day['Volume'] > 0 else 0
-        
-        # Simple Raw Returns
-        def get_return(days: int):
-            if iloc_idx + days < len(df):
-                future_day = df.iloc[iloc_idx + days]
-                return float(((future_day['Close'] - res_day['Close']) / res_day['Close']) * 100)
-            return None
-            
-        # Get historical window for Beta estimation (1 year)
-        est_start = max(0, iloc_idx - 252)
-        est_window = df.iloc[est_start:iloc_idx]
-        
-        # We fetch NIFTY 50 directly for a quick Market Model (CAPM) approximation of FF3
-        # In a full FF3 setup, we would query FamaFrenchFactor table, but fetching Nifty acts as the MKT proxy
-        try:
-            nifty = yf.download("^NSEI", start=est_window.index[0], end=df.index[-1], progress=False)
-            if not nifty.empty:
-                nifty_rets = nifty['Close'].pct_change().dropna()
-                ticker_rets = df['Close'].pct_change().dropna()
-                
-                # Estimate Beta
-                aligned = pd.concat([ticker_rets, nifty_rets], axis=1).dropna()
-                aligned.columns = ['ticker', 'mkt']
-                if len(aligned) > 30:
-                    cov = aligned.cov().iloc[0,1]
-                    var = aligned['mkt'].var()
-                    beta = cov / var if var > 0 else 1.0
-                else:
-                    beta = 1.0
-                    
-                def get_ar(days: int):
-                    if iloc_idx + days < len(df):
-                        act_ret = get_return(days)
-                        mkt_end = df.index[iloc_idx + days]
-                        mkt_start = res_day.name
-                        if mkt_start in nifty.index and mkt_end in nifty.index:
-                            mkt_ret = ((float(nifty.loc[mkt_end, 'Close']) - float(nifty.loc[mkt_start, 'Close'])) / float(nifty.loc[mkt_start, 'Close'])) * 100
-                            return act_ret - (beta * mkt_ret)
-                    return None
-            else:
-                get_ar = get_return
-        except Exception as e:
-            get_ar = get_return
-
-        # Patell Z-test approximation for CAR (30-day)
-        car_30 = get_ar(30)
-        car_pvalue = 1.0
-        if car_30 is not None and est_window is not None and len(est_window) > 30:
-            est_rets = est_window['Close'].pct_change().dropna() * 100
-            ar_std = est_rets.std()
-            if ar_std > 0:
-                import numpy as np
-                from scipy.stats import norm
-                z_stat = car_30 / (np.sqrt(30) * ar_std)
-                car_pvalue = 2 * (1 - norm.cdf(abs(z_stat)))
-
-        return {
-            "prev_close": float(prev_day['Close']),
-            "open_price": float(res_day['Open']),
-            "high_price": float(res_day['High']),
-            "low_price": float(res_day['Low']),
-            "close_price": float(res_day['Close']),
-            "gap_pct": float(gap_pct),
-            "intraday_pct": float(intraday_pct),
-            "volume_change_pct": float(vol_change),
-            "ret_1d": get_return(1),
-            "ret_3d": get_return(3),
-            "ret_5d": get_return(5),
-            "ret_10d": get_return(10),
-            "ret_20d": get_return(20),
-            "ret_30d": get_return(30),
-            "ar_1d": get_ar(1) if car_30 is not None else get_return(1),
-            "ar_5d": get_ar(5) if car_30 is not None else get_return(5),
-            "ar_10d": get_ar(10) if car_30 is not None else get_return(10),
-            "ar_30d": get_ar(30) if car_30 is not None else get_return(30),
-            "car_30d": car_30 if car_30 is not None else get_return(30),
-            "car_pvalue": float(car_pvalue) if car_30 is not None else None,
-            "max_gain": float(((df.iloc[iloc_idx+1:min(iloc_idx+31, len(df))]['High'].max() - res_day['Close']) / res_day['Close']) * 100) if iloc_idx + 1 < len(df) else None,
-            "max_drawdown": float(((df.iloc[iloc_idx+1:min(iloc_idx+31, len(df))]['Low'].min() - res_day['Close']) / res_day['Close']) * 100) if iloc_idx + 1 < len(df) else None
-        }
+    # Removed calculate_technicals (moved to technical_indicator_service.py)
+    # Removed calculate_event_study (moved to event_study_service.py)
 
     def run_strategy_backtests(self, df: pd.DataFrame, ticker: str) -> List[Dict[str, Any]]:
         if df.empty:
@@ -270,7 +171,7 @@ class QuantService:
                 if iloc_idx + 20 < len(df):
                     entry = e_day['Close']
                     exit_val = df.iloc[iloc_idx + 20]['Close']
-                    ret = (((exit_val - entry) / entry) * 100.0) - 0.20 # Net of 0.20% Indian STT/brokerage friction
+                    ret = (((exit_val - entry) / entry) * 100.0) - 0.40 # Net of 0.20% Indian STT/brokerage friction
                     strategies['A']['trades'].append(ret)
                     if ret > 0: strategies['A']['win'] += 1
                     else: strategies['A']['loss'] += 1
@@ -280,7 +181,7 @@ class QuantService:
                 if iloc_idx + 3 < len(df):
                     entry = e_day['Close']
                     exit_val = df.iloc[iloc_idx + 3]['Close']
-                    ret = (((entry - exit_val) / entry) * 100.0) - 0.20 # Short position net of friction
+                    ret = (((entry - exit_val) / entry) * 100.0) - 0.40 # Short position net of friction
                     strategies['B']['trades'].append(ret)
                     if ret > 0: strategies['B']['win'] += 1
                     else: strategies['B']['loss'] += 1
@@ -290,7 +191,7 @@ class QuantService:
                 if iloc_idx + 10 < len(df):
                     entry = e_day['Close']
                     exit_val = df.iloc[iloc_idx + 10]['Close']
-                    ret = (((exit_val - entry) / entry) * 100.0) - 0.20
+                    ret = (((exit_val - entry) / entry) * 100.0) - 0.40
                     strategies['C']['trades'].append(ret)
                     if ret > 0: strategies['C']['win'] += 1
                     else: strategies['C']['loss'] += 1
@@ -304,7 +205,7 @@ class QuantService:
                         next_day = df.iloc[iloc_idx + 1]
                         entry = next_day['Open']
                         exit_val = df.iloc[iloc_idx + 6]['Close']
-                        ret = (((exit_val - entry) / entry) * 100.0) - 0.20
+                        ret = (((exit_val - entry) / entry) * 100.0) - 0.40
                         strategies['D']['trades'].append(ret)
                         if ret > 0: strategies['D']['win'] += 1
                         else: strategies['D']['loss'] += 1
@@ -314,7 +215,7 @@ class QuantService:
                 entry_day = df.iloc[iloc_idx - 10]
                 entry = entry_day['Close']
                 exit_val = prev_day['Close']
-                ret = (((exit_val - entry) / entry) * 100.0) - 0.20
+                ret = (((exit_val - entry) / entry) * 100.0) - 0.40
                 strategies['E']['trades'].append(ret)
                 if ret > 0: strategies['E']['win'] += 1
                 else: strategies['E']['loss'] += 1
@@ -324,7 +225,7 @@ class QuantService:
                 if iloc_idx + 5 < len(df):
                     entry = e_day['Close']
                     exit_val = df.iloc[iloc_idx + 5]['Close']
-                    ret = (((exit_val - entry) / entry) * 100.0) - 0.20
+                    ret = (((exit_val - entry) / entry) * 100.0) - 0.40
                     strategies['F']['trades'].append(ret)
                     if ret > 0: strategies['F']['win'] += 1
                     else: strategies['F']['loss'] += 1
@@ -399,7 +300,7 @@ class QuantService:
             d_clean = str(d_str).strip()
             for m_name, m_num in mon_map.items():
                 if m_name in d_clean:
-                    year = "2025"
+                    year = str(datetime.utcnow().year)
                     import re
                     y_match = re.findall(r"\d{4}", d_clean)
                     if y_match:
@@ -411,7 +312,7 @@ class QuantService:
                     dt = pd.to_datetime(d_clean)
                     norm_date = dt.strftime("%Y-%m-%d")
                 except Exception:
-                    norm_date = "2025-06-15"
+                    norm_date = f"{datetime.utcnow().year}-06-15"
 
             post_df = df_sorted[df_sorted.index >= norm_date]
             if len(post_df) >= 7:

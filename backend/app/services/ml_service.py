@@ -20,6 +20,12 @@ except ImportError:
 
 from sqlalchemy.orm import Session
 from app.infrastructure.models import Company, MomentumSignal
+from functools import lru_cache
+
+@lru_cache(maxsize=2)
+def _load_cached_models(model_path: str):
+    import joblib
+    return joblib.load(model_path)
 
 
 class MomentumMLService:
@@ -65,7 +71,7 @@ class MomentumMLService:
 
         # 3. SHAP Feature Importance ranking via preliminary LightGBM pass
         try:
-            X = df[surviving_cols].fillna(0.0)
+            X = df[surviving_cols].fillna(df[surviving_cols].median())
             y = df[target_col].values
             model = lgb.LGBMClassifier(n_estimators=30, random_state=42, verbose=-1)
             model.fit(X, y)
@@ -149,33 +155,37 @@ class MomentumMLService:
         if not ML_AVAILABLE:
             return None
             
-        model_path = os.path.join(self.model_dir, "lgb_momentum.joblib")
+        model_path = os.path.join(self.model_dir, "lgb_momentum_multi.joblib")
         if not force_retrain and os.path.exists(model_path):
             try:
-                import joblib
-                self.lgb_model, self.selected_features = joblib.load(model_path)
-                return self.lgb_model
+                return _load_cached_models(model_path)
             except Exception:
                 pass
 
-        # Gather prediction logs with actual realized returns for training
-        # Gather prediction logs with actual realized returns for training
-        from app.infrastructure.models import ScorePredictionLog
+        from app.infrastructure.models import ScorePredictionLog, Company
         logs = self.db.query(ScorePredictionLog).filter(
             ScorePredictionLog.realized_5d_return != None
         ).all()
 
         if not logs or len(logs) < 30:
-            self.lgb_model = None
+            self.models = None
             return None
 
-        # Fetch bulk OHLCV data for Triple Barrier Labeling efficiently
-        # Actually, since logs have realized_5d_return, we'll use a fast approximation:
-        # If realized_5d > 2.0% -> 1
-        # If realized_5d < -2.0% -> -1 (or 0 for binary)
-        # Else -> 0 (timeout)
-        # For full Triple Barrier we would fetch OHLCV, but for performance in this loop we use returns.
+        from app.services.labeling_service import TripleBarrierLabeler
+        from app.services.ohlcv_cache_service import OHLCVCacheService
+        cache_svc = OHLCVCacheService(self.db)
+        
+        labelers = {
+            '3d': TripleBarrierLabeler(pt_pct=1.5, sl_pct=-1.5, max_days=3),
+            '5d': TripleBarrierLabeler(pt_pct=2.0, sl_pct=-2.0, max_days=5),
+            '10d': TripleBarrierLabeler(pt_pct=4.0, sl_pct=-3.0, max_days=10)
+        }
+
         data = []
+        # Optimization: Pre-fetch companies
+        company_ids = {l.company_id for l in logs}
+        companies = {c.id: c.ticker for c in self.db.query(Company).filter(Company.id.in_(company_ids)).all()}
+        
         for log in logs:
             signal = self.db.query(MomentumSignal).filter(
                 MomentumSignal.company_id == log.company_id,
@@ -183,10 +193,23 @@ class MomentumMLService:
             ).order_by(MomentumSignal.date_calculated.desc()).first()
 
             if signal:
-                # Fast Triple-Barrier Approximation (2% PT, -2% SL over 5 days)
-                # If we hit 2% before -2%, target is 1. If we hit -2% before 2%, target is 0.
-                # Since we only have realized 5d, we proxy: if realized_5d > 2.0, target=1, else target=0
-                target_val = 1 if log.realized_5d_return > 2.0 else 0
+                target_3d, target_5d, target_10d = 0, 0, 0
+                ticker = companies.get(log.company_id)
+                if ticker:
+                    df_ohlcv = cache_svc.get_ohlcv(ticker, start_date=signal.date_calculated - timedelta(days=5), end_date=signal.date_calculated + timedelta(days=15))
+                    if not df_ohlcv.empty:
+                        idx_matches = np.where(df_ohlcv.index >= pd.to_datetime(signal.date_calculated).tz_localize(None))
+                        if len(idx_matches[0]) > 0:
+                            entry_idx = idx_matches[0][0]
+                            target_3d = labelers['3d'].label(df_ohlcv.reset_index(), [entry_idx]).iloc[0]
+                            target_5d = labelers['5d'].label(df_ohlcv.reset_index(), [entry_idx]).iloc[0]
+                            target_10d = labelers['10d'].label(df_ohlcv.reset_index(), [entry_idx]).iloc[0]
+                        else:
+                            target_5d = 1 if log.realized_5d_return > 2.0 else 0
+                    else:
+                        target_5d = 1 if log.realized_5d_return > 2.0 else 0
+                else:
+                    target_5d = 1 if log.realized_5d_return > 2.0 else 0
                 
                 data.append({
                     "fundamental_score": signal.fundamental_score or 50.0,
@@ -194,51 +217,63 @@ class MomentumMLService:
                     "regime_score": signal.regime_score or 50.0,
                     "smart_money_score": signal.smart_money_score or 50.0,
                     "derivatives_score": signal.derivatives_score or 50.0,
-                    "target": target_val
+                    "target_3d": target_3d,
+                    "target_5d": target_5d,
+                    "target_10d": target_10d,
+                    "date_calculated": signal.date_calculated
                 })
 
         if len(data) < 30:
-            self.lgb_model = None
+            self.models = None
             return None
 
         df = pd.DataFrame(data)
         
-        # 1. Feature Selection Wiring
         candidate_features = [
             'fundamental_score', 'technical_score', 'regime_score',
             'smart_money_score', 'derivatives_score'
         ]
-        self.selected_features = self.feature_selection(df, candidate_features, 'target')
-        if not self.selected_features:
-            self.selected_features = candidate_features
-            
-        # 2 & 3. Feature Pipeline: Imputation -> Z-Scoring -> Model
+        
         from sklearn.pipeline import Pipeline
         from sklearn.impute import SimpleImputer
         from sklearn.preprocessing import StandardScaler
         from sklearn.calibration import CalibratedClassifierCV
+        from sklearn.feature_selection import SelectFromModel
+        from app.services.purged_cv_service import PurgedKFoldCV
         
-        X = df[self.selected_features]
-        y = df['target'].values
-        
-        base_model = lgb.LGBMClassifier(n_estimators=50, random_state=42, verbose=-1)
-        calibrated = CalibratedClassifierCV(base_model, method='isotonic', cv=3)
-        
-        self.lgb_model = Pipeline([
-            ('imputer', SimpleImputer(strategy='median')),
-            ('scaler', StandardScaler()),
-            ('classifier', calibrated)
-        ])
-        
-        self.lgb_model.fit(X, y)
+        models = {}
+        for horizon, target_col, days in [('3d', 'target_3d', 3), ('5d', 'target_5d', 5), ('10d', 'target_10d', 10)]:
+            # Use all candidate features and let the pipeline do the feature selection inside CV folds
+            selected = candidate_features
+                
+            X = df[selected]
+            y = df[target_col].values
+            
+            cv_gen = PurgedKFoldCV(n_splits=3)
+            splits = list(cv_gen.split(df, "date_calculated", horizon_days=days))
+            if len(splits) < 3:
+                splits = 3
+                
+            base_model = lgb.LGBMClassifier(n_estimators=50, random_state=42, verbose=-1)
+            calibrated = CalibratedClassifierCV(base_model, method='isotonic', cv=splits)
+            
+            pipeline = Pipeline([
+                ('imputer', SimpleImputer(strategy='median')),
+                ('scaler', StandardScaler()),
+                ('feature_selection', SelectFromModel(lgb.LGBMClassifier(n_estimators=30, random_state=42, verbose=-1))),
+                ('classifier', calibrated)
+            ])
+            pipeline.fit(X, y)
+            models[horizon] = {'pipeline': pipeline, 'features': selected}
 
         try:
             import joblib
-            joblib.dump((self.lgb_model, self.selected_features), model_path)
+            joblib.dump(models, model_path)
+            _load_cached_models.cache_clear()
         except Exception as e:
-            print(f"Could not save trained model to disk: {e}")
+            print(f"Could not save trained models to disk: {e}")
 
-        return self.lgb_model
+        return models
 
     def calculate_psi_drift(self, expected: List[float], actual: List[float], buckets: int = 10) -> float:
         """
@@ -286,8 +321,26 @@ class MomentumMLService:
         )
         base_prob = min(0.95, max(0.05, comp / 100.0))
 
-        model = self.train_or_load_model() if ML_AVAILABLE else None
-        if model is not None:
+        models = self.train_or_load_model() if ML_AVAILABLE else None
+        
+        prob_3d, prob_5d, prob_10d = base_prob, base_prob, base_prob
+        
+        if models is not None and isinstance(models, dict):
+            try:
+                for horizon, prob_var in [('3d', 'prob_3d'), ('5d', 'prob_5d'), ('10d', 'prob_10d')]:
+                    model_dict = models.get(horizon)
+                    if model_dict:
+                        feat_cols = model_dict['features']
+                        x_vec = np.array([[features.get(f, 50.0) for f in feat_cols]])
+                        probs = model_dict['pipeline'].predict_proba(x_vec)
+                        val = float(probs[0][1])
+                        if horizon == '3d': prob_3d = val
+                        elif horizon == '5d': prob_5d = val
+                        elif horizon == '10d': prob_10d = val
+            except Exception:
+                pass
+        elif hasattr(self, 'lgb_model') and self.lgb_model is not None:
+            # Fallback if old model format
             try:
                 x_vec = np.array([[
                     features.get("fundamental_score", 50.0),
@@ -297,21 +350,18 @@ class MomentumMLService:
                     features.get("derivatives_score", 50.0)
                 ]])
                 probs = self.lgb_model.predict_proba(x_vec)
-                base_prob = float(probs[0][1])
+                prob_5d = prob_3d = prob_10d = float(probs[0][1])
             except Exception:
                 pass
 
         # Adjust probabilities using PCA Sequence Embeddings (Phase 5 integration)
         emb_bonus = 0.0
         if sequence_embeddings and len(sequence_embeddings) >= 2:
-            # First component captures price trend velocity, second captures volume expansion vector
             emb_bonus = (sequence_embeddings[0] * 0.02 + sequence_embeddings[1] * 0.015)
 
-        prob_5d = round(min(0.98, max(0.02, base_prob + emb_bonus)), 3)
-        # 3-day horizon leans slightly heavier on shorter technical momentum & volume bursts
-        prob_3d = round(min(0.98, max(0.02, prob_5d + (features.get("technical_score", 50.0) - 50.0) * 0.001)), 3)
-        # 10-day positional horizon leans heavier on fundamental quality and market regime stability
-        prob_10d = round(min(0.98, max(0.02, prob_5d + (features.get("fundamental_score", 50.0) - 50.0) * 0.0015)), 3)
+        prob_5d = round(min(0.98, max(0.02, prob_5d + emb_bonus)), 3)
+        prob_3d = round(min(0.98, max(0.02, prob_3d + emb_bonus)), 3)
+        prob_10d = round(min(0.98, max(0.02, prob_10d + emb_bonus)), 3)
 
         return {
             "prob_3d": prob_3d,

@@ -43,11 +43,9 @@ class PurgedKFoldCV:
                 if train_time <= test_start_time and train_horizon_end >= test_start_time:
                     continue
                     
-                # Embargo condition: Training sample is right after test period
-                if train_time > test_end_time:
-                    # Determine how many indices past the test_end we are
-                    if (idx - test_idx[-1]) <= embargo_samples:
-                        continue
+                # Embargo condition: Training sample is within the 5-day embargo period after test period
+                if test_end_time < train_time <= (test_end_time + np.timedelta64(5, 'D')):
+                    continue
                         
                 train_idx.append(idx)
                 

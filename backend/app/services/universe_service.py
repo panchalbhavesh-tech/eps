@@ -19,11 +19,10 @@ class UniverseService:
             (HistoricalConstituent.removed_date == None) | (HistoricalConstituent.removed_date > as_of_date)
         ).all()
         
-        # Fallback to fetching all current companies if no historical data exists
         if not constituents:
-            from app.infrastructure.models import Company
-            companies = self.db.query(Company).all()
-            return [c.ticker for c in companies]
+            import logging
+            logging.getLogger(__name__).warning(f"No historical constituents found for {index_name} on {as_of_date}. Returning empty list to prevent survivorship bias.")
+            return []
             
         return [c.ticker for c in constituents]
         

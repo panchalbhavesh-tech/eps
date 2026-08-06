@@ -70,45 +70,44 @@ class NseDataService:
                 self.db.commit()
                 return {"status": "Success", "records_synced": count, "date": str(target_date.date())}
         except Exception as e:
-            logger.warning(f"Live Bhavcopy scrape unavailable or rate-limited ({e}). Executing resilient synthetic T+1 fallback estimation from existing DB volume dynamics.")
+            logger.warning(f"Live Bhavcopy scrape unavailable or rate-limited ({e}). Skipping synthetic fallback to prevent noise injection.")
 
-        # Resilient backup: Generate realistic T+1 delivery % records based on database institutional holds so backtest pipelines operate uninterrupted
-        companies = self.db.query(Company).all()
-        for comp in companies:
-            try:
-                deliv_proxy = round(float(comp.promoter_holding or 50.0) * 0.4 + float(comp.fii_holding or 20.0) * 1.5, 2)
-                deliv_proxy = min(92.0, max(25.0, deliv_proxy))
-                
-                record = DailyBhavcopy(
-                    id=uuid.uuid4(),
-                    ticker=comp.ticker.replace(".NS", "").replace(".BO", ""),
-                    trade_date=target_date,
-                    close_price=comp.current_price or 0.0,
-                    volume=0.0,
-                    delivery_pct=deliv_proxy,
-                    known_at=datetime.utcnow()
-                )
-                self.db.add(record)
-                count += 1
-            except Exception:
-                continue
-        try:
-            self.db.commit()
-        except Exception:
-            self.db.rollback()
-
-        return {"status": "Resilient Fallback Synced", "records_synced": count, "date": str(target_date.date())}
+        return {"status": "Bhavcopy sync attempted", "records_synced": count, "date": str(target_date.date())}
 
     def sync_surveillance_watchlists(self) -> Dict[str, Any]:
         """
         Synchronizes SEBI & NSE regulatory Additional Surveillance Measure (ASM) and Graded Surveillance Measure (GSM) lists.
         Equities on these watchlists are automatically barred from momentum BUY recommendations.
         """
-        known_regulatory_flags = [
-            {"ticker": "ADANIENSOL", "list_type": "ASM", "stage": "Stage I"},
-            {"ticker": "SUZLON", "list_type": "ASM", "stage": "Stage II"},
-            {"ticker": "IDEA", "list_type": "GSM", "stage": "Stage I"}
-        ]
+        known_regulatory_flags = []
+        try:
+            session = requests.Session()
+            session.headers.update(self.headers)
+            session.get("https://www.nseindia.com", timeout=10)
+            
+            # ASM
+            asm_resp = session.get("https://www.nseindia.com/api/corporates-asmList", timeout=10)
+            if asm_resp.status_code == 200:
+                for item in asm_resp.json().get("data", []):
+                    if item.get("symbol"):
+                        known_regulatory_flags.append({
+                            "ticker": item["symbol"],
+                            "list_type": "ASM",
+                            "stage": item.get("stage", "Stage I")
+                        })
+            
+            # GSM
+            gsm_resp = session.get("https://www.nseindia.com/api/corporates-gsmList", timeout=10)
+            if gsm_resp.status_code == 200:
+                for item in gsm_resp.json().get("data", []):
+                    if item.get("symbol"):
+                        known_regulatory_flags.append({
+                            "ticker": item["symbol"],
+                            "list_type": "GSM",
+                            "stage": item.get("stage", "Stage I")
+                        })
+        except Exception as e:
+            logger.warning(f"Failed to scrape real ASM/GSM lists: {e}. ")
 
         synced = 0
         for item in known_regulatory_flags:
@@ -139,7 +138,48 @@ class NseDataService:
         """
         Ingests daily NSE institutional Bulk and Block trade disclosures to track large order flow directions.
         """
-        return {"status": "Bulk/Block flows processed successfully", "synced": True}
+        count = 0
+        try:
+            session = requests.Session()
+            session.headers.update(self.headers)
+            session.get("https://www.nseindia.com", timeout=10) # to get cookies
+            
+            resp = session.get("https://www.nseindia.com/api/block-deal", timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                for item in data.get("data", []):
+                    ticker = item.get("symbol", "").strip()
+                    if not ticker: continue
+                    client_name = item.get("clientName", "")
+                    direction = "BUY" if str(item.get("buySell", "")).upper() == "BUY" else "SELL"
+                    quantity = float(item.get("quantity", 0))
+                    price = float(item.get("tradePrice", 0))
+                    date_str = item.get("date", "")
+                    try:
+                        deal_date = datetime.strptime(date_str, "%d-%b-%Y")
+                    except Exception:
+                        deal_date = datetime.utcnow()
+                        
+                    deal = BulkBlockDeal(
+                        id=uuid.uuid4(),
+                        ticker=ticker,
+                        deal_date=deal_date,
+                        deal_type="BLOCK",
+                        client_name=client_name,
+                        direction=direction,
+                        quantity=quantity,
+                        trade_price=price,
+                        known_at=datetime.utcnow()
+                    )
+                    self.db.add(deal)
+                    count += 1
+            
+            self.db.commit()
+            return {"status": "Bulk/Block flows processed successfully", "records_synced": count}
+        except Exception as e:
+            self.db.rollback()
+            logger.warning(f"Failed to fetch bulk/block deals: {e}")
+            return {"status": f"Failed: {e}", "records_synced": count}
 
     def get_delivery_pct(self, ticker: str) -> float:
         """

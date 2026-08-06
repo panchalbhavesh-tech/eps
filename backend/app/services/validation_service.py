@@ -19,7 +19,7 @@ class ValidationService:
     def __init__(self, db: Session):
         self.db = db
         import os
-        self.probation_days = int(os.environ.get("SHADOW_PROBATION_DAYS", 63))
+        self.probation_days = int(os.environ.get("SHADOW_PROBATION_DAYS", 252))
 
     def log_prediction_snapshot(
         self,
@@ -108,7 +108,11 @@ class ValidationService:
         A positive IC (> 0.03) confirms our momentum composite score successfully predicts actual market outperformance.
         """
         try:
-            logs = self.db.query(ScorePredictionLog).filter(ScorePredictionLog.realized_5d_return != None).all()
+            cutoff = datetime.utcnow() - timedelta(days=60)
+            logs = self.db.query(ScorePredictionLog).filter(
+                ScorePredictionLog.realized_5d_return != None,
+                ScorePredictionLog.date_evaluated >= cutoff
+            ).all()
             if not logs or len(logs) < 15:
                 return {"status": "Incomplete sample size for statistical IC", "mean_ic_5d": None, "is_valid": False}
 

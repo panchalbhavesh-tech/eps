@@ -13,14 +13,28 @@ class PortfolioConstructionService:
     def __init__(self, db=None):
         self.db = db
 
-    def get_hrp_weights(self, cov_matrix: pd.DataFrame) -> pd.Series:
+    def get_hrp_weights(self, returns: pd.DataFrame = None, cov_matrix: pd.DataFrame = None) -> pd.Series:
         """
         Calculates Hierarchical Risk Parity (HRP) weights from a covariance matrix.
         Using Marcos Lopez de Prado's algorithm.
         """
+        if returns is not None and not returns.empty:
+            try:
+                from sklearn.covariance import LedoitWolf
+                # Apply true Ledoit-Wolf optimal shrinkage to the historical returns
+                lw = LedoitWolf().fit(returns.values)
+                # Annualize the shrunk covariance
+                shrunk_cov = lw.covariance_ * 252
+                cov_matrix = pd.DataFrame(shrunk_cov, index=returns.columns, columns=returns.columns)
+            except ImportError:
+                cov_matrix = returns.cov() * 252
+        elif cov_matrix is None:
+            raise ValueError("Either returns or cov_matrix must be provided")
+
         corr = self._cov_to_corr(cov_matrix)
         dist = np.sqrt(0.5 * (1 - corr).clip(0, 2))
-        link = linkage(squareform(dist.values), method='single')
+        # Use ward linkage per Lopez de Prado's recommendation for HRP
+        link = linkage(squareform(dist.values), method='ward')
         sort_ix = self._get_quasi_diag(link)
         sort_ix = corr.index[sort_ix].tolist()
         df0 = corr.loc[sort_ix, sort_ix]
@@ -55,7 +69,9 @@ class PortfolioConstructionService:
             # Normalize the rest
             non_violating_stocks = w.index[~sectors.isin(violating_sectors)].intersection(w.index)
             if len(non_violating_stocks) == 0:
-                break # Can't redistribute if everything is violating (unlikely unless few sectors)
+                # Can't redistribute. Normalize existing to 1.0 to prevent cash drag
+                w = w / w.sum()
+                break 
                 
             current_sum = w.sum()
             if current_sum < 1.0:

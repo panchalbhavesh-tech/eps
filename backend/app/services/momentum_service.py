@@ -107,14 +107,55 @@ class MomentumService:
         high52w_proximity = (current_price / high_52w) * 100 if high_52w > 0 else 0.0
         relative_volume = (latest_vol / vol_20d_avg) if vol_20d_avg > 0 else 1.0
 
-        # Fundamental Metrics from DB
-        roe = float(company.roe) if company.roe is not None else 0.0
-        roce = float(company.roce) if company.roce is not None else roe
-        fin_health = float(company.financial_health_score) if company.financial_health_score is not None else 50.0
+        # CRITICAL #1: Point-in-Time Fundamentals & Release Lag Mitigation
+        from app.infrastructure.models import FundamentalSnapshot
+        roe, roce, fin_health, de_ratio, pe_ratio = 0.0, 0.0, 50.0, 1.0, 30.0
         
-        # Invert Debt to Equity and PE ratio for ranking (lower debt & fair PE ranks higher)
-        de_ratio = float(company.debt_to_equity) if company.debt_to_equity is not None else 1.0
-        pe_ratio = float(company.pe_ratio) if (company.pe_ratio is not None and company.pe_ratio > 0) else 30.0
+        # Try to get the latest snapshot from our DB
+        snapshot = self.db.query(FundamentalSnapshot).filter(
+            FundamentalSnapshot.ticker == company.ticker
+        ).order_by(FundamentalSnapshot.trade_date.desc()).first()
+        
+        if snapshot:
+            roe = float(snapshot.roe or 0.0)
+            de_ratio = float(snapshot.debt_to_equity or 1.0)
+            pe_ratio = float(snapshot.pe_ratio or 30.0)
+            roce = roe
+        else:
+            print(f"WARNING: No PIT FundamentalSnapshot found for {company.ticker}. Falling back to live yfinance data (Lookahead Bias).")
+            try:
+                yf_ticker = f"{company.ticker}.NS" if not company.ticker.endswith((".NS", ".BO")) else company.ticker
+                tk = yf.Ticker(yf_ticker)
+                
+                financials = tk.financials
+                bs = tk.balance_sheet
+                
+                if not financials.empty and not bs.empty:
+                    latest_fin = financials.iloc[:, 0]
+                    latest_bs = bs.iloc[:, 0]
+                    
+                    net_income = latest_fin.get('Net Income', 0)
+                    total_equity = latest_bs.get('Stockholders Equity', 1)
+                    total_debt = latest_bs.get('Total Debt', 0)
+                    
+                    roe = float(net_income / total_equity) if total_equity > 0 else 0.0
+                    de_ratio = float(total_debt / total_equity) if total_equity > 0 else 1.0
+                    roce = roe # Proxy ROCE
+                    
+                    # Fetch trailing PE safely
+                    info = tk.info
+                    pe_ratio = float(info.get('trailingPE', company.pe_ratio or 30.0))
+                else:
+                    roe = float(company.roe or 0.0)
+                    pe_ratio = float(company.pe_ratio or 30.0)
+                    de_ratio = float(company.debt_to_equity or 1.0)
+                    roce = float(company.roce or roe)
+            except Exception:
+                roe = float(company.roe or 0.0)
+                roce = float(company.roce or roe)
+                fin_health = float(company.financial_health_score or 50.0)
+                de_ratio = float(company.debt_to_equity or 1.0)
+                pe_ratio = float(company.pe_ratio or 30.0)
 
         # Phase 2: Smart Money & Derivatives factor calculation with native NSE Bhavcopy T+1 Delivery %
         from app.services.nse_data_service import NseDataService
@@ -225,7 +266,7 @@ class MomentumService:
         tech_cols = ['dma200_dist_pct', 'high52w_proximity', 'relative_volume', 'rsi', 'adx']
         fund_cols = ['roe', 'roce', 'fin_health', 'de_score', 'pe_score']
         smart_cols = ['smart_money_val', 'inst_holding']
-        deriv_cols = ['derivatives_val', 'relative_volume']
+        deriv_cols = ['derivatives_val']
 
         for col in tech_cols + fund_cols + smart_cols + deriv_cols:
             m_df[f"{col}_rank"] = m_df[col].rank(pct=True, ascending=True, method='average') * 100.0
@@ -235,7 +276,8 @@ class MomentumService:
         m_df['fundamental_score'] = m_df[[f"{c}_rank" for c in fund_cols]].mean(axis=1)
         m_df['smart_money_score'] = m_df[[f"{c}_rank" for c in smart_cols]].mean(axis=1)
         m_df['derivatives_score'] = m_df[[f"{c}_rank" for c in deriv_cols]].mean(axis=1)
-        m_df['regime_score'] = regime_score
+        # Regime alignment proxy: market regime score scaled by stock's distance to 200DMA direction
+        m_df['regime_score'] = (regime_score * np.sign(m_df['dma200_dist_pct'])).rank(pct=True, ascending=True) * 100.0
 
         # Composite Score incorporating Phase 2 factors dynamically
         from app.services.weight_learning_service import WeightLearningService
@@ -283,7 +325,7 @@ class MomentumService:
             prob_gain_5d = multi_probs["prob_5d"]
             prob_gain_10d = multi_probs["prob_10d"]
             
-            comp_score = round(0.55 * comp_score + 0.45 * (prob_gain_5d * 100.0), 2)
+            comp_score = round(comp_score, 2)
             cur_price = float(row['current_price'])
             atr = float(row['latest_atr'])
             rel_vol = float(row['relative_volume'])
@@ -463,10 +505,9 @@ class MomentumService:
             if returns.empty:
                 return
                 
-            cov_matrix = returns.cov() * 252 # Annualized covariance
             
             pcs = PortfolioConstructionService(self.db)
-            hrp_weights = pcs.get_hrp_weights(cov_matrix)
+            hrp_weights = pcs.get_hrp_weights(returns=returns)
             
             # Apply sector constraints (max 25% per sector)
             final_weights = pcs.apply_sector_constraints(hrp_weights, sectors, max_sector_weight=0.25)

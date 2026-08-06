@@ -20,10 +20,18 @@ def get_current_user(request: Request, db: Session) -> Optional[User]:
         
     token = auth_header.split(" ")[1]
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        from jose import ExpiredSignatureError
+        payload = jwt.decode(
+            token, 
+            settings.JWT_SECRET, 
+            algorithms=[settings.JWT_ALGORITHM],
+            options={"verify_exp": True}
+        )
         user_id = payload.get("sub")
         if user_id is None:
             return None
+    except ExpiredSignatureError:
+        return None
     except JWTError:
         return None
         

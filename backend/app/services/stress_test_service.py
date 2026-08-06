@@ -11,7 +11,10 @@ class StressTestService:
         self.scenarios = {
             "COVID_Crash": ("2020-02-19", "2020-03-23"),
             "GFC_Lehman": ("2008-09-15", "2009-03-09"),
-            "Taper_Tantrum": ("2013-05-22", "2013-08-30")
+            "Taper_Tantrum": ("2013-05-22", "2013-08-30"),
+            "Demonetization_India": ("2016-11-08", "2016-12-26"),
+            "ILFS_Crisis": ("2018-08-28", "2018-10-31"),
+            "Adani_Hindenburg": ("2023-01-24", "2023-02-28")
         }
 
     def run_stress_test(self, current_portfolio_weights: Dict[str, float], historical_data: pd.DataFrame) -> Dict[str, Any]:

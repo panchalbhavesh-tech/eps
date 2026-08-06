@@ -228,8 +228,17 @@ class Query:
     @strawberry.field
     def company(self, info: Info[Context, None], id: str) -> Optional[CompanyType]:
         from app.infrastructure.models import Company, Prediction, EarningsReport
+        from sqlalchemy.orm import selectinload
         db = info.context.db
-        c = db.query(Company).filter(Company.id == id).first()
+        c = db.query(Company).options(
+            selectinload(Company.predictions),
+            selectinload(Company.earnings_reports),
+            selectinload(Company.event_studies),
+            selectinload(Company.backtests),
+            selectinload(Company.technical_snapshots),
+            selectinload(Company.ai_reports),
+            selectinload(Company.momentum_signals)
+        ).filter(Company.id == id).first()
         if not c:
             return None
             

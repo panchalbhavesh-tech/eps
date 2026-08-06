@@ -48,8 +48,8 @@ class RiskEngine:
                 max_dd = np.min(drawdown) * 100.0 if len(drawdown) > 0 else 0.0
 
                 # Determine dynamic threshold using regime
-                from app.services.momentum_service import MomentumMLService
-                ml_svc = MomentumMLService(self.db)
+                from app.services.momentum_service import MomentumService
+                ml_svc = MomentumService(self.db)
                 regime = ml_svc.get_market_regime()
                 regime_status = regime.get("status", "Neutral")
                 
@@ -61,10 +61,13 @@ class RiskEngine:
                 # Compute CVaR as additional check
                 sorted_rets = np.sort(returns)
                 var_95_idx = int(0.05 * len(sorted_rets))
-                cvar_95 = np.mean(sorted_rets[:var_95_idx]) * 100.0 if var_95_idx > 0 else 0.0
+                if len(sorted_rets) >= 30 and var_95_idx > 0:
+                    cvar_95 = np.mean(sorted_rets[:var_95_idx]) * 100.0
+                else:
+                    cvar_95 = max_dd # Fallback to max_dd if sample too small for robust CVaR
                 
                 # If CVaR is worse than dynamic threshold OR max drawdown is worse, kill switch
-                if max_dd < dynamic_threshold or (cvar_95 < dynamic_threshold and len(returns) >= 20):
+                if max_dd < dynamic_threshold or cvar_95 < dynamic_threshold:
                     self._kill_switch_active = (True, f"Emergency Kill Switch Tripped: Max Drawdown ({max_dd:.1f}%) or CVaR ({cvar_95:.1f}%) breached dynamic safety boundary ({dynamic_threshold}%).")
                     return self._kill_switch_active
         except Exception as e:

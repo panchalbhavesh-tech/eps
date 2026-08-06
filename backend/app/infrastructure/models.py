@@ -238,6 +238,8 @@ class MomentumSignal(Base):
 
 class DailyBhavcopy(Base):
     __tablename__ = "daily_bhavcopy"
+    from sqlalchemy import UniqueConstraint
+    __table_args__ = (UniqueConstraint('ticker', 'trade_date', name='uq_ticker_trade_date'),)
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     ticker = Column(String, index=True, nullable=False)
     trade_date = Column(DateTime, nullable=False, index=True)
@@ -379,3 +381,18 @@ class HypothesisSignal(Base):
     rank_percentile = Column(Float, nullable=True)
     direction = Column(String, nullable=False) # 'LONG' or 'SHORT'
     hypothesis = relationship("ResearchHypothesis")
+
+
+class FundamentalSnapshot(Base):
+    __tablename__ = "fundamental_snapshots"
+    from sqlalchemy import UniqueConstraint
+    __table_args__ = (UniqueConstraint('ticker', 'trade_date', name='uq_fund_snapshot_ticker_trade_date'),)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ticker = Column(String, index=True, nullable=False)
+    trade_date = Column(DateTime, nullable=False, index=True)
+    roe = Column(Float, nullable=True)
+    debt_to_equity = Column(Float, nullable=True)
+    pe_ratio = Column(Float, nullable=True)
+    revenue = Column(Float, nullable=True)
+    net_income = Column(Float, nullable=True)
+    captured_at = Column(DateTime, default=datetime.utcnow)

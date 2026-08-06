@@ -32,6 +32,7 @@ class IntensiveBacktestEngine:
         # 1. Fetch historical stock OHLCV data
         df = self.quant.fetch_historical_ohlcv(ticker, years=years)
         if df.empty or len(df) < 20:
+            print(f"[{ticker}] WARNING: Survivorship Bias Alert. Insufficient historical data. Ticker may be newly listed or delisted.")
             return {
                 "ticker": ticker,
                 "status": f"Insufficient historical OHLCV rows ({len(df)} bars found, minimum 20 required)",
@@ -110,9 +111,7 @@ class IntensiveBacktestEngine:
         entry_date = None
         
         # Track ML classification accuracy over 5-day horizon
-        ml_correct_predictions = 0
-        ml_total_predictions = 0
-        brier_sum = 0.0
+        prediction_ledger = []
 
         # Step through historical bars after dynamic warm-up window
         start_idx = min(50, max(15, len(df) // 4))
@@ -131,28 +130,21 @@ class IntensiveBacktestEngine:
             # Predict 5-day calibrated gain probability via Phase 3 ML Service
             prob_gain = self.ml_service.predict_gain_probability({
                 "technical_score": tech_score,
-                "fundamental_score": 70.0,  # Proxy institutional benchmark
+                "fundamental_score": 50.0,  # Neutral prior without DB lookups
                 "regime_score": 65.0 if cur_price >= sma50 else 35.0,
                 "smart_money_score": 75.0 if rel_vol > 1.2 else 50.0,
                 "derivatives_score": 70.0 if rel_vol > 1.5 else 50.0
             })
 
-            # Check actual 5-day forward return for ML calibration hit rate
-            future_price_5d = df.iloc[i + 5]['Close']
-            actual_gain = 1 if future_price_5d > cur_price else 0
-            
             if abs(prob_gain - 0.50) >= 0.05:  # Confident predictions only
-                ml_total_predictions += 1
-                if (prob_gain > 0.50 and actual_gain == 1) or (prob_gain < 0.50 and actual_gain == 0):
-                    ml_correct_predictions += 1
-                brier_sum += (prob_gain - actual_gain) ** 2
+                prediction_ledger.append((i, prob_gain, cur_price))
 
             # Trading rules: BUY on bullish alignment & probability >= 0.53
             if not in_position and cur_price > sma50 and (prob_gain >= 0.53 or rel_vol >= 1.05):
                 in_position = True
-                entry_price = cur_price
+                entry_price = df.iloc[i + 1]['Open'] * 1.001 # Includes 0.1% entry slippage
                 stop_loss = entry_price - (2.0 * atr)
-                entry_date = df.index[i]
+                entry_date = df.index[i + 1]
             elif in_position:
                 # Update trailing stop loss if price advances
                 new_stop = cur_price - (2.0 * atr)
@@ -161,11 +153,11 @@ class IntensiveBacktestEngine:
                 
                 # EXIT on trailing stop triggered or bearish momentum reversal
                 if cur_bar['Low'] <= stop_loss or cur_price < sma50:
-                    exit_price = stop_loss if cur_bar['Low'] <= stop_loss else cur_price
-                    # Calculate net trade return minus dynamic slippage and Indian market friction
-                    volatility = (df.iloc[max(0, i-14):i+1]['High'] - df.iloc[max(0, i-14):i+1]['Low']).mean() / cur_price
-                    transaction_cost = self.quant.estimate_transaction_cost(exit_price, cur_bar['Volume'], vol_avg, volatility)
-                    total_friction = (transaction_cost * 2 * 100.0) # Round trip %
+                    raw_exit = stop_loss if cur_bar['Low'] <= stop_loss else cur_price
+                    exit_price = raw_exit * 0.999 # Includes 0.1% exit slippage
+                    
+                    # Flat 0.20% Indian market STT/brokerage friction round-trip
+                    total_friction = 0.20 
                     
                     trade_ret = (((exit_price - entry_price) / entry_price) * 100.0) - total_friction
                     holding_days = max(1, (df.index[i] - entry_date).days if entry_date else (i - 5))
@@ -176,6 +168,19 @@ class IntensiveBacktestEngine:
                         "net_return_pct": trade_ret
                     })
                     in_position = False
+
+        # Post-hoc vectorized pass to calculate Brier score and ML hit rate
+        ml_correct_predictions = 0
+        ml_total_predictions = len(prediction_ledger)
+        brier_sum = 0.0
+
+        for i_idx, prob, price in prediction_ledger:
+            future_price_5d = df.iloc[i_idx + 5]['Close']
+            actual_gain = 1 if future_price_5d > price else 0
+            
+            if (prob > 0.50 and actual_gain == 1) or (prob < 0.50 and actual_gain == 0):
+                ml_correct_predictions += 1
+            brier_sum += (prob - actual_gain) ** 2
 
         # Compile portfolio risk & accuracy statistics
         total_trades = len(trades)

@@ -3,6 +3,8 @@ from sqlalchemy.exc import IntegrityError
 from app.infrastructure.database import SessionLocal
 from app.services.prediction_service import PredictionService
 from app.services.quant_service import QuantService
+from app.services.technical_indicator_service import TechnicalIndicatorService
+from app.services.event_study_service import EventStudyService
 from app.services.ai_analyst_service import AIAnalystService
 from app.services.nse_service import NSEService
 from app.infrastructure.models import (
@@ -258,18 +260,23 @@ def populate_companies_data_task():
 
     db = SessionLocal()
     try:
-        companies = db.query(Company).filter(Company.sector == "NSE").all()
+        company_ids = [c.id for c in db.query(Company.id).filter(Company.sector == "NSE").all()]
         updated = 0
-        for company in companies:
-            if company.current_price not in (0, 0.0, None) and company.market_cap not in (0, 0.0, None) and company.q4_revenue not in (0, 0.0, None) and company.q4_date is not None:
-                continue
+        for cid in company_ids:
             try:
+                company = db.query(Company).filter(Company.id == cid).with_for_update(skip_locked=True).first()
+                if not company:
+                    continue
+                if company.current_price not in (0, 0.0, None) and company.market_cap not in (0, 0.0, None) and company.q4_revenue not in (0, 0.0, None) and company.q4_date is not None:
+                    db.rollback()
+                    continue
+                
                 enrich_single_company(company, db)
                 db.commit()
                 updated += 1
                 time.sleep(1.5)
             except Exception as e:
-                print(f"Failed to populate data for {company.ticker}: {e}")
+                print(f"Failed to populate data for company {cid}: {e}")
                 db.rollback()
                 
         return f"Populated data for {updated} companies."
@@ -325,21 +332,23 @@ def generate_deep_research_report_task(company_id: str):
             print(f"Failed to populate info fields for {company.ticker}: {e}")
         
         # 1. Technicals
+        tech_svc = TechnicalIndicatorService()
         techs = {}
         if not df.empty:
-            techs = quant.calculate_technicals(df)
+            techs = tech_svc.calculate_technicals(df)
             if techs:
                 db.query(TechnicalSnapshot).filter(TechnicalSnapshot.company_id == company.id).delete()
                 tech_snap = TechnicalSnapshot(company_id=company.id, **techs)
                 db.add(tech_snap)
         
         # 2. Event Study & Backtests
+        event_svc = EventStudyService()
         backtests = []
         if not df.empty:
             dates = [company.upcoming_date] if company.upcoming_date else []
             for d in dates:
                 if d:
-                    es = quant.calculate_event_study(df, d)
+                    es = event_svc.calculate_event_study(df, d)
                     if es:
                         db.query(EventStudyResult).filter(EventStudyResult.company_id == company.id).delete()
                         es_db = EventStudyResult(
@@ -599,9 +608,6 @@ def evaluate_single_hypothesis_task(hypothesis_id: str):
 def run_automated_hypothesis_research_task():
     """Worker task: runs scheduled FSM lifecycle transitions and deploys Gemini AI to generate new orthogonal hypotheses."""
     from app.services.hypothesis_service import HypothesisService
-    from app.services.ai_analyst_service import AIAnalystService
-    from app.infrastructure.models import ResearchHypothesis
-    import re
     
     db = SessionLocal()
     try:
@@ -610,61 +616,9 @@ def run_automated_hypothesis_research_task():
         res = svc.check_and_evolve_all_hypotheses()
         
         # 2. Autonomous AI Alpha Proposal if live stream is low
-        active_count = db.query(ResearchHypothesis).filter(
-            ResearchHypothesis.current_stage.in_(["DRAFT_HYPOTHESIS", "OUT_OF_SAMPLE_SHADOW", "LIVE_ALPHA_STREAM"])
-        ).count()
-        
-        TARGET_PIPELINE_DEPTH = 15
-        ai_msg = []
-        
-        if active_count < TARGET_PIPELINE_DEPTH:
-            ai_svc = AIAnalystService()
-            for _ in range(TARGET_PIPELINE_DEPTH - active_count):
-                failed = db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage == "ARCHIVE_FAILED").order_by(ResearchHypothesis.created_at.desc()).limit(50).all()
-                active = db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage.in_(["DRAFT_HYPOTHESIS", "OUT_OF_SAMPLE_SHADOW", "LIVE_ALPHA_STREAM"])).order_by(ResearchHypothesis.created_at.desc()).limit(50).all()
-                
-                failed_list = [{"name": f.name, "alpha_expression": f.alpha_expression, "decommission_reason": f.decommission_reason} for f in failed]
-                active_list = [{"name": a.name, "alpha_expression": a.alpha_expression} for a in active]
-                
-                try:
-                    proposal = ai_svc.generate_orthogonal_hypothesis(failed_list, active_list)
-                except Exception as e:
-                    ai_msg.append(f"AI Generation halted: {e}")
-                    break
-                    
-                if proposal and proposal.get("name"):
-                    expr = proposal.get("alpha_expression", "")
-                    normalized = re.sub(r'\s+', '', expr.lower())
-                    
-                    # Deduplication check
-                    dup = db.query(ResearchHypothesis).filter(ResearchHypothesis.normalized_expression == normalized).first()
-                    if dup:
-                        ai_msg.append(f"Skipped duplicate expression: {expr}")
-                        continue
-
-                    reg = svc.register_hypothesis(
-                        name=proposal["name"],
-                        economic_mechanism=proposal["economic_mechanism"],
-                        economic_rationale_text=proposal["economic_rationale_text"],
-                        alpha_expression=expr,
-                        author="GEMINI_AI_QUANT",
-                        target_universe="NIFTY500",
-                        holding_horizon_days=int(proposal.get("holding_horizon_days", 5))
-                    )
-                    
-                    if reg.get("status") == "Success":
-                        hyp_id = reg["hypothesis_id"]
-                        # Set normalized expression
-                        new_hyp = db.query(ResearchHypothesis).filter(ResearchHypothesis.id == hyp_id).first()
-                        new_hyp.normalized_expression = normalized
-                        db.commit()
+        ai_action = svc.execute_autonomous_ai_research_cycle()
                         
-                        eval_res = svc.evaluate_hypothesis(hyp_id)
-                        ai_msg.append(f"Generated {proposal['name']}: {eval_res.get('stage')} (DSR: {eval_res.get('deflated_sharpe')})")
-                    else:
-                        ai_msg.append(f"Proposal skipped: {reg.get('message')}")
-                        
-        return f"Automated QHLM FSM Research Cycle complete: {res} | AI Action: {' | '.join(ai_msg)}"
+        return f"Automated QHLM FSM Research Cycle complete: {res} | AI Action: {ai_action}"
     finally:
         db.close()
 
@@ -689,19 +643,25 @@ def generate_live_signals_task():
         companies = db.query(Company).limit(50).all()
         tickers = [c.ticker for c in companies]
         
-        # Load recent bars for rolling calcs
-        rows = db.query(DailyBhavcopy).filter(DailyBhavcopy.ticker.in_(tickers)).order_by(DailyBhavcopy.trade_date.asc()).all()
-        if not rows:
-            return "No price data."
+        # Load recent bars for rolling calcs using LIVE intraday 5m data
+        import yfinance as yf
+        yf_tickers = [f"{t}.NS" for t in tickers]
+        df_yf = yf.download(yf_tickers, period="5d", interval="5m", progress=False)
+        
+        if df_yf.empty:
+            return "No live price data from yfinance."
             
-        df = pd.DataFrame([{
-            "Date": r.trade_date,
-            "Ticker": r.ticker,
-            "close": r.close_price,
-            "volume": r.volume,
-            "high": r.high_price,
-            "low": r.low_price
-        } for r in rows])
+        # Reshape to match the expected multi-index: ['Date', 'Ticker']
+        if isinstance(df_yf.columns, pd.MultiIndex):
+            df = df_yf.stack(level=1, future_stack=True).reset_index()
+        else:
+            df = df_yf.reset_index()
+            df['Ticker'] = yf_tickers[0]
+            
+        date_col = 'Datetime' if 'Datetime' in df.columns else 'Date'
+        df.rename(columns={date_col: 'Date'}, inplace=True)
+        df['Ticker'] = df['Ticker'].str.replace('.NS', '', regex=False)
+        df.rename(columns={'Close': 'close', 'Volume': 'volume', 'High': 'high', 'Low': 'low', 'Open': 'open'}, inplace=True)
         df.set_index(['Date', 'Ticker'], inplace=True)
         df.sort_index(inplace=True)
         
@@ -711,6 +671,36 @@ def generate_live_signals_task():
         df['volatility_20'] = df['volatility_20d']
         df['high_low_spread_10d'] = (df['high'] - df['low']).groupby(level='Ticker').transform(lambda x: x.rolling(10).mean())
         df['adv_10'] = grouped['volume'].transform(lambda x: x.rolling(10).mean())
+        
+        # Fetch daily data for daily ATR calculations to align with backtest
+        df_daily = yf.download(yf_tickers, period="30d", interval="1d", progress=False)
+        if not df_daily.empty:
+            if isinstance(df_daily.columns, pd.MultiIndex):
+                df_daily = df_daily.stack(level=1, future_stack=True).reset_index()
+            else:
+                df_daily = df_daily.reset_index()
+                df_daily['Ticker'] = yf_tickers[0]
+            
+            date_col_daily = 'Datetime' if 'Datetime' in df_daily.columns else 'Date'
+            df_daily.rename(columns={date_col_daily: 'Date', 'High': 'high', 'Low': 'low', 'Close': 'close'}, inplace=True)
+            df_daily['Ticker'] = df_daily['Ticker'].str.replace('.NS', '', regex=False)
+            
+            # Calculate ATR for daily data
+            df_daily.set_index(['Date', 'Ticker'], inplace=True)
+            df_daily.sort_index(inplace=True)
+            daily_grouped = df_daily.groupby(level='Ticker')
+            df_daily['prev_close'] = daily_grouped['close'].shift(1)
+            df_daily['tr1'] = df_daily['high'] - df_daily['low']
+            df_daily['tr2'] = (df_daily['high'] - df_daily['prev_close']).abs()
+            df_daily['tr3'] = (df_daily['low'] - df_daily['prev_close']).abs()
+            df_daily['true_range'] = df_daily[['tr1', 'tr2', 'tr3']].max(axis=1)
+            df_daily['atr_14'] = daily_grouped['true_range'].transform(lambda x: x.rolling(14).mean())
+            
+            # Get latest daily ATR per ticker
+            latest_atr = df_daily['atr_14'].groupby(level='Ticker').last()
+            
+            # Map back to intraday dataframe
+            df['atr_14'] = df.index.get_level_values('Ticker').map(latest_atr)
         
         last_date = df.index.get_level_values('Date').max()
         
@@ -749,5 +739,93 @@ def generate_live_signals_task():
                 
         db.commit()
         return f"Generated {generated} live signals for {last_date}"
+    finally:
+        db.close()
+
+
+@shared_task
+def capture_fundamental_snapshots_task():
+    """Nightly task to capture point-in-time fundamentals for all active companies."""
+    from app.infrastructure.models import FundamentalSnapshot
+    import yfinance as yf
+    db = SessionLocal()
+    try:
+        companies = db.query(Company).filter(Company.sector == "NSE").all()
+        captured = 0
+        trade_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        for comp in companies:
+            try:
+                yf_ticker = f"{comp.ticker}.NS" if not comp.ticker.endswith((".NS", ".BO")) else comp.ticker
+                tk = yf.Ticker(yf_ticker)
+                
+                financials = tk.financials
+                bs = tk.balance_sheet
+                
+                roe, de_ratio, pe_ratio, rev, net_inc = 0.0, 1.0, 30.0, 0.0, 0.0
+                
+                if not financials.empty and not bs.empty:
+                    latest_fin = financials.iloc[:, 0]
+                    latest_bs = bs.iloc[:, 0]
+                    
+                    net_inc = latest_fin.get('Net Income', 0)
+                    rev = latest_fin.get('Total Revenue', 0)
+                    total_equity = latest_bs.get('Stockholders Equity', 1)
+                    total_debt = latest_bs.get('Total Debt', 0)
+                    
+                    roe = float(net_inc / total_equity) if total_equity > 0 else 0.0
+                    de_ratio = float(total_debt / total_equity) if total_equity > 0 else 1.0
+                    
+                    info = tk.info
+                    pe_ratio = float(info.get('trailingPE', comp.pe_ratio or 30.0))
+                else:
+                    continue
+                    
+                snap = FundamentalSnapshot(
+                    ticker=comp.ticker,
+                    trade_date=trade_date,
+                    roe=roe,
+                    debt_to_equity=de_ratio,
+                    pe_ratio=pe_ratio,
+                    revenue=float(rev),
+                    net_income=float(net_inc)
+                )
+                db.add(snap)
+                try:
+                    db.commit()
+                    captured += 1
+                except IntegrityError:
+                    db.rollback()
+            except Exception as e:
+                db.rollback()
+                print(f"Failed to capture snapshot for {comp.ticker}: {e}")
+                
+        return f"Captured {captured} fundamental snapshots for {trade_date.date()}"
+    finally:
+        db.close()
+
+
+@shared_task
+def run_weekly_portfolio_stress_test_task():
+    from app.services.stress_test_service import StressTestService
+    db = SessionLocal()
+    try:
+        svc = StressTestService(db)
+        # Using placeholder for portfolio weights for testing
+        # Actual implementation would pull active weights from DB
+        weights = {"HDFCBANK.NS": 0.5, "RELIANCE.NS": 0.5}
+        res = svc.run_stress_test(weights)
+        return f"Weekly Portfolio Stress Test: {res}"
+    finally:
+        db.close()
+
+@shared_task
+def run_weekly_weight_optimization_task():
+    from app.services.weight_learning_service import WeightLearningService
+    db = SessionLocal()
+    try:
+        svc = WeightLearningService(db)
+        res = svc.learn_weights()
+        return f"Weekly Weight Optimization: {res}"
     finally:
         db.close()

@@ -6,7 +6,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
-from app.infrastructure.models import ResearchHypothesis, HypothesisExperiment, DailyBhavcopy, Company
+from app.infrastructure.models import ResearchHypothesis, HypothesisExperiment, DailyBhavcopy, Company, TotalHypothesisTrials
 
 logger = logging.getLogger(__name__)
 
@@ -227,6 +227,14 @@ class HypothesisService:
             df['high_low_spread_10d'] = (df['high'] - df['low']).groupby(level='Ticker').transform(lambda x: x.rolling(10).mean())
             df['adv_10'] = grouped['volume'].transform(lambda x: x.rolling(10).mean())
             
+            # Prevent forward return leakage by strictly segregating in-sample and out-of-sample data
+            if hyp.current_stage == "DRAFT_HYPOTHESIS":
+                cutoff = pd.to_datetime(hyp.created_at or datetime.utcnow()).tz_localize(None)
+                df = df[df.index.get_level_values('Date') <= cutoff].copy()
+            elif hyp.current_stage in ["OUT_OF_SAMPLE_SHADOW", "LIVE_ALPHA_STREAM"]:
+                cutoff = pd.to_datetime(hyp.created_at or datetime.utcnow()).tz_localize(None)
+                df = df[df.index.get_level_values('Date') > cutoff].copy()
+                
             # Forward returns
             horizon = hyp.holding_horizon_days
             df['fwd_ret'] = grouped['close'].transform(lambda x: x.shift(-horizon) / x - 1.0)
@@ -241,18 +249,10 @@ class HypothesisService:
                 
             clean = df.dropna(subset=['factor', 'fwd_ret']).copy()
             
-            # Factor Orthogonalization: Regress out the cross-sectional market mean 
-            # (which proxies the market factor) to obtain pure idiosyncratic alpha.
+            # Factor Orthogonalization: Cross-sectional demeaning to remove the market factor proxy
             def orthogonalize(group):
                 if len(group) > 5:
-                    import statsmodels.api as sm
-                    y = group['factor']
-                    X = sm.add_constant(np.ones(len(y))) # In absence of market return, we remove the mean
-                    try:
-                        res = sm.OLS(y, X).fit()
-                        group['factor'] = res.resid
-                    except:
-                        pass
+                    group['factor'] = group['factor'] - group['factor'].mean()
                 return group
                 
             clean = clean.groupby(level='Date').apply(orthogonalize)
@@ -308,18 +308,20 @@ class HypothesisService:
             mean_ret = float(np.mean(s_arr))
             std_ret = float(np.std(s_arr))
             
-            classic_sharpe = (mean_ret / std_ret) * math.sqrt(252.0 / max(1, hyp.holding_horizon_days)) if std_ret > 0 else 0.0
+            per_period_sharpe = (mean_ret / std_ret) if std_ret > 0 else 0.0
+            classic_sharpe = per_period_sharpe * math.sqrt(252.0 / max(1, hyp.holding_horizon_days))
             
             # Compute skewness and kurtosis of strategy returns
             skew = float(pd.Series(s_arr).skew()) if len(s_arr) > 10 else 0.0
             kurt = float(pd.Series(s_arr).kurtosis()) if len(s_arr) > 10 else 3.0
 
             dsr = self.calculate_deflated_sharpe(
-                classic_sharpe=classic_sharpe,
+                classic_sharpe=per_period_sharpe,
                 total_trials=current_trial_count,
                 sample_length_periods=sample_length,
                 skewness=skew,
-                kurtosis=kurt
+                kurtosis=kurt,
+                annualization_factor=1.0
             )
 
             ic, ic_tstat = self.compute_spearman_ic_stats(all_scores, all_returns)
@@ -455,3 +457,66 @@ class HypothesisService:
             logger.error(f"Error executing FSM evolution cycle: {e}")
             
         return counts
+
+    def execute_autonomous_ai_research_cycle(self) -> str:
+        """
+        Runs the Autonomous AI Alpha Proposal cycle to generate orthogonal hypotheses
+        if the live pipeline is running low.
+        """
+        from app.services.ai_analyst_service import AIAnalystService
+        import re
+        
+        active_count = self.db.query(ResearchHypothesis).filter(
+            ResearchHypothesis.current_stage.in_(["DRAFT_HYPOTHESIS", "OUT_OF_SAMPLE_SHADOW", "LIVE_ALPHA_STREAM"])
+        ).count()
+        
+        TARGET_PIPELINE_DEPTH = 15
+        ai_msg = []
+        
+        if active_count < TARGET_PIPELINE_DEPTH:
+            ai_svc = AIAnalystService()
+            for _ in range(TARGET_PIPELINE_DEPTH - active_count):
+                failed = self.db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage == "ARCHIVE_FAILED").order_by(ResearchHypothesis.created_at.desc()).limit(50).all()
+                active = self.db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage.in_(["DRAFT_HYPOTHESIS", "OUT_OF_SAMPLE_SHADOW", "LIVE_ALPHA_STREAM"])).order_by(ResearchHypothesis.created_at.desc()).limit(50).all()
+                
+                failed_list = [{"name": f.name, "alpha_expression": f.alpha_expression, "decommission_reason": f.decommission_reason} for f in failed]
+                active_list = [{"name": a.name, "alpha_expression": a.alpha_expression} for a in active]
+                
+                try:
+                    proposal = ai_svc.generate_orthogonal_hypothesis(failed_list, active_list)
+                except Exception as e:
+                    ai_msg.append(f"AI Generation halted: {e}")
+                    break
+                    
+                if proposal and proposal.get("name"):
+                    expr = proposal.get("alpha_expression", "")
+                    normalized = re.sub(r'\s+', '', expr.lower())
+                    
+                    # Deduplication check
+                    dup = self.db.query(ResearchHypothesis).filter(ResearchHypothesis.normalized_expression == normalized).first()
+                    if dup:
+                        ai_msg.append(f"Skipped duplicate expression: {expr}")
+                        continue
+
+                    reg = self.register_hypothesis(
+                        name=proposal["name"],
+                        economic_mechanism=proposal["economic_mechanism"],
+                        economic_rationale_text=proposal["economic_rationale_text"],
+                        alpha_expression=expr,
+                        author="GEMINI_AI_QUANT",
+                        target_universe="NIFTY500",
+                        holding_horizon_days=int(proposal.get("holding_horizon_days", 5))
+                    )
+                    
+                    if reg.get("status") == "Success":
+                        hyp_id = reg["hypothesis_id"]
+                        new_hyp = self.db.query(ResearchHypothesis).filter(ResearchHypothesis.id == hyp_id).first()
+                        new_hyp.normalized_expression = normalized
+                        self.db.commit()
+                        
+                        eval_res = self.evaluate_hypothesis(hyp_id)
+                        ai_msg.append(f"Generated {proposal['name']}: {eval_res.get('stage')} (DSR: {eval_res.get('deflated_sharpe')})")
+                    else:
+                        ai_msg.append(f"Proposal skipped: {reg.get('message')}")
+                        
+        return ' | '.join(ai_msg) if ai_msg else "No AI action needed."

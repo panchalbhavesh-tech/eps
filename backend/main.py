@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from contextlib import asynccontextmanager
 from strawberry.fastapi import GraphQLRouter
 from app.graphql.schema import schema
@@ -44,12 +44,47 @@ app = FastAPI(title="QEPS API", lifespan=lifespan)
 graphql_app = GraphQLRouter(schema, context_getter=get_context)
 app.include_router(graphql_app, prefix="/graphql")
 
+import time
+from collections import defaultdict
+from fastapi.responses import JSONResponse
+
+# Simple in-memory rate limiter (100 requests / minute)
+_rate_limits = defaultdict(list)
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    if not request.url.path.startswith("/health"):
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        
+        # Keep only timestamps from the last 60 seconds
+        _rate_limits[client_ip] = [t for t in _rate_limits[client_ip] if now - t < 60]
+        
+        if len(_rate_limits[client_ip]) >= 100:
+            return JSONResponse(status_code=429, content={"detail": "Too Many Requests"})
+            
+        _rate_limits[client_ip].append(now)
+        
+    return await call_next(request)
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
 
-@app.get("/sentiment/{ticker}")
-@app.get("/api/sentiment/{ticker}")
+from fastapi import Depends, HTTPException, Security
+from fastapi.security.api_key import APIKeyHeader
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def get_api_key(api_key_header: str = Security(api_key_header)):
+    # In production this would check against a DB of valid keys
+    if api_key_header == "QEPS-INTERNAL-SECURE-KEY":
+        return api_key_header
+    raise HTTPException(status_code=403, detail="Forbidden")
+
+@app.get("/sentiment/{ticker}", dependencies=[Depends(get_api_key)])
+@app.get("/api/sentiment/{ticker}", dependencies=[Depends(get_api_key)])
 def get_company_sentiment(ticker: str, name: str = "", sector: str = ""):
     from app.services.ai_analyst_service import AIAnalystService
     service = AIAnalystService()
