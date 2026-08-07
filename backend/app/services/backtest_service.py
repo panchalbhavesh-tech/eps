@@ -46,6 +46,29 @@ class IntensiveBacktestEngine:
         if not benchmark_df.empty and len(benchmark_df) > 10:
             nifty_ret_total = ((benchmark_df['Close'].iloc[-1] - benchmark_df['Close'].iloc[0]) / benchmark_df['Close'].iloc[0]) * 100.0
 
+        # Inject FundamentalSnapshots for PIT fundamentals to avoid Lookahead Bias
+        from app.infrastructure.models import FundamentalSnapshot
+        snapshots = pd.read_sql(
+            self.db.query(FundamentalSnapshot).filter(FundamentalSnapshot.ticker == ticker).statement,
+            self.db.bind
+        )
+        if not snapshots.empty:
+            snapshots = snapshots.sort_values('trade_date')
+            snapshots['trade_date_dt'] = pd.to_datetime(snapshots['trade_date']).dt.tz_localize(None)
+            df = df.reset_index()
+            date_col = 'Date' if 'Date' in df.columns else df.columns[0]
+            df[date_col] = pd.to_datetime(df[date_col]).dt.tz_localize(None)
+            
+            df = pd.merge_asof(
+                df.sort_values(date_col), 
+                snapshots[['trade_date_dt', 'roe', 'debt_to_equity', 'pe_ratio']], 
+                left_on=date_col, 
+                right_on='trade_date_dt', 
+                direction='backward'
+            )
+            df.set_index(date_col, inplace=True)
+            df.drop(columns=['trade_date_dt'], inplace=True, errors='ignore')
+
         # 3. Run Event Strategies A-F with Net 0.20% Friction & EV/Profit Factor Formulas
         event_results = self.quant.run_strategy_backtests(df, ticker)
         
@@ -127,13 +150,18 @@ class IntensiveBacktestEngine:
             tech_score = min(99.0, max(10.0, ((cur_price - sma200) / (sma200 if sma200 > 0 else cur_price)) * 300.0 + 50.0)) if not pd.isna(sma200) else 50.0
             rel_vol = cur_bar['Volume'] / vol_avg if vol_avg and vol_avg > 0 else 1.0
             
-            # Predict 5-day calibrated gain probability via Phase 3 ML Service
+            # Extract PIT fundamentals merged earlier, or use neutral defaults
+            pit_roe = float(cur_bar['roe']) if 'roe' in cur_bar and not pd.isna(cur_bar['roe']) else 0.0
+            pit_de = float(cur_bar['debt_to_equity']) if 'debt_to_equity' in cur_bar and not pd.isna(cur_bar['debt_to_equity']) else 1.0
+            pit_pe = float(cur_bar['pe_ratio']) if 'pe_ratio' in cur_bar and not pd.isna(cur_bar['pe_ratio']) else 30.0
+            
+            # Predict 5-day calibrated gain probability via Phase 3 ML Service using RAW features, not pre-aggregated ranks
             prob_gain = self.ml_service.predict_gain_probability({
-                "technical_score": tech_score,
-                "fundamental_score": 50.0,  # Neutral prior without DB lookups
-                "regime_score": 65.0 if cur_price >= sma50 else 35.0,
-                "smart_money_score": 75.0 if rel_vol > 1.2 else 50.0,
-                "derivatives_score": 70.0 if rel_vol > 1.5 else 50.0
+                "raw_roe": pit_roe,
+                "raw_de": pit_de,
+                "raw_pe": pit_pe,
+                "raw_dma200_dist": ((cur_price - sma200) / sma200) if sma200 > 0 else 0.0,
+                "raw_rel_vol": rel_vol
             })
 
             if abs(prob_gain - 0.50) >= 0.05:  # Confident predictions only

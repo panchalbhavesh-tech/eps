@@ -1,0 +1,70 @@
+# QEPS Enterprise Deployment Plan
+
+This document outlines the strategy for deploying the Quantitative Earnings Prediction System (QEPS) to a production environment. Given that this system performs intensive Machine Learning training, high-frequency web scraping, and relational database queries, a **Multi-VPS Architecture** is strongly recommended for production stability. A **Single-VPS Architecture** is also provided as a fallback for staging/testing.
+
+## Architecture Decision
+
+We have decided to proceed with a **Multi-VPS Architecture** to separate web traffic from the database, combined with **GitHub Actions** to handle heavy compute tasks (saving the cost of a dedicated Worker Node).
+
+---
+
+## The GitHub Actions Strategy (Cost Optimization)
+
+To significantly lower your monthly infrastructure costs, we can eliminate the expensive **Worker Node(s)** entirely. Instead of keeping a dedicated 8-vCPU VPS running 24/7 (when it only does heavy ML training or scraping a few times a day), we can offload the Celery worker and scheduler logic to **GitHub Actions**.
+
+### How it Works:
+1. **Scraping & Data Engineering**: GitHub Actions runs a daily cron job (e.g., at 18:00 IST) to scrape the NSE Bhavcopy and fetch Yahoo Finance data, processing it in the cloud.
+2. **Machine Learning Pipeline**: A separate weekly GitHub Actions job executes the heavy LightGBM training and Purged K-Fold CV.
+3. **Data Injection**: The GitHub runner computes all momentum and fundamental scores, then connects to your production Postgres Database to `UPSERT` the final results.
+
+**Cost Savings**: You save \$40-\$80+/month by completely deleting the Worker Node VPS. You only pay for the Web and Data node.
+
+---
+
+## Option A: Multi-VPS Architecture (Web & Data Split)
+
+This architecture splits the core application across 2 distinct nodes for stability, while GitHub Actions handles the compute.
+
+### 1. Node Topology
+
+#### VPS 1: The Web Node (Traffic & API)
+* **Purpose**: Handles all incoming user HTTP/HTTPS traffic.
+* **Services**: 
+  - `nginx` (Reverse Proxy & React Frontend)
+  - `backend` (FastAPI / Uvicorn)
+* **Hardware Profile**: 2-4 vCPUs, 4GB RAM.
+
+#### VPS 2: The Data Node (State & Message Broker)
+* **Purpose**: The source of truth. Needs fast I/O and high memory. 
+* **Services**:
+  - `postgres` (Main Database)
+  - `redis` (Cache layer)
+* **Hardware Profile**: 4-8 vCPUs, 16GB+ RAM, NVMe SSDs.
+* **Note on GitHub Actions**: This node must be configured to accept database connections from GitHub Action Runner IP addresses so they can inject the daily ML results.
+
+### 2. Multi-VPS Interconnection Plan
+
+To securely connect these nodes:
+
+1. **If using the same Cloud Provider (e.g., DigitalOcean, AWS)**:
+   - We will assign the 2 nodes to the same **VPC (Virtual Private Cloud)**.
+   - The Web Node will connect to Postgres/Redis using the internal VPC IP address (e.g., `10.114.0.5`).
+
+2. **If using Mixed Cloud Providers (e.g., Hetzner + AWS)**:
+   - We will install **Tailscale** (a zero-config WireGuard VPN) on both nodes.
+   - Tailscale creates a secure mesh network (e.g., `100.x.y.z` IPs). The Web node will route database/broker traffic through the encrypted Tailscale tunnel.
+
+### 3. Docker Compose Configuration
+We will split your current `docker-compose.yml` into two separate files:
+- `docker-compose.web.yml` (Deployed to VPS 1)
+- `docker-compose.data.yml` (Deployed to VPS 2)
+
+---
+
+## Next Steps
+
+1. Restructure the `docker-compose.yml` configurations based on this architecture.
+2. Write the necessary `.env.production` templates.
+3. Write the necessary `.env.production` templates.
+4. Generate the Nginx SSL / Certbot configuration for secure HTTPS access.
+5. Create a step-by-step shell execution guide (`deployment_runbook.md`) for you to run on the servers.

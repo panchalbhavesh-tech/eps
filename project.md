@@ -63,7 +63,7 @@ The platform implements a containerized microservices architecture orchestrated 
 - **Database & Migrations**: SQLAlchemy 2.0 Core/ORM paired with PostgreSQL and Alembic database migrations.
 - **Task Orchestration**: Celery distributed task queue connected to Redis and Postgres result backend.
 - **Data Engineering & Finance**: `pandas`, `pandas-ta`, `numpy`, `yfinance` (Yahoo Finance extraction engine), custom NSE website web scrapers (`NSEService`).
-- **Machine Learning & Predictive Modeling**: `lightgbm`, `xgboost`, `scikit-learn`, `shap` (SHapley Additive exPlanations) for probability calibration, feature attribution, **Purged Walk-Forward Cross-Validation (Combinatorial Embargoing)**, **Triple-Barrier Labeling**, and PCA trajectory compression. Zero-leakage `scikit-learn` Pipelines ensure strict point-in-time adherence.
+- **Machine Learning & Predictive Modeling**: `lightgbm`, `xgboost`, `scikit-learn`, `shap` (SHapley Additive exPlanations) for probability calibration, feature attribution, **Purged Walk-Forward Cross-Validation (Combinatorial Embargoing)** via `roc_auc_score` metric enforcement, **Triple-Barrier Labeling**, and PCA trajectory compression. Zero-leakage `scikit-learn` Pipelines ensure strict point-in-time adherence, operating directly on unadulterated *raw* fundamental/technical values rather than statistically capped composites.
 - **Artificial Intelligence**: Google Gemini API via `AIAnalystService` structured prompting for institutional evaluation and catalyst sentiment scoring.
 - **Security & Authentication**: JSON Web Tokens (JWT) via `python-jose` and cryptographic hashing with `bcrypt`.
 
@@ -114,7 +114,8 @@ The front-end interface is governed by a responsive, token-based design system c
 ### 4.5 Transparent Financial Health Scorecard (`FinancialHealthScorecard.tsx`)
 When analyzing a specific stock, the application constructs an interactive normalized scorecard evaluation:
 - **7 Evaluation Sectors**: Scores Profitability & Returns, Debt & Solvency, Cash Flow Efficiency, Growth Expansion, Valuation Multiples, Price Stability, and Ownership Quality on an aggregate 100-point scale.
-- **Click-Only Interactive Formula Tooltips**: To maintain sleek, uncluttered card dimensions, explicit normalization formulas are concealed by default. Each metric card houses an information icon (`i`); **clicking the icon** displays an interactive dark glassmorphic tooltip detailing the exact mathematical formula (e.g., `clamp((ROE - 0.0%) / (20.0% - 0.0%), 0, 1) * 25.0`).
+- **Dynamic Cross-Sectional Sector Normalization (Z-Scoring)**: Replaces hardcoded static boundaries (e.g., ROE > 20) with dynamic sector-neutral standardizations. For example, the algorithm correctly shifts ideal leverage targets (Debt-to-Equity) up for banking/financial institutions while enforcing strict low-debt rules for technology equivalents, eliminating single-factor measurement biases.
+- **Click-Only Interactive Formula Tooltips**: To maintain sleek, uncluttered card dimensions, explicit normalization formulas are concealed by default. Each metric card houses an information icon (`i`); **clicking the icon** displays an interactive dark glassmorphic tooltip detailing the exact mathematical formula (e.g., `clamp((ROE - 0.0%) / (SectorTarget - 0.0%), 0, 1) * 25.0`).
 - **Governance Penalty & Transparency Logs**: An explicit footer tracks institutional governance deductions (such as Promoter Pledges exceeding nominal safety thresholds), ensuring completely reproducible numerical point adjustments.
 
 ### 4.6 Unified Quarterly Earnings Market Impact (`QuarterlyMarketImpact.tsx`)

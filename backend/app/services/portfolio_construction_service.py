@@ -33,8 +33,10 @@ class PortfolioConstructionService:
 
         corr = self._cov_to_corr(cov_matrix)
         dist = np.sqrt(0.5 * (1 - corr).clip(0, 2))
+        dist_arr = dist.values.copy()
+        np.fill_diagonal(dist_arr, 0.0)
         # Use ward linkage per Lopez de Prado's recommendation for HRP
-        link = linkage(squareform(dist.values), method='ward')
+        link = linkage(squareform(dist_arr), method='ward')
         sort_ix = self._get_quasi_diag(link)
         sort_ix = corr.index[sort_ix].tolist()
         df0 = corr.loc[sort_ix, sort_ix]
@@ -105,7 +107,7 @@ class PortfolioConstructionService:
         return sort_ix.tolist()
         
     def _get_rec_bipart(self, cov: pd.DataFrame, sort_ix: List[str]) -> pd.Series:
-        w = pd.Series(1, index=sort_ix)
+        w = pd.Series(1.0, index=sort_ix)
         c_items = [sort_ix]
         while len(c_items) > 0:
             c_items = [i[j:k] for i in c_items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]

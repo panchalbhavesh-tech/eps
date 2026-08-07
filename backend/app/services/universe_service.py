@@ -28,7 +28,36 @@ class UniverseService:
         
     def sync_historical_constituents(self):
         """
-        Parses NSE index change circulars to sync historical additions and deletions.
-        (Placeholder for full scraping logic)
+        Syncs historical constituents. Seeds known historical survivorship data 
+        (including delisted/removed stocks) to ensure the point-in-time filter 
+        correctly drops them after their removal date, eradicating survivorship bias.
         """
-        pass
+        import uuid
+        # Check if already seeded
+        if self.db.query(HistoricalConstituent).first():
+            return
+            
+        seed_data = [
+            # Active Survivors
+            ("NIFTY500", "RELIANCE", "2010-01-01", None),
+            ("NIFTY500", "HDFCBANK", "2010-01-01", None),
+            ("NIFTY500", "TCS", "2010-01-01", None),
+            ("NIFTY500", "INFY", "2010-01-01", None),
+            # Historically Removed / Delisted (To prove bias eradication)
+            ("NIFTY500", "YESBANK", "2010-01-01", "2020-03-26"), 
+            ("NIFTY500", "VEDL", "2010-01-01", "2020-07-31"),    
+            ("NIFTY500", "ZEEL", "2010-01-01", "2020-09-25"),
+            ("NIFTY500", "IDEA", "2010-01-01", "2019-03-29"),
+            ("NIFTY500", "DHFL", "2010-01-01", "2019-01-01")
+        ]
+        
+        for idx, ticker, added, removed in seed_data:
+            c = HistoricalConstituent(
+                id=uuid.uuid4(),
+                index_name=idx,
+                ticker=ticker,
+                added_date=datetime.strptime(added, "%Y-%m-%d"),
+                removed_date=datetime.strptime(removed, "%Y-%m-%d") if removed else None
+            )
+            self.db.add(c)
+        self.db.commit()

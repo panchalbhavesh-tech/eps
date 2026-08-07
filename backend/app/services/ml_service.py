@@ -101,7 +101,7 @@ class MomentumMLService:
             return {"status": "Insufficient historical rows for 10-day embargoed CV", "gbm_accuracy": 0.0, "logistic_accuracy": 0.0, "clears_gate": True}
 
         from app.services.purged_cv_service import PurgedKFoldCV
-        from sklearn.metrics import accuracy_score
+        from sklearn.metrics import roc_auc_score
         
         cv = PurgedKFoldCV(n_splits=5, embargo_pct=0.02)
         
@@ -126,7 +126,7 @@ class MomentumMLService:
             ('lr', LogisticRegression(max_iter=300, random_state=42))
         ])
         
-        lr_scores = cv.cross_val_score(df_sorted, feature_cols, target_col, time_col, lr_pipeline, accuracy_score)
+        lr_scores = cv.cross_val_score(df_sorted, feature_cols, target_col, time_col, lr_pipeline, roc_auc_score)
         lr_acc = float(np.nanmean(lr_scores)) if len(lr_scores) > 0 and not np.isnan(np.nanmean(lr_scores)) else 0.5
         
         # LightGBM pipeline
@@ -136,7 +136,7 @@ class MomentumMLService:
             ('gbm', lgb.LGBMClassifier(n_estimators=60, learning_rate=0.05, random_state=42, verbose=-1))
         ])
         
-        gbm_scores = cv.cross_val_score(df_sorted, feature_cols, target_col, time_col, gbm_pipeline, accuracy_score)
+        gbm_scores = cv.cross_val_score(df_sorted, feature_cols, target_col, time_col, gbm_pipeline, roc_auc_score)
         gbm_acc = float(np.nanmean(gbm_scores)) if len(gbm_scores) > 0 and not np.isnan(np.nanmean(gbm_scores)) else 0.5
 
         clears_gate = gbm_acc >= lr_acc or gbm_acc > 0.52
@@ -211,12 +211,21 @@ class MomentumMLService:
                 else:
                     target_5d = 1 if log.realized_5d_return > 2.0 else 0
                 
+                # Point-in-Time lookup for RAW features
+                from app.infrastructure.models import FundamentalSnapshot
+                f_snap = None
+                if ticker:
+                    f_snap = self.db.query(FundamentalSnapshot).filter(
+                        FundamentalSnapshot.ticker == ticker,
+                        FundamentalSnapshot.trade_date <= signal.date_calculated
+                    ).order_by(FundamentalSnapshot.trade_date.desc()).first()
+                
                 data.append({
-                    "fundamental_score": signal.fundamental_score or 50.0,
-                    "technical_score": signal.technical_score or 50.0,
-                    "regime_score": signal.regime_score or 50.0,
-                    "smart_money_score": signal.smart_money_score or 50.0,
-                    "derivatives_score": signal.derivatives_score or 50.0,
+                    "raw_roe": f_snap.roe if f_snap and f_snap.roe is not None else 0.0,
+                    "raw_de": f_snap.debt_to_equity if f_snap and f_snap.debt_to_equity is not None else 1.0,
+                    "raw_pe": f_snap.pe_ratio if f_snap and f_snap.pe_ratio is not None else 30.0,
+                    "raw_rel_vol": 1.0, # Approximate for historical logs
+                    "raw_dma200_dist": (signal.technical_score - 50.0) / 100.0 if signal.technical_score else 0.0, # Proxy if we don't have raw tech snapshot easily
                     "target_3d": target_3d,
                     "target_5d": target_5d,
                     "target_10d": target_10d,
@@ -230,8 +239,8 @@ class MomentumMLService:
         df = pd.DataFrame(data)
         
         candidate_features = [
-            'fundamental_score', 'technical_score', 'regime_score',
-            'smart_money_score', 'derivatives_score'
+            'raw_roe', 'raw_de', 'raw_pe',
+            'raw_rel_vol', 'raw_dma200_dist'
         ]
         
         from sklearn.pipeline import Pipeline
@@ -331,26 +340,12 @@ class MomentumMLService:
                     model_dict = models.get(horizon)
                     if model_dict:
                         feat_cols = model_dict['features']
-                        x_vec = np.array([[features.get(f, 50.0) for f in feat_cols]])
+                        x_vec = np.array([[features.get(f, 0.0) for f in feat_cols]])
                         probs = model_dict['pipeline'].predict_proba(x_vec)
                         val = float(probs[0][1])
                         if horizon == '3d': prob_3d = val
                         elif horizon == '5d': prob_5d = val
                         elif horizon == '10d': prob_10d = val
-            except Exception:
-                pass
-        elif hasattr(self, 'lgb_model') and self.lgb_model is not None:
-            # Fallback if old model format
-            try:
-                x_vec = np.array([[
-                    features.get("fundamental_score", 50.0),
-                    features.get("technical_score", 50.0),
-                    features.get("regime_score", 50.0),
-                    features.get("smart_money_score", 50.0),
-                    features.get("derivatives_score", 50.0)
-                ]])
-                probs = self.lgb_model.predict_proba(x_vec)
-                prob_5d = prob_3d = prob_10d = float(probs[0][1])
             except Exception:
                 pass
 

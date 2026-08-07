@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 import pandas_ta as ta
-import yfinance as yf
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
@@ -122,40 +121,11 @@ class MomentumService:
             pe_ratio = float(snapshot.pe_ratio or 30.0)
             roce = roe
         else:
-            print(f"WARNING: No PIT FundamentalSnapshot found for {company.ticker}. Falling back to live yfinance data (Lookahead Bias).")
-            try:
-                yf_ticker = f"{company.ticker}.NS" if not company.ticker.endswith((".NS", ".BO")) else company.ticker
-                tk = yf.Ticker(yf_ticker)
-                
-                financials = tk.financials
-                bs = tk.balance_sheet
-                
-                if not financials.empty and not bs.empty:
-                    latest_fin = financials.iloc[:, 0]
-                    latest_bs = bs.iloc[:, 0]
-                    
-                    net_income = latest_fin.get('Net Income', 0)
-                    total_equity = latest_bs.get('Stockholders Equity', 1)
-                    total_debt = latest_bs.get('Total Debt', 0)
-                    
-                    roe = float(net_income / total_equity) if total_equity > 0 else 0.0
-                    de_ratio = float(total_debt / total_equity) if total_equity > 0 else 1.0
-                    roce = roe # Proxy ROCE
-                    
-                    # Fetch trailing PE safely
-                    info = tk.info
-                    pe_ratio = float(info.get('trailingPE', company.pe_ratio or 30.0))
-                else:
-                    roe = float(company.roe or 0.0)
-                    pe_ratio = float(company.pe_ratio or 30.0)
-                    de_ratio = float(company.debt_to_equity or 1.0)
-                    roce = float(company.roce or roe)
-            except Exception:
-                roe = float(company.roe or 0.0)
-                roce = float(company.roce or roe)
-                fin_health = float(company.financial_health_score or 50.0)
-                de_ratio = float(company.debt_to_equity or 1.0)
-                pe_ratio = float(company.pe_ratio or 30.0)
+            print(f"WARNING: No PIT FundamentalSnapshot found for {company.ticker}. Falling back to safe neutral values to prevent Lookahead Bias.")
+            roe = float(company.roe or 0.0)
+            pe_ratio = float(company.pe_ratio or 30.0)
+            roce = roe
+            de_ratio = 1.0
 
         # Phase 2: Smart Money & Derivatives factor calculation with native NSE Bhavcopy T+1 Delivery %
         from app.services.nse_data_service import NseDataService
@@ -276,8 +246,8 @@ class MomentumService:
         m_df['fundamental_score'] = m_df[[f"{c}_rank" for c in fund_cols]].mean(axis=1)
         m_df['smart_money_score'] = m_df[[f"{c}_rank" for c in smart_cols]].mean(axis=1)
         m_df['derivatives_score'] = m_df[[f"{c}_rank" for c in deriv_cols]].mean(axis=1)
-        # Regime alignment proxy: market regime score scaled by stock's distance to 200DMA direction
-        m_df['regime_score'] = (regime_score * np.sign(m_df['dma200_dist_pct'])).rank(pct=True, ascending=True) * 100.0
+        # Regime alignment proxy: market regime score scaled by stock's distance to 200DMA direction, strictly between 0 and 100
+        m_df['regime_score'] = 50.0 + (regime_score * np.sign(m_df['dma200_dist_pct'])) / 2.0
 
         # Composite Score incorporating Phase 2 factors dynamically
         from app.services.weight_learning_service import WeightLearningService
@@ -316,7 +286,7 @@ class MomentumService:
             multi_probs = ml_svc.predict_multi_horizon({
                 "fundamental_score": fund_score,
                 "technical_score": tech_score,
-                "regime_score": regime_score,
+                "regime_score": float(row['regime_score']),
                 "smart_money_score": smart_score,
                 "derivatives_score": deriv_score
             }, sequence_embeddings=seq_embed)

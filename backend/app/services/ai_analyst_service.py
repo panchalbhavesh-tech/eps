@@ -162,7 +162,9 @@ Synthesize backtests (PEAD, Mean Reversion, Volatility Breakout, etc.) purely as
 
     def _generate_fallback_report(self, ticker: str, q: dict) -> dict:
         name = q.get("name", ticker)
-        sector = q.get("sector", "Equities")
+        sector_raw = q.get("sector", "Equities")
+        sector = sector_raw.lower()
+        
         price = safe_float(q.get("current_price"), 0.0)
         mcap = safe_float(q.get("market_cap"), 0.0)
         ev = safe_float(q.get("enterprise_value"), mcap)
@@ -184,13 +186,35 @@ Synthesize backtests (PEAD, Mean Reversion, Volatility Breakout, etc.) purely as
         imm_sup = safe_float(techs.get("imm_support") or techs.get("immSupport"), price * 0.95 if price > 0 else 0.0)
         imm_res = safe_float(techs.get("imm_resistance") or techs.get("immResistance"), price * 1.05 if price > 0 else 0.0)
 
+        # Dynamic Sector-Neutral Standardization (Proxied Z-Scores)
+        ideal_roe = 20.0
+        ideal_de_upper = 1.0
+        ideal_de_excellent = 0.5
+        ideal_pe_upper = 25.0
+        
+        if "bank" in sector or "finance" in sector or "nbfc" in sector:
+            ideal_roe = 15.0
+            ideal_de_upper = 8.0  # High leverage is structural
+            ideal_de_excellent = 5.0
+            ideal_pe_upper = 18.0
+        elif "it" in sector or "tech" in sector or "software" in sector:
+            ideal_roe = 25.0
+            ideal_de_upper = 0.3  # Tech should have near zero debt
+            ideal_de_excellent = 0.1
+            ideal_pe_upper = 40.0
+        elif "metal" in sector or "auto" in sector or "manufacturing" in sector:
+            ideal_roe = 12.0
+            ideal_de_upper = 1.5
+            ideal_de_excellent = 0.8
+            ideal_pe_upper = 18.0
+
         # Calculate Health Score out of 100
-        # 1. Profitability (/25): based on ROE/ROCE
-        prof_score = min(25.0, max(5.0, (roe * 100 / 20.0) * 12.5 + (roce * 100 / 25.0) * 12.5))
+        # 1. Profitability (/25): based on ROE/ROCE (sector neutralized)
+        prof_score = min(25.0, max(5.0, (roe * 100 / ideal_roe) * 12.5 + (roce * 100 / (ideal_roe * 1.25)) * 12.5))
         if roe == 0 and roce == 0: prof_score = 16.5  # default sector benchmark
         
-        # 2. Debt & Solvency (/20): lower DE is better
-        debt_score = 18.0 if de <= 0.5 else (14.0 if de <= 1.2 else 8.0)
+        # 2. Debt & Solvency (/20): sector neutralized
+        debt_score = 18.0 if de <= ideal_de_excellent else (14.0 if de <= ideal_de_upper else 8.0)
         
         # 3. Cash Flow & Liquidity (/15)
         cf_score = 12.5
@@ -199,7 +223,7 @@ Synthesize backtests (PEAD, Mean Reversion, Volatility Breakout, etc.) purely as
         growth_score = 11.8
         
         # 5. Valuation Classification (/10)
-        val_score = 8.5 if (pe > 0 and pe < 25) else 6.5
+        val_score = 8.5 if (pe > 0 and pe < ideal_pe_upper) else 6.5
         
         # 6. Market Stability (/10)
         stab_score = 8.0
@@ -214,8 +238,8 @@ Synthesize backtests (PEAD, Mean Reversion, Volatility Breakout, etc.) purely as
         else: grade = f"Grade C ({total_score} / 100 - Average)"
 
         val_classification = "Near Industry"
-        if pe > 0 and pe < 15: val_classification = "Below Industry"
-        elif pe >= 30: val_classification = "Above Industry"
+        if pe > 0 and pe < (ideal_pe_upper * 0.6): val_classification = "Below Industry"
+        elif pe >= (ideal_pe_upper * 1.2): val_classification = "Above Industry"
 
         summary = f"""### {name} ({ticker}) - Executive Summary
 This report presents an objective quantitative equity assessment of **{name}**, listed on the National Stock Exchange (NSE) / BSE within the **{sector}** sector. All findings are derived strictly from measurable historical financial ratios and structural technical price behavior without subjective forecasting.
@@ -224,9 +248,9 @@ This report presents an objective quantitative equity assessment of **{name}**, 
 | :--- | :--- | :--- | :--- | :--- |
 | **Current Price** | **{format_inr(price)}** | 52W Range: {format_inr(l52)} - {format_inr(h52)} | {'Strong' if price > (h52+l52)/2 else 'Moderate'} | Currently trading above median annual historical price dispersion. |
 | **Market Valuation** | **{format_lakh_cr(mcap)}** | EV: {format_lakh_cr(ev)} | Established | Aggregate market capitalization reflect institutionally verifiable capitalization. |
-| **P/E Earnings Multiple** | **{pe:.2f}x** | 22.50x (Industry Mean) | **{val_classification}** | Current valuation relative to trailing/forward net earnings per share. |
-| **Return on Equity (ROE)** | **{(roe * (100 if roe < 1 else 1)):.2f}%** | > 15.00% (Ideal Target) | {'Good' if roe >= 0.15 else 'Average'} | Measures profit generation efficiency per rupee of equity capital. |
-| **Debt to Equity Ratio** | **{de:.2f}x** | < 1.00x (Solvency Threshold) | {'Excellent' if de <= 0.5 else ('Good' if de <= 1.0 else 'Weak')} | Evaluates capital structure balance and financial balance sheet leverage. |
+| **P/E Earnings Multiple** | **{pe:.2f}x** | {ideal_pe_upper:.2f}x (Sector Ideal) | **{val_classification}** | Current valuation relative to trailing/forward net earnings per share. |
+| **Return on Equity (ROE)** | **{(roe * (100 if roe < 1 else 1)):.2f}%** | > {ideal_roe:.2f}% (Sector Target) | {'Good' if (roe*100) >= ideal_roe else 'Average'} | Measures profit generation efficiency per rupee of equity capital. |
+| **Debt to Equity Ratio** | **{de:.2f}x** | < {ideal_de_upper:.2f}x (Sector Threshold) | {'Excellent' if de <= ideal_de_excellent else ('Good' if de <= ideal_de_upper else 'Weak')} | Evaluates capital structure balance and financial balance sheet leverage. |
 
 > **Analyst Mandate Verification:** This document abides strictly by professional institutional compliance standards. No target prices, stop losses, or speculative buy/sell directives are communicated."""
 
