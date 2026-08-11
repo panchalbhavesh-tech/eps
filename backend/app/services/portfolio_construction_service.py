@@ -42,7 +42,40 @@ class PortfolioConstructionService:
         df0 = corr.loc[sort_ix, sort_ix]
         
         hrp_weights = self._get_rec_bipart(cov_matrix, sort_ix)
+        hrp_weights = self.apply_position_constraints(hrp_weights, max_weight=0.05)
         return hrp_weights
+
+    def apply_position_constraints(self, weights: pd.Series, max_weight: float = 0.05) -> pd.Series:
+        """
+        Enforces a strict maximum position limit (e.g., 5%).
+        Redistributes excess weight proportionally to non-capped stocks.
+        """
+        if weights.empty:
+            return weights
+            
+        w = weights.copy()
+        
+        while True:
+            violating_stocks = w[w > max_weight + 1e-5].index
+            
+            if len(violating_stocks) == 0:
+                break
+                
+            for s in violating_stocks:
+                w[s] = max_weight
+                
+            non_violating_stocks = w.index[~w.index.isin(violating_stocks)]
+            if len(non_violating_stocks) == 0:
+                # Everyone is capped. Normalize to 1.0
+                w = w / w.sum()
+                break
+                
+            current_sum = w.sum()
+            if current_sum < 1.0:
+                shortfall = 1.0 - current_sum
+                w[non_violating_stocks] += (w[non_violating_stocks] / w[non_violating_stocks].sum()) * shortfall
+                
+        return w
 
     def apply_sector_constraints(self, weights: pd.Series, sector_mapping: Dict[str, str], max_sector_weight: float = 0.25) -> pd.Series:
         """
@@ -128,6 +161,8 @@ class PortfolioConstructionService:
         return c_var
         
     def _get_ivp(self, cov: pd.DataFrame) -> np.ndarray:
-        ivp = 1. / np.diag(cov)
+        var = np.diag(cov)
+        var = np.where(var < 1e-8, 1e-8, var)
+        ivp = 1. / var
         ivp /= ivp.sum()
         return ivp

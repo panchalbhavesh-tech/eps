@@ -44,52 +44,11 @@ class MomentumMLService:
 
     def feature_selection(self, df: pd.DataFrame, feature_cols: List[str], target_col: str) -> List[str]:
         """
-        Step 1: Drop feature pairs with |correlation| > 0.9.
-        Step 2: Compute Spearman rank correlation (IC) against forward returns; drop near-zero IC.
-        Step 3: Run baseline GBM pass, rank by SHAP importance, retain top survivors.
+        Phase 1: Feature Selection.
+        This method is now a pass-through. Feature selection has been moved inside the
+        cross-validation folds (via sklearn Pipeline + SelectFromModel) to eradicate lookahead bias.
         """
-        if not ML_AVAILABLE or df.empty or len(df) < 20:
-            return feature_cols
-
-        # 1. Collinearity filter (|correlation| > 0.9)
-        corr_matrix = df[feature_cols].corr(method='pearson').abs()
-        upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-        to_drop = [column for column in upper.columns if any(upper[column] > 0.90)]
-        selected = [col for col in feature_cols if col not in to_drop]
-
-        # 2. Spearman Rank Information Coefficient (IC) filter
-        ic_scores = {}
-        for col in selected:
-            try:
-                ic = df[col].corr(df[target_col], method='spearman')
-                if not np.isnan(ic) and abs(ic) >= 0.01:
-                    ic_scores[col] = ic
-            except Exception:
-                pass
-        
-        surviving_cols = list(ic_scores.keys()) if ic_scores else selected
-
-        # 3. SHAP Feature Importance ranking via preliminary LightGBM pass
-        try:
-            X = df[surviving_cols].fillna(df[surviving_cols].median())
-            y = df[target_col].values
-            model = lgb.LGBMClassifier(n_estimators=30, random_state=42, verbose=-1)
-            model.fit(X, y)
-            
-            explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(X)
-            if isinstance(shap_values, list):
-                shap_vals = shap_values[1]
-            else:
-                shap_vals = shap_values
-                
-            mean_shap = np.abs(shap_vals).mean(axis=0)
-            ranked_indices = np.argsort(mean_shap)[::-1]
-            top_features = [surviving_cols[i] for i in ranked_indices[:45]] # Retain top ~40-60 features
-            return top_features if top_features else surviving_cols
-        except Exception as e:
-            print(f"SHAP ranking fallback: {e}")
-            return surviving_cols
+        return feature_cols
 
     def purged_walk_forward_cv(self, df: pd.DataFrame, feature_cols: List[str], target_col: str, embargo_days: int = 10) -> Dict[str, Any]:
         """
@@ -100,12 +59,12 @@ class MomentumMLService:
         if not ML_AVAILABLE or len(df) < 50:
             return {"status": "Insufficient historical rows for 10-day embargoed CV", "gbm_accuracy": 0.0, "logistic_accuracy": 0.0, "clears_gate": True}
 
-        from app.services.purged_cv_service import PurgedKFoldCV
+        from app.services.purged_cv_service import PurgedWalkForwardCV
         from sklearn.metrics import roc_auc_score
         
-        cv = PurgedKFoldCV(n_splits=5, embargo_pct=0.02)
+        cv = PurgedWalkForwardCV(n_splits=5, embargo_pct=0.01)
         
-        # We need a time column for PurgedKFoldCV, let's assume 'date_calculated'
+        # We need a time column for PurgedWalkForwardCV, let's assume 'date_calculated'
         # but if the dataframe index is datetime, we can use that.
         if "date_calculated" not in df.columns:
             df = df.reset_index()
@@ -119,10 +78,12 @@ class MomentumMLService:
         from sklearn.pipeline import Pipeline
         from sklearn.impute import SimpleImputer
         from sklearn.preprocessing import StandardScaler
+        from sklearn.feature_selection import SelectFromModel
         
         lr_pipeline = Pipeline([
             ('imputer', SimpleImputer(strategy='median')),
             ('scaler', StandardScaler()),
+            ('feature_selection', SelectFromModel(lgb.LGBMClassifier(n_estimators=30, random_state=42, verbose=-1))),
             ('lr', LogisticRegression(max_iter=300, random_state=42))
         ])
         
@@ -133,13 +94,14 @@ class MomentumMLService:
         gbm_pipeline = Pipeline([
             ('imputer', SimpleImputer(strategy='median')),
             ('scaler', StandardScaler()),
+            ('feature_selection', SelectFromModel(lgb.LGBMClassifier(n_estimators=30, random_state=42, verbose=-1))),
             ('gbm', lgb.LGBMClassifier(n_estimators=60, learning_rate=0.05, random_state=42, verbose=-1))
         ])
         
         gbm_scores = cv.cross_val_score(df_sorted, feature_cols, target_col, time_col, gbm_pipeline, roc_auc_score)
         gbm_acc = float(np.nanmean(gbm_scores)) if len(gbm_scores) > 0 and not np.isnan(np.nanmean(gbm_scores)) else 0.5
 
-        clears_gate = gbm_acc >= lr_acc or gbm_acc > 0.52
+        clears_gate = gbm_acc >= lr_acc or gbm_acc > 0.55
         return {
             "status": "Purged K-Fold validation complete",
             "gbm_accuracy": round(gbm_acc, 4),
@@ -248,7 +210,7 @@ class MomentumMLService:
         from sklearn.preprocessing import StandardScaler
         from sklearn.calibration import CalibratedClassifierCV
         from sklearn.feature_selection import SelectFromModel
-        from app.services.purged_cv_service import PurgedKFoldCV
+        from app.services.purged_cv_service import PurgedWalkForwardCV
         
         models = {}
         for horizon, target_col, days in [('3d', 'target_3d', 3), ('5d', 'target_5d', 5), ('10d', 'target_10d', 10)]:
@@ -258,22 +220,22 @@ class MomentumMLService:
             X = df[selected]
             y = df[target_col].values
             
-            cv_gen = PurgedKFoldCV(n_splits=3)
+            cv_gen = PurgedWalkForwardCV(n_splits=3)
             splits = list(cv_gen.split(df, "date_calculated", horizon_days=days))
             if len(splits) < 3:
                 splits = 3
                 
             base_model = lgb.LGBMClassifier(n_estimators=50, random_state=42, verbose=-1)
-            calibrated = CalibratedClassifierCV(base_model, method='isotonic', cv=splits)
-            
-            pipeline = Pipeline([
+            base_pipeline = Pipeline([
                 ('imputer', SimpleImputer(strategy='median')),
                 ('scaler', StandardScaler()),
                 ('feature_selection', SelectFromModel(lgb.LGBMClassifier(n_estimators=30, random_state=42, verbose=-1))),
-                ('classifier', calibrated)
+                ('classifier', base_model)
             ])
-            pipeline.fit(X, y)
-            models[horizon] = {'pipeline': pipeline, 'features': selected}
+            
+            calibrated = CalibratedClassifierCV(base_pipeline, method='isotonic', cv=splits)
+            calibrated.fit(X, y)
+            models[horizon] = {'pipeline': calibrated, 'features': selected}
 
         try:
             import joblib
@@ -341,22 +303,24 @@ class MomentumMLService:
                     if model_dict:
                         feat_cols = model_dict['features']
                         x_vec = np.array([[features.get(f, 0.0) for f in feat_cols]])
-                        probs = model_dict['pipeline'].predict_proba(x_vec)
-                        val = float(probs[0][1])
+                        pipeline = model_dict['pipeline']
+                        probs = pipeline.predict_proba(x_vec)
+                        clf = pipeline.named_steps.get('classifier') or pipeline.steps[-1][1]
+                        
+                        if hasattr(clf, 'classes_') and 1 in clf.classes_:
+                            pos_idx = np.where(clf.classes_ == 1)[0][0]
+                            val = float(probs[0][pos_idx])
+                        else:
+                            val = float(probs[0][-1])
                         if horizon == '3d': prob_3d = val
                         elif horizon == '5d': prob_5d = val
                         elif horizon == '10d': prob_10d = val
             except Exception:
                 pass
 
-        # Adjust probabilities using PCA Sequence Embeddings (Phase 5 integration)
-        emb_bonus = 0.0
-        if sequence_embeddings and len(sequence_embeddings) >= 2:
-            emb_bonus = (sequence_embeddings[0] * 0.02 + sequence_embeddings[1] * 0.015)
-
-        prob_5d = round(min(0.98, max(0.02, prob_5d + emb_bonus)), 3)
-        prob_3d = round(min(0.98, max(0.02, prob_3d + emb_bonus)), 3)
-        prob_10d = round(min(0.98, max(0.02, prob_10d + emb_bonus)), 3)
+        prob_5d = round(prob_5d, 3)
+        prob_3d = round(prob_3d, 3)
+        prob_10d = round(prob_10d, 3)
 
         return {
             "prob_3d": prob_3d,
@@ -366,31 +330,6 @@ class MomentumMLService:
 
     def generate_sequence_embeddings(self, prices: List[float], volumes: List[float], n_components: int = 2) -> List[float]:
         """
-        Phase 5 Sequence-Model Embeddings: Compresses 20-to-60 day trajectory sequences of scaled returns
-        and volume fluctuations into a low-dimensional embedding vector (to serve as an extra feature slot in the GBM).
-        Uses Principal Component / Autoencoder matrix compression.
+        Removed due to mathematical flaws (PCA on 2 columns is trivial) and destroying calibration.
         """
-        if not ML_AVAILABLE or not prices or len(prices) < 10:
-            return [0.0] * n_components
-
-        try:
-            p_arr = np.array(prices, dtype=float)
-            v_arr = np.array(volumes if len(volumes) == len(prices) else [1.0] * len(prices), dtype=float)
-
-            # Compute standardized return and volume sequences
-            returns = np.diff(p_arr) / max(0.001, p_arr[:-1].mean())
-            vol_changes = np.diff(v_arr) / max(1.0, v_arr[:-1].mean())
-
-            matrix = np.vstack([returns, vol_changes]).T
-            from sklearn.decomposition import PCA
-            pca = PCA(n_components=min(n_components, matrix.shape[1]), random_state=42)
-            transformed = pca.fit_transform(matrix)
-            
-            # Aggregate summary embedding vector of the recent trajectory
-            emb_vector = np.mean(transformed, axis=0).tolist()
-            while len(emb_vector) < n_components:
-                emb_vector.append(0.0)
-            return [round(float(val), 4) for val in emb_vector[:n_components]]
-        except Exception as e:
-            print(f"Sequence embedding fallback: {e}")
-            return [0.0] * n_components
+        return [0.0] * n_components

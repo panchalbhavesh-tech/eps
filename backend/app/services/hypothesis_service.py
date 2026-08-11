@@ -209,6 +209,7 @@ class HypothesisService:
             df_data = [{
                 "Date": r.trade_date,
                 "Ticker": r.ticker,
+                "open": r.open_price,
                 "close": r.close_price,
                 "volume": r.volume,
                 "high": r.high_price,
@@ -231,13 +232,17 @@ class HypothesisService:
             if hyp.current_stage == "DRAFT_HYPOTHESIS":
                 cutoff = pd.to_datetime(hyp.created_at or datetime.utcnow()).tz_localize(None)
                 df = df[df.index.get_level_values('Date') <= cutoff].copy()
+                grouped = df.groupby(level='Ticker') # Regroup after filtering
             elif hyp.current_stage in ["OUT_OF_SAMPLE_SHADOW", "LIVE_ALPHA_STREAM"]:
                 cutoff = pd.to_datetime(hyp.created_at or datetime.utcnow()).tz_localize(None)
                 df = df[df.index.get_level_values('Date') > cutoff].copy()
+                grouped = df.groupby(level='Ticker')
                 
-            # Forward returns
+            # Forward returns: Shift execution to Next-Day Open to prevent Close-to-Close lookahead bias
             horizon = hyp.holding_horizon_days
-            df['fwd_ret'] = grouped['close'].transform(lambda x: x.shift(-horizon) / x - 1.0)
+            df['next_open'] = grouped['open'].shift(-1)
+            df['future_close'] = grouped['close'].shift(-horizon)
+            df['fwd_ret'] = df['future_close'] / df['next_open'] - 1.0
             
             # Safely evaluate alpha expression
             ev = SafeASTEvaluator(df)
@@ -283,8 +288,8 @@ class HypothesisService:
                 
             daily_returns = clean.groupby(level='Date').apply(calc_daily_ret)
             
-            # Filter zero returns which might skew std
-            strategy_daily_returns = daily_returns[daily_returns != 0.0].tolist()
+            # Keep all days (including zero-return days) to accurately reflect cash drag and true Sharpe denominator
+            strategy_daily_returns = daily_returns.tolist()
             all_scores = clean['factor'].tolist()
             all_returns = clean['fwd_ret'].tolist()
 

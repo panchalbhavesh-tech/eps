@@ -38,48 +38,10 @@ class EventStudyService:
         est_start = max(0, iloc_idx - 252)
         est_window = df.iloc[est_start:iloc_idx]
         
-        # We fetch FF3 Factors directly for a true Fama-French 3-Factor (FF3) Market Model
+        # Use CAPM for Expected Returns (FF3 disabled due to missing high-fidelity HML data)
         try:
-            from app.services.factor_attribution_service import FactorAttributionService
-            ff_svc = FactorAttributionService()
-            # We add 30 days buffer for the estimation window
-            ff_data = ff_svc.get_factors(start_date=est_window.index[0], end_date=df.index[-1])
-            
             nifty = yf.download("^NSEI", start=est_window.index[0], end=df.index[-1], progress=False)
-            
-            if not ff_data.empty and not nifty.empty:
-                # Merge ticker returns with FF3
-                ticker_rets = est_window['Close'].pct_change().dropna() * 100
-                nifty_rets = nifty['Close'].pct_change().dropna() * 100
-                
-                # If FF3 is present, calculate full regression
-                aligned = pd.concat([ticker_rets, nifty_rets, ff_data['SMB'], ff_data['HML']], axis=1).dropna()
-                aligned.columns = ['ticker', 'mkt', 'smb', 'hml']
-                
-                if len(aligned) > 30:
-                    import statsmodels.api as sm
-                    X = aligned[['mkt', 'smb', 'hml']]
-                    X = sm.add_constant(X)
-                    y = aligned['ticker']
-                    model = sm.OLS(y, X).fit()
-                    beta = model.params['mkt']
-                    beta_smb = model.params['smb']
-                    beta_hml = model.params['hml']
-                else:
-                    beta, beta_smb, beta_hml = 1.0, 0.0, 0.0
-                    
-                def get_ar(days: int):
-                    if iloc_idx + days < len(df):
-                        act_ret = get_return(days)
-                        mkt_end = df.index[iloc_idx + days]
-                        mkt_start = res_day.name
-                        if mkt_start in nifty.index and mkt_end in nifty.index:
-                            mkt_ret = ((float(nifty.loc[mkt_end, 'Close']) - float(nifty.loc[mkt_start, 'Close'])) / float(nifty.loc[mkt_start, 'Close'])) * 100
-                            exp_ret = beta * mkt_ret
-                            return act_ret - exp_ret
-                    return None
-            elif not nifty.empty:
-                # CAPM Fallback
+            if not nifty.empty:
                 nifty_rets = nifty['Close'].pct_change().dropna() * 100
                 ticker_rets = est_window['Close'].pct_change().dropna() * 100
                 aligned = pd.concat([ticker_rets, nifty_rets], axis=1).dropna()
@@ -98,7 +60,8 @@ class EventStudyService:
                         mkt_start = res_day.name
                         if mkt_start in nifty.index and mkt_end in nifty.index:
                             mkt_ret = ((float(nifty.loc[mkt_end, 'Close']) - float(nifty.loc[mkt_start, 'Close'])) / float(nifty.loc[mkt_start, 'Close'])) * 100
-                            return act_ret - (beta * mkt_ret)
+                            exp_ret = beta * mkt_ret
+                            return act_ret - exp_ret
                     return None
             else:
                 get_ar = get_return

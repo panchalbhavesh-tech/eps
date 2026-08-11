@@ -89,20 +89,7 @@ const GET_INTENSIVE_BACKTEST = gql`
   }
 `;
 
-// Helper for realistic 24h price delta representation when live tick change isn't returned directly by schema
-const computeMock24hChange = (ticker?: string, price?: number | null): { pct: number; label: string; isPositive: boolean } => {
-  if (!ticker || !price) return { pct: 0, label: '0.00%', isPositive: true };
-  let hash = 0;
-  for (let i = 0; i < ticker.length; i++) hash = (hash << 5) - hash + ticker.charCodeAt(i);
-  const raw = ((Math.abs(hash) % 800) - 350) / 100; // between -3.50% and +4.50%
-  const isPositive = raw >= 0;
-  return {
-    pct: raw,
-    label: `${isPositive ? '+' : ''}${raw.toFixed(2)}%`,
-    isPositive
-  };
-};
-
+// 24H Change temporarily disabled pending backend schema integration
 const formatRelativeTimestamp = (dateStr?: string | null) => {
   if (!dateStr) return 'Recently';
   const timestamp = new Date(dateStr).getTime();
@@ -254,11 +241,10 @@ const MomentumTracker: React.FC = () => {
       align: 'left',
       sortable: false,
       renderCell: (p: GridRenderCellParams) => {
-        const chg = computeMock24hChange(p.row?.ticker, p.row?.currentPrice);
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
-            <Typography className="mono-font tabular-nums" sx={{ fontSize: '12px', fontWeight: 600, color: chg.isPositive ? tokens.status.success.main : tokens.status.error.main }}>
-              {chg.label}
+            <Typography className="mono-font tabular-nums" sx={{ fontSize: '12px', fontWeight: 600, color: tokens.text.tertiary }}>
+              --
             </Typography>
           </Box>
         );

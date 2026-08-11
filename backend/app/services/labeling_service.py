@@ -25,7 +25,12 @@ class TripleBarrierLabeler:
                 labels.loc[idx] = 0
                 continue
                 
-            entry_price = df['Close'].iloc[idx]
+            # Neutralize Close-to-Close lookahead leakage by using Next-Day MOO execution
+            if idx + 1 >= len(df):
+                labels.loc[idx] = 0
+                continue
+                
+            entry_price = df['Open'].iloc[idx + 1]
             if pd.isna(entry_price) or entry_price <= 0:
                 labels.loc[idx] = 0
                 continue
@@ -43,7 +48,7 @@ class TripleBarrierLabeler:
                 
                 # Check Stop Loss (Lower Barrier)
                 if (low - entry_price) / entry_price <= self.sl_pct:
-                    label = 0 # 0 or -1 depending on classification scheme. We'll use 0 for failure/loss, 1 for success
+                    label = -1
                     break
                     
                 # Check Profit Target (Upper Barrier)

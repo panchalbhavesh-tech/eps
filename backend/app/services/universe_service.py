@@ -28,36 +28,56 @@ class UniverseService:
         
     def sync_historical_constituents(self):
         """
-        Syncs historical constituents. Seeds known historical survivorship data 
-        (including delisted/removed stocks) to ensure the point-in-time filter 
-        correctly drops them after their removal date, eradicating survivorship bias.
+        Fetches the list of currently listed NSE equities from the official NSE archives.
+        As per user decision, this accepts survivorship bias for historical backtesting
+        in exchange for providing a comprehensive, realistic current universe (approx 2000+ stocks).
         """
         import uuid
-        # Check if already seeded
+        import logging
+        
+        # Check if already seeded to avoid redundant downloads
         if self.db.query(HistoricalConstituent).first():
             return
             
-        seed_data = [
-            # Active Survivors
-            ("NIFTY500", "RELIANCE", "2010-01-01", None),
-            ("NIFTY500", "HDFCBANK", "2010-01-01", None),
-            ("NIFTY500", "TCS", "2010-01-01", None),
-            ("NIFTY500", "INFY", "2010-01-01", None),
-            # Historically Removed / Delisted (To prove bias eradication)
-            ("NIFTY500", "YESBANK", "2010-01-01", "2020-03-26"), 
-            ("NIFTY500", "VEDL", "2010-01-01", "2020-07-31"),    
-            ("NIFTY500", "ZEEL", "2010-01-01", "2020-09-25"),
-            ("NIFTY500", "IDEA", "2010-01-01", "2019-03-29"),
-            ("NIFTY500", "DHFL", "2010-01-01", "2019-01-01")
-        ]
+        logger = logging.getLogger(__name__)
+        logger.info("Fetching current NSE equity universe...")
         
-        for idx, ticker, added, removed in seed_data:
+        try:
+            # Official NSE URL for all listed equities
+            url = "https://archives.nseindia.com/content/equities/EQUITY_L.csv"
+            df = pd.read_csv(url)
+            
+            # The CSV has a 'SYMBOL' column
+            if 'SYMBOL' not in df.columns:
+                raise ValueError("SYMBOL column not found in NSE CSV.")
+                
+            symbols = df['SYMBOL'].dropna().unique().tolist()
+            logger.info(f"Successfully fetched {len(symbols)} symbols from NSE.")
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch NSE universe: {e}. Falling back to top 50.")
+            # Fallback to NIFTY 50 if the NSE site blocks the request (common with automated requests)
+            try:
+                wiki_url = 'https://en.wikipedia.org/wiki/NIFTY_50'
+                tables = pd.read_html(wiki_url)
+                symbols = tables[1]['Symbol'].tolist()
+            except Exception as e_wiki:
+                logger.error(f"Wiki fallback failed: {e_wiki}")
+                symbols = ["RELIANCE", "HDFCBANK", "TCS", "INFY", "ICICIBANK", "HINDUNILVR", "ITC", "SBIN", "BHARTIARTL", "KOTAKBANK"]
+        
+        # Seed the database
+        # We use a default 'added_date' far in the past so they are always available in backtests
+        default_added_date = datetime.strptime("2010-01-01", "%Y-%m-%d")
+        
+        for ticker in symbols:
             c = HistoricalConstituent(
                 id=uuid.uuid4(),
-                index_name=idx,
+                index_name="NSE_ALL",
                 ticker=ticker,
-                added_date=datetime.strptime(added, "%Y-%m-%d"),
-                removed_date=datetime.strptime(removed, "%Y-%m-%d") if removed else None
+                added_date=default_added_date,
+                removed_date=None # Never removed, accepting survivorship bias
             )
             self.db.add(c)
+            
         self.db.commit()
+        logger.info("Universe synchronization complete.")

@@ -111,6 +111,16 @@ class IntensiveBacktestEngine:
             "benchmark_nifty_return_pct": round(float(nifty_ret_total), 2)
         }
 
+    def estimate_slippage(self, trade_value: float, adv_inr: float) -> float:
+        """
+        Market impact model: slippage = 0.1% + 0.5% * sqrt(trade_value / adv_inr).
+        Defaults to 50 bps for illiquid regimes.
+        """
+        if adv_inr <= 0:
+            return 0.005
+        participation_rate = trade_value / adv_inr
+        return 0.001 + 0.005 * np.sqrt(participation_rate)
+
     def _simulate_momentum_ml_strategy(self, df: pd.DataFrame, nifty_ret_total: float) -> Dict[str, Any]:
         """
         Simulates historical momentum composite ranking and ML gain probability classification.
@@ -118,14 +128,14 @@ class IntensiveBacktestEngine:
         """
         df = df.copy()
         
-        # Calculate trailing moving averages & RSI for historical evaluation
-        df['SMA50'] = df['Close'].rolling(50).mean()
-        df['SMA200'] = df['Close'].rolling(200).mean()
-        df['Vol_Avg'] = df['Volume'].rolling(20).mean()
+        # Calculate trailing moving averages & RSI vectorized (min_periods=1 avoids NaNs)
+        df['SMA50'] = df['Close'].rolling(50, min_periods=1).mean()
+        df['SMA200'] = df['Close'].rolling(200, min_periods=1).mean()
+        df['Vol_Avg'] = df['Volume'].rolling(20, min_periods=1).mean()
         
         # ATR Proxy for Volatility Stop Loss
         high_low = df['High'] - df['Low']
-        df['ATR'] = high_low.rolling(14).mean()
+        df['ATR'] = high_low.rolling(14, min_periods=1).mean()
 
         trades = []
         in_position = False
@@ -136,19 +146,20 @@ class IntensiveBacktestEngine:
         # Track ML classification accuracy over 5-day horizon
         prediction_ledger = []
 
-        # Step through historical bars after dynamic warm-up window
         start_idx = min(50, max(15, len(df) // 4))
         for i in range(start_idx, len(df) - 5):
             cur_bar = df.iloc[i]
             cur_price = cur_bar['Close']
-            sma50 = cur_bar['SMA50'] if not pd.isna(cur_bar['SMA50']) else df['Close'].iloc[max(0, i-50):i+1].mean()
-            sma200 = cur_bar['SMA200'] if not pd.isna(cur_bar['SMA200']) else sma50
-            vol_avg = cur_bar['Vol_Avg'] if not pd.isna(cur_bar['Vol_Avg']) else df['Volume'].iloc[max(0, i-20):i+1].mean()
-            atr = cur_bar['ATR'] if not pd.isna(cur_bar['ATR']) and cur_bar['ATR'] > 0 else cur_price * 0.02
+            sma50 = cur_bar['SMA50']
+            sma200 = cur_bar['SMA200']
+            vol_avg = cur_bar['Vol_Avg']
+            atr = cur_bar['ATR'] if cur_bar['ATR'] > 0 else cur_price * 0.02
+            
+            adv_inr = vol_avg * cur_price if vol_avg and cur_price else 0.0
             
             # Historical factor proxy calculation
-            tech_score = min(99.0, max(10.0, ((cur_price - sma200) / (sma200 if sma200 > 0 else cur_price)) * 300.0 + 50.0)) if not pd.isna(sma200) else 50.0
-            rel_vol = cur_bar['Volume'] / vol_avg if vol_avg and vol_avg > 0 else 1.0
+            tech_score = min(99.0, max(10.0, ((cur_price - sma200) / (sma200 if sma200 > 0 else cur_price)) * 300.0 + 50.0))
+            rel_vol = cur_bar['Volume'] / vol_avg if vol_avg > 0 else 1.0
             
             # Extract PIT fundamentals merged earlier, or use neutral defaults
             pit_roe = float(cur_bar['roe']) if 'roe' in cur_bar and not pd.isna(cur_bar['roe']) else 0.0
@@ -165,12 +176,29 @@ class IntensiveBacktestEngine:
             })
 
             if abs(prob_gain - 0.50) >= 0.05:  # Confident predictions only
-                prediction_ledger.append((i, prob_gain, cur_price))
+                next_open = df.iloc[i + 1]['Open']
+                prediction_ledger.append((i, prob_gain, next_open))
 
             # Trading rules: BUY on bullish alignment & probability >= 0.53
             if not in_position and cur_price > sma50 and (prob_gain >= 0.53 or rel_vol >= 1.05):
                 in_position = True
-                entry_price = df.iloc[i + 1]['Open'] * 1.001 # Includes 0.1% entry slippage
+                
+                target_trade_value = 1000000.0
+                adv_inr = vol_avg * cur_price if vol_avg and cur_price else 0.0
+                
+                # Max 10% ADV participation cap
+                max_trade_value = 0.10 * adv_inr
+                executed_trade_value = min(target_trade_value, max_trade_value)
+                
+                # If adv is so low we can't even trade 10k INR, skip the trade completely
+                if executed_trade_value < 10000:
+                    in_position = False
+                    continue
+                    
+                executed_fraction = executed_trade_value / target_trade_value
+                
+                entry_slip = self.estimate_slippage(executed_trade_value, adv_inr)
+                entry_price = df.iloc[i + 1]['Open'] * (1.0 + entry_slip)
                 stop_loss = entry_price - (2.0 * atr)
                 entry_date = df.index[i + 1]
             elif in_position:
@@ -179,21 +207,34 @@ class IntensiveBacktestEngine:
                 if new_stop > stop_loss:
                     stop_loss = new_stop
                 
-                # EXIT on trailing stop triggered or bearish momentum reversal
                 if cur_bar['Low'] <= stop_loss or cur_price < sma50:
-                    raw_exit = stop_loss if cur_bar['Low'] <= stop_loss else cur_price
-                    exit_price = raw_exit * 0.999 # Includes 0.1% exit slippage
+                    # Enforce gap-down execution realism. If the stock opens below the stop loss, 
+                    # we cannot magically sell at the stop limit. We get filled at the Open price.
+                    if cur_bar['Open'] < stop_loss:
+                        raw_exit = cur_bar['Open']
+                    else:
+                        raw_exit = stop_loss if cur_bar['Low'] <= stop_loss else cur_price
                     
-                    # Flat 0.20% Indian market STT/brokerage friction round-trip
-                    total_friction = 0.20 
+                    adv_inr = vol_avg * cur_price if vol_avg and cur_price else 0.0
+                    # For exit, we must sell what we bought, regardless of ADV, paying the required slippage penalty
+                    exit_slip = self.estimate_slippage(executed_trade_value, adv_inr)
+                    exit_price = raw_exit * (1.0 - exit_slip)
                     
-                    trade_ret = (((exit_price - entry_price) / entry_price) * 100.0) - total_friction
+                    # 0.12% round-trip friction for STT (0.025% * 2), Brokerage, GST, Stamp Duty
+                    total_friction = 0.12 
+                    
+                    raw_trade_ret = (((exit_price - entry_price) / entry_price) * 100.0) - total_friction
+                    
+                    # Dilute returns with cash drag for unexecuted allocated capital
+                    effective_trade_ret = raw_trade_ret * executed_fraction
+                    
                     holding_days = max(1, (df.index[i] - entry_date).days if entry_date else (i - 5))
                     trades.append({
                         "entry_date": str(entry_date),
                         "exit_date": str(df.index[i]),
                         "holding_days": holding_days,
-                        "net_return_pct": trade_ret
+                        "net_return_pct": effective_trade_ret,
+                        "executed_fraction": executed_fraction
                     })
                     in_position = False
 

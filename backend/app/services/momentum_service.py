@@ -8,6 +8,7 @@ from app.infrastructure.models import Company, MomentumSignal
 from app.services.quant_service import QuantService
 import uuid
 import time
+import yfinance as yf
 
 _REGIME_CACHE: Dict[str, Any] = {}
 _REGIME_CACHE_TIME: float = 0
@@ -180,7 +181,7 @@ class MomentumService:
         from datetime import datetime
         universe_svc = UniverseService(self.db)
         # Using NIFTY500 as the baseline universe for the scan
-        tickers = universe_svc.get_pit_universe("NIFTY500", datetime.utcnow())
+        tickers = universe_svc.get_pit_universe("NSE_ALL", datetime.utcnow())
         
         companies = self.db.query(Company).filter(Company.ticker.in_(tickers)).all()
         if limit:
@@ -284,11 +285,19 @@ class MomentumService:
 
             # Calibrated Phase 3 & 5 Multi-Horizon ML Probability Inference P(gain, 3d/5d/10d)
             multi_probs = ml_svc.predict_multi_horizon({
+                # Aggregated ranks for base probability heuristic
                 "fundamental_score": fund_score,
                 "technical_score": tech_score,
                 "regime_score": float(row['regime_score']),
                 "smart_money_score": smart_score,
-                "derivatives_score": deriv_score
+                "derivatives_score": deriv_score,
+                
+                # Raw point-in-time features strictly required by the trained LightGBM pipelines
+                "raw_roe": float(row['roe']),
+                "raw_de": -float(row['de_score']), # Revert the negative sorting flip
+                "raw_pe": -float(row['pe_score']),
+                "raw_rel_vol": float(row['relative_volume']),
+                "raw_dma200_dist": float(row['dma200_dist_pct']) / 100.0 # Convert pct back to raw ratio
             }, sequence_embeddings=seq_embed)
 
             prob_gain_3d = multi_probs["prob_3d"]

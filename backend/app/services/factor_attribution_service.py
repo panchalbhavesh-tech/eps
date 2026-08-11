@@ -9,7 +9,12 @@ class FactorAttributionService:
     Constructs an India-specific Fama-French proxy using NSE indices:
     Mkt-RF: Nifty 50 (^NSEI) minus Risk Free Rate (6.5% annual approx)
     SMB: Nifty Smallcap 100 (^CNXSC) minus Nifty 50 (^NSEI)
-    HML: Approximated as 0.0 due to lack of reliable daily value index on Yahoo Finance.
+    
+    IMPORTANT LIMITATION (HML - Value Factor):
+    This system is currently constrained to a 2-factor model (Market + SMB). 
+    HML is approximated as 0.0 due to the unavailability of a reliable daily Value (HML) 
+    index for the Indian equities market via free data sources (like yfinance).
+    True 3-factor or 5-factor attribution requires a premium institutional data feed.
     """
     def __init__(self):
         self.cache_dir = "/tmp/ff3_cache"

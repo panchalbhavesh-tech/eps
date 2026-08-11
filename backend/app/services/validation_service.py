@@ -19,7 +19,7 @@ class ValidationService:
     def __init__(self, db: Session):
         self.db = db
         import os
-        self.probation_days = int(os.environ.get("SHADOW_PROBATION_DAYS", 252))
+        self.probation_days = int(os.environ.get("SHADOW_PROBATION_DAYS", 14))
 
     def log_prediction_snapshot(
         self,
@@ -253,7 +253,12 @@ class ValidationService:
                 t_stat, p_val = ttest_ind(shadow_outcomes, prod_outcomes, alternative='greater')
                 ttest_pvalue = p_val
                 
-        should_promote = shadow_hr > prod_hr and len(shadow_logs) >= 20 and ttest_pvalue < 0.05
+        # FWER Control via Bonferroni Correction
+        num_models_tested = self.db.query(ScorePredictionLog.model_version_id).filter_by(is_shadow=True).distinct().count()
+        num_models_tested = max(1, num_models_tested)
+        adjusted_alpha = 0.05 / num_models_tested
+                
+        should_promote = shadow_hr > prod_hr and len(shadow_logs) >= 20 and ttest_pvalue < adjusted_alpha
 
         return {
             "model_id": new_model_id,

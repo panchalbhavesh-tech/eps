@@ -38,22 +38,33 @@ class WeightLearningService:
         X = factor_scores_df[features].fillna(50.0).values
         y = forward_returns
         
-        # Scale features
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
+        from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
+        from sklearn.pipeline import Pipeline
+        from sklearn.linear_model import ElasticNet
         
-        # Elastic Net CV (force positive coefficients to maintain interpretability)
-        enet = ElasticNetCV(
-            l1_ratio=[0.1, 0.5, 0.7, 0.9, 0.95, 0.99, 1.0],
-            cv=5,
-            positive=True,
-            random_state=42,
-            n_jobs=-1
+        tscv = TimeSeriesSplit(n_splits=5)
+        
+        pipeline = Pipeline([
+            ('scaler', StandardScaler()),
+            ('enet', ElasticNet(positive=True, random_state=42))
+        ])
+        
+        param_grid = {
+            'enet__l1_ratio': [0.1, 0.5, 0.7, 0.9, 0.95, 0.99, 1.0],
+            'enet__alpha': [0.01, 0.1, 1.0, 10.0]
+        }
+        
+        grid_search = GridSearchCV(
+            pipeline,
+            param_grid,
+            cv=tscv,
+            n_jobs=-1,
+            scoring='neg_mean_squared_error'
         )
         
-        enet.fit(X_scaled, y)
+        grid_search.fit(X, y)
         
-        coefs = enet.coef_
+        coefs = grid_search.best_estimator_.named_steps['enet'].coef_
         sum_coef = np.sum(coefs)
         
         if sum_coef > 0:

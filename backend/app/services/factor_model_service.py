@@ -80,7 +80,7 @@ class FamaFrenchService:
         expected_ret = rf_daily + (betas.get('beta_mkt', 1.0) * mkt_rf) + (betas.get('beta_smb', 0.0) * smb) + (betas.get('beta_hml', 0.0) * hml)
         return actual_ret - expected_ret
 
-    def compute_car(self, abnormal_returns_series: pd.Series, pre_window: int = 7, post_window: int = 30) -> Dict[str, float]:
+    def compute_car(self, abnormal_returns_series: pd.Series, estimation_window_std: float, pre_window: int = 7, post_window: int = 30) -> Dict[str, float]:
         """
         Computes Cumulative Abnormal Return (CAR) and Patell Z-test p-value.
         abnormal_returns_series should be aligned such that index 0 is the event date.
@@ -93,7 +93,7 @@ class FamaFrenchService:
         # Patell Z-test simplification (assume ARs are roughly normal and independent)
         # Z = CAR / sqrt(N * variance(AR_estimation_window))
         n_days = len(abnormal_returns_series)
-        ar_std = abnormal_returns_series.std()
+        ar_std = estimation_window_std
         
         if ar_std > 0 and n_days > 0:
             z_stat = car / (np.sqrt(n_days) * ar_std)

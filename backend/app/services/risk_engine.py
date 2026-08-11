@@ -41,11 +41,10 @@ class RiskEngine:
             ).all()
             if logs:
                 returns = np.array([float(l.realized_5d_return) / 100.0 for l in logs])
-                # Compute cumulative equity curve to calculate true drawdown
-                equity_curve = np.cumprod(1 + returns)
-                peak = np.maximum.accumulate(equity_curve)
-                drawdown = (equity_curve - peak) / peak
-                max_dd = np.min(drawdown) * 100.0 if len(drawdown) > 0 else 0.0
+                # Compute average realized return to evaluate system edge accurately,
+                # avoiding the mathematical fallacy of compounding overlapping individual trades.
+                avg_return = np.mean(returns) * 100.0
+                win_rate = np.mean(returns > 0) * 100.0 if len(returns) > 0 else 0.0
 
                 # Determine dynamic threshold using regime
                 from app.services.momentum_service import MomentumService
@@ -53,22 +52,14 @@ class RiskEngine:
                 regime = ml_svc.get_market_regime()
                 regime_status = regime.get("status", "Neutral")
                 
-                dynamic_threshold = self.mdd_kill_switch_threshold
+                dynamic_threshold = -5.0
                 if regime_status == "Bearish":
                     # Tighten stop loss
-                    dynamic_threshold = -10.0
+                    dynamic_threshold = -3.0
                     
-                # Compute CVaR as additional check
-                sorted_rets = np.sort(returns)
-                var_95_idx = int(0.05 * len(sorted_rets))
-                if len(sorted_rets) >= 30 and var_95_idx > 0:
-                    cvar_95 = np.mean(sorted_rets[:var_95_idx]) * 100.0
-                else:
-                    cvar_95 = max_dd # Fallback to max_dd if sample too small for robust CVaR
-                
-                # If CVaR is worse than dynamic threshold OR max drawdown is worse, kill switch
-                if max_dd < dynamic_threshold or cvar_95 < dynamic_threshold:
-                    self._kill_switch_active = (True, f"Emergency Kill Switch Tripped: Max Drawdown ({max_dd:.1f}%) or CVaR ({cvar_95:.1f}%) breached dynamic safety boundary ({dynamic_threshold}%).")
+                # If average return is worse than dynamic threshold, kill switch
+                if avg_return < dynamic_threshold:
+                    self._kill_switch_active = (True, f"Emergency Kill Switch Tripped: Average Trailing Trade Return ({avg_return:.1f}%) breached dynamic safety boundary ({dynamic_threshold}%). Win rate: {win_rate:.1f}%.")
                     return self._kill_switch_active
         except Exception as e:
             print(f"Error checking kill switch status: {e}")

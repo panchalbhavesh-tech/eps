@@ -41,7 +41,7 @@ class PredictionService:
             # We want chronological order (Q1, Q2, Q3, Q4) to compare 1vs2, 2vs3, etc.
             historical_eps.reverse()
             
-            # Calculate UP/DOWN trend
+            # Calculate UP/DOWN trend using rigorous point-to-point momentum
             trend = []
             for i in range(1, len(historical_eps)):
                 prev = historical_eps[i-1]
@@ -55,11 +55,28 @@ class PredictionService:
             
             result["historical_trend"] = ",".join(trend) if trend else "N/A"
             
-            # Simple Prediction
-            avg_eps = sum(historical_eps) / len(historical_eps)
-            growth = historical_eps[-1] - historical_eps[0] if len(historical_eps) > 1 else 0
-            predicted = avg_eps + (growth * 0.5)
-            confidence = min(0.95, 0.5 + (len(historical_eps) * 0.04))
+            # Rigorous Linear Regression Prediction for EPS
+            import numpy as np
+            y = np.array(historical_eps)
+            x = np.arange(len(y))
+            
+            if len(y) > 1:
+                # OLS Regression: slope (m) and intercept (c)
+                m, c = np.polyfit(x, y, 1)
+                # Predict next quarter (x = len(y))
+                predicted = m * len(y) + c
+                
+                # Calculate R-squared for confidence
+                y_pred = m * x + c
+                ss_res = np.sum((y - y_pred)**2)
+                ss_tot = np.sum((y - np.mean(y))**2)
+                r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+                
+                # Confidence scales with R-squared and sample size
+                confidence = min(0.95, 0.5 + (r_squared * 0.4) + (len(historical_eps) * 0.01))
+            else:
+                predicted = y[0] if len(y) > 0 else 0.0
+                confidence = 0.5
             
             result["predicted_eps"] = round(predicted, 2)
             result["confidence_score"] = round(confidence, 2)
