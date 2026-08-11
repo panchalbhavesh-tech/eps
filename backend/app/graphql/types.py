@@ -76,6 +76,10 @@ class StrategyBacktestType:
     max_drawdown: Optional[float] = None
     expected_value: Optional[float] = None
     profit_factor: Optional[float] = None
+    sharpe_ratio: Optional[float] = None
+    sharpe_ci_lower: Optional[float] = None
+    sharpe_ci_upper: Optional[float] = None
+    sharpe_pvalue: Optional[float] = None
 
 @strawberry.type
 class TechnicalSnapshotType:

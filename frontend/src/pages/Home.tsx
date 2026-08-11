@@ -1,13 +1,159 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
-import { Typography, Box, CircularProgress, Chip, IconButton, InputBase, Tooltip, Button, Dialog, DialogTitle, DialogContent, Grid, DialogActions, LinearProgress } from '@mui/material';
+import { Typography, Box, CircularProgress, Chip, IconButton, InputBase, Tooltip, Button, Dialog, DialogTitle, DialogContent, Grid, DialogActions, LinearProgress, Collapse } from '@mui/material';
 import { GridColDef, GridRenderCellParams, GridRowSelectionModel } from '@mui/x-data-grid';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import SearchIcon from '@mui/icons-material/Search';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
+import NewspaperIcon from '@mui/icons-material/Newspaper';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { FilterChipGroup, ErrorBoundary, StatusChip, StatusBadge, BulkActionBar, RowTintedDataGrid } from '../components/common';
 import { useThemeMode } from '../theme/ThemeContext';
+
+// ─── Standalone News Cell ──────────────────────────────────────────────────────
+interface NewsItem { title: string; summary: string; url: string; source: string; published: string; }
+
+const NewsCell: React.FC<{ ticker: string; name: string }> = ({ ticker, name }) => {
+  const { tokens } = useThemeMode();
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [fetched, setFetched] = useState(false);
+
+  const fetchNews = useCallback(async () => {
+    if (fetched) { setExpanded(true); return; }
+    setLoading(true);
+    setExpanded(true);
+    try {
+      const res = await fetch(`/api/news/${ticker}?name=${encodeURIComponent(name || ticker)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setNews(data.news || []);
+      }
+    } catch (_) {}
+    setFetched(true);
+    setLoading(false);
+  }, [ticker, name, fetched]);
+
+  const first = news[0];
+
+  return (
+    <Box sx={{ width: '100%', py: 0.5 }}>
+      {/* Table cell row */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', height: '100%' }}>
+        <NewspaperIcon sx={{ fontSize: 13, color: tokens.text.tertiary, flexShrink: 0 }} />
+        <Typography
+          noWrap
+          sx={{ fontSize: '11px', color: first ? tokens.text.primary : tokens.text.tertiary, flex: 1, lineHeight: '15px', fontWeight: first ? 500 : 400 }}
+        >
+          {first ? first.title : (fetched ? 'No recent news' : 'Latest news…')}
+        </Typography>
+        <Button
+          size="small"
+          onClick={(e) => { e.stopPropagation(); fetchNews(); }}
+          sx={{
+            minWidth: 0,
+            px: '8px',
+            py: '2px',
+            fontSize: '10px',
+            fontWeight: 700,
+            color: tokens.text.primary,
+            backgroundColor: tokens.background.card,
+            border: `1px solid ${tokens.border.light}`,
+            textTransform: 'none',
+            flexShrink: 0,
+            lineHeight: '16px',
+            borderRadius: '4px',
+            '&:hover': {
+              borderColor: tokens.accent.main,
+              color: tokens.accent.main
+            }
+          }}
+        >
+          {loading ? '…' : 'VIEW ↗'}
+        </Button>
+      </Box>
+
+      {/* Popup Dialog */}
+      <Dialog 
+        open={expanded} 
+        onClose={(e: any) => { e.stopPropagation(); setExpanded(false); }}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: tokens.background.card,
+            backgroundImage: 'none',
+            border: `1px solid ${tokens.border.main}`,
+            borderRadius: '12px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ p: 2, borderBottom: `1px solid ${tokens.border.main}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <NewspaperIcon sx={{ color: tokens.accent.main, fontSize: 20 }} />
+            <Typography sx={{ fontSize: '14px', fontWeight: 700, color: tokens.text.primary, letterSpacing: '0.5px' }}>
+              {name || ticker} • LATEST NEWS
+            </Typography>
+          </Box>
+          <Button onClick={(e) => { e.stopPropagation(); setExpanded(false); }} sx={{ color: tokens.text.tertiary, minWidth: 0, p: 0.5 }}>
+            ✕
+          </Button>
+        </DialogTitle>
+        
+        <DialogContent sx={{ p: 0, maxHeight: '60vh' }}>
+          {loading && (
+            <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center', justifyContent: 'center' }}>
+              <CircularProgress size={32} sx={{ color: tokens.accent.main }} />
+              <Typography sx={{ fontSize: '13px', color: tokens.text.tertiary }}>Aggregating latest articles from financial feeds…</Typography>
+            </Box>
+          )}
+          {!loading && news.length === 0 && (
+            <Box sx={{ p: 4, textAlign: 'center' }}>
+              <Typography sx={{ fontSize: '13px', color: tokens.text.tertiary }}>No recent news found for this company.</Typography>
+            </Box>
+          )}
+          {!loading && news.map((item, idx) => (
+            <Box
+              key={idx}
+              component="a"
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{
+                display: 'block',
+                p: 2,
+                textDecoration: 'none',
+                borderBottom: idx < news.length - 1 ? `1px solid ${tokens.border.main}` : 'none',
+                '&:hover': { backgroundColor: tokens.background.cardHover },
+                cursor: 'pointer',
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
+                <Typography sx={{ fontSize: '13px', fontWeight: 600, color: tokens.text.primary, lineHeight: '18px', flex: 1 }}>
+                  {item.title}
+                </Typography>
+                <OpenInNewIcon sx={{ fontSize: 14, color: tokens.text.tertiary, flexShrink: 0, mt: '2px' }} />
+              </Box>
+              <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'center' }}>
+                <Chip size="small" label={item.source} sx={{ height: '20px', fontSize: '10px', fontWeight: 700, backgroundColor: tokens.primary.tint, color: tokens.text.primary, border: `1px solid ${tokens.border.light}` }} />
+                <Typography sx={{ fontSize: '11px', color: tokens.text.tertiary }}>{item.published}</Typography>
+              </Box>
+              {item.summary && (
+                <Typography sx={{ fontSize: '12px', color: tokens.text.secondary, mt: 1, lineHeight: '18px' }}>
+                  {item.summary.length > 250 ? item.summary.slice(0, 250) + '…' : item.summary}
+                </Typography>
+              )}
+            </Box>
+          ))}
+        </DialogContent>
+      </Dialog>
+    </Box>
+  );
+};
+// ──────────────────────────────────────────────────────────────────────────────
 
 const GET_COMPANIES = gql`
   query GetCompanies {
@@ -588,6 +734,17 @@ const Home: React.FC = () => {
             {formatRelativeDate(p.value) || '—'}
           </Typography>
         </Box>
+      )
+    },
+    {
+      field: 'latestNews',
+      headerName: 'LATEST NEWS (30d)',
+      width: 320,
+      sortable: false,
+      headerAlign: 'left',
+      align: 'left',
+      renderCell: (p: GridRenderCellParams) => (
+        <NewsCell ticker={p.row?.ticker || ''} name={p.row?.name || ''} />
       )
     },
     ...(expandQuarters ? [

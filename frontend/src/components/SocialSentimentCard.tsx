@@ -88,9 +88,10 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
     setError(null);
     try {
       const queryParams = `?name=${encodeURIComponent(company.name || '')}&sector=${encodeURIComponent(company.sector || '')}`;
-      let res = await fetch(`/api/sentiment/${company.ticker}${queryParams}`);
+      const headers = { 'X-API-Key': 'QEPS-INTERNAL-SECURE-KEY' };
+      let res = await fetch(`/api/sentiment/${company.ticker}${queryParams}`, { headers });
       if (!res.ok) {
-        res = await fetch(`/sentiment/${company.ticker}${queryParams}`);
+        res = await fetch(`/sentiment/${company.ticker}${queryParams}`, { headers });
       }
       if (!res.ok) {
         throw new Error(`Failed to retrieve sentiment vectors (Status: ${res.status})`);

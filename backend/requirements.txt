@@ -24,3 +24,4 @@ lightgbm
 xgboost
 shap
 curl-cffi
+feedparser

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
-import { Box, Typography, CircularProgress, Button, Tooltip, Grid, Card, CardContent, Snackbar, Alert } from '@mui/material';
+import { Box, Typography, CircularProgress, Button, Grid, Card, CardContent, Snackbar, Alert } from '@mui/material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -47,8 +47,8 @@ export interface CelerySchedule {
 }
 
 const Schedules: React.FC = () => {
-  const { mode, tokens } = useThemeMode();
-  const isDark = mode === 'dark';
+  const { tokens } = useThemeMode();
+
 
   const { loading, error, data, refetch } = useQuery(GET_CELERY_SCHEDULES, { 
     pollInterval: 15000, 

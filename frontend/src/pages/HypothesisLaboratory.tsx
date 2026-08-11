@@ -673,9 +673,9 @@ const HypothesisLaboratory: React.FC = () => {
               { field: 'direction', headerName: 'Direction', width: 120, renderCell: (params) => (
                 <Chip size="small" label={params.value} sx={{ bgcolor: params.value === 'LONG' ? '#22c55e' : '#ef4444', color: '#fff', fontWeight: 'bold' }} />
               )},
-              { field: 'rankPercentile', headerName: 'Rank', width: 120, valueFormatter: (params) => params.value?.toFixed(3) },
-              { field: 'factorScore', headerName: 'Factor Score', width: 150, valueFormatter: (params) => params.value?.toFixed(4) },
-              { field: 'tradeDate', headerName: 'Trade Date', width: 200, valueFormatter: (params) => new Date(params.value).toLocaleDateString() },
+              { field: 'rankPercentile', headerName: 'Rank', width: 120, valueFormatter: (params: any) => params.value?.toFixed(3) },
+              { field: 'factorScore', headerName: 'Factor Score', width: 150, valueFormatter: (params: any) => params.value?.toFixed(4) },
+              { field: 'tradeDate', headerName: 'Trade Date', width: 200, valueFormatter: (params: any) => new Date(params.value).toLocaleDateString() },
               { field: 'hypothesisId', headerName: 'Hypothesis ID', width: 300 }
             ]}
             rowHeight={48}
