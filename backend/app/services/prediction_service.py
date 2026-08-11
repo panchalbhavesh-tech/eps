@@ -78,8 +78,14 @@ class PredictionService:
                 predicted = y[0] if len(y) > 0 else 0.0
                 confidence = 0.5
             
-            result["predicted_eps"] = round(predicted, 2)
-            result["confidence_score"] = round(confidence, 2)
+            import math
+            if math.isnan(predicted) or math.isinf(predicted):
+                predicted = 0.0
+            if math.isnan(confidence) or math.isinf(confidence):
+                confidence = 0.5
+                
+            result["predicted_eps"] = float(round(predicted, 2))
+            result["confidence_score"] = float(round(confidence, 2))
             
         except Exception as e:
             print(f"Error generating prediction for {yf_ticker}: {e}")
