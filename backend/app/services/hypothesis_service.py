@@ -27,9 +27,10 @@ class SafeASTEvaluator:
             'abs': np.abs,
             'log': np.log,
             'sqrt': np.sqrt,
-            'rolling_mean': lambda x, w: x.rolling(int(w)).mean(),
-            'rolling_std': lambda x, w: x.rolling(int(w)).std(),
-            'rank': lambda x: x.rank(pct=True)
+            'rolling_mean': lambda x, w: x.groupby(level='Ticker').rolling(int(w)).mean().reset_index(level=0, drop=True).sort_index(),
+            'rolling_std': lambda x, w: x.groupby(level='Ticker').rolling(int(w)).std().reset_index(level=0, drop=True).sort_index(),
+            'rank': lambda x: x.groupby(level='Date').rank(pct=True),
+            'delta': lambda x, w: x.groupby(level='Ticker').diff(int(w))
         }
 
     def _eval(self, node):
