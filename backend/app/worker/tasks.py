@@ -829,3 +829,14 @@ def run_weekly_weight_optimization_task():
         return f"Weekly Weight Optimization: {res}"
     finally:
         db.close()
+
+@celery_app.task(name="app.worker.tasks.cleanup_old_activity_logs_task")
+def cleanup_old_activity_logs_task():
+    from app.infrastructure.database import SessionLocal
+    from app.services.activity_logger import cleanup_old_activity_logs
+    db = SessionLocal()
+    try:
+        cleanup_old_activity_logs(db, days=15)
+        return "Cleaned up old activity logs (15 days)."
+    finally:
+        db.close()

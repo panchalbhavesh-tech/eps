@@ -49,6 +49,10 @@ celery_app.conf.update(
             'task': 'app.worker.tasks.run_automated_hypothesis_research_task',
             'schedule': 86400.0, # Nightly QHLM FSM statistical evaluation and alpha decay retirement
         },
+        'cleanup-old-activity-logs-daily': {
+            'task': 'app.worker.tasks.cleanup_old_activity_logs_task',
+            'schedule': 86400.0, # Daily cleanup of admin logs older than 15 days
+        },
     }
 )
 

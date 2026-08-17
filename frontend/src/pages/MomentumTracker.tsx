@@ -58,6 +58,18 @@ const TRIGGER_MOMENTUM_SCAN = gql`
   }
 `;
 
+const GET_LATEST_ADMIN_ACTIVITY = gql`
+  query GetLatestAdminActivity($eventName: String!) {
+    latestAdminActivity(eventName: $eventName) {
+      id
+      userEmail
+      status
+      startedAt
+      completedAt
+    }
+  }
+`;
+
 const GET_INTENSIVE_BACKTEST = gql`
   query GetIntensiveBacktest($ticker: String!, $years: Int!) {
     getIntensiveBacktest(ticker: $ticker, years: $years) {
@@ -130,6 +142,12 @@ const MomentumTracker: React.FC = () => {
     fetchPolicy: 'cache-and-network',
   });
 
+  const { data: latestLogData } = useQuery(GET_LATEST_ADMIN_ACTIVITY, {
+    variables: { eventName: 'Momentum Scan' },
+    fetchPolicy: 'network-only'
+  });
+  const latestLog = latestLogData?.latestAdminActivity;
+
   const [triggerScan, { loading: scanning }] = useMutation(TRIGGER_MOMENTUM_SCAN, {
     onCompleted: (res) => {
       setScanNotice(res.triggerMomentumScan);
@@ -139,8 +157,14 @@ const MomentumTracker: React.FC = () => {
 
   const handleRunScan = useCallback(() => {
     setScanNotice(null);
+    if (latestLog && latestLog.status === 'SUCCESS') {
+      const timeStr = new Date(Number(latestLog.completedAt) || latestLog.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      if (!window.confirm(`Momentum Scan was already completed today by ${latestLog.userEmail} at ${timeStr}.\n\nDo you want to run it again?`)) {
+        return;
+      }
+    }
     triggerScan();
-  }, [triggerScan]);
+  }, [latestLog, triggerScan]);
 
   const stocks = useMemo(() => data?.momentumScanner || [], [data?.momentumScanner]);
   const regime = useMemo(() => data?.marketRegimeStatus || { status: 'Neutral', score: 50, reason: '' }, [data?.marketRegimeStatus]);
@@ -447,7 +471,7 @@ const MomentumTracker: React.FC = () => {
               Real-time cross-sectional percentile rankings and anomaly attention tracker across NSE equities.
             </Typography>
           </Box>
-          <Box display="flex" gap={2} alignItems="center">
+          <Box display="flex" flexDirection="column" alignItems="flex-end">
             <Button
               variant="contained"
               disabled={scanning}
@@ -469,6 +493,11 @@ const MomentumTracker: React.FC = () => {
             >
               {scanning ? 'Scanning Universe...' : 'Run Real-Time Scan'}
             </Button>
+            {latestLog && latestLog.status === 'SUCCESS' && (
+              <Typography variant="caption" sx={{ color: tokens.status.success.main, mt: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontWeight: 500 }}>
+                ✓ Completed today at {new Date(Number(latestLog.completedAt) || latestLog.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} by {latestLog.userEmail}
+              </Typography>
+            )}
           </Box>
         </Box>
 

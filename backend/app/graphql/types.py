@@ -212,6 +212,21 @@ class CompanyType:
     latest_momentum: Optional[MomentumSignalType] = None
 
 @strawberry.type
+class AdminActivityLogType:
+    id: str
+    user_email: str
+    event_type: str
+    event_name: str
+    event_description: Optional[str] = None
+    status: str
+    started_at: str
+    completed_at: Optional[str] = None
+    duration_ms: Optional[int] = None
+    created_at: str
+    metadata_json: Optional[str] = None
+    celery_task_id: Optional[str] = None
+
+@strawberry.type
 class AuthPayload:
     access_token: str
     token_type: str

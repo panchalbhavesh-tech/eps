@@ -214,6 +214,21 @@ class BackgroundJob(Base):
     result = Column(String, nullable=True)
     error_message = Column(String, nullable=True)
 
+class AdminActivityLog(Base):
+    __tablename__ = "admin_activity_logs"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_email = Column(String, index=True, nullable=False)
+    event_type = Column(String, index=True, nullable=False)
+    event_name = Column(String, index=True, nullable=False)
+    event_description = Column(String, nullable=True)
+    status = Column(String, index=True, nullable=False, default="RUNNING")
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    duration_ms = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    metadata_json = Column(String, nullable=True)
+    celery_task_id = Column(String, nullable=True, index=True)
+
 class MomentumSignal(Base):
     __tablename__ = "momentum_signals"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

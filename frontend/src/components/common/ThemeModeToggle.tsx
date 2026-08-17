@@ -15,12 +15,15 @@ export const ThemeModeToggle: React.FC = () => {
         aria-label="Toggle Light/Dark Theme Mode"
         onClick={toggleMode}
         sx={{
-          color: isDark ? tokens.accent.main : '#F59E0B',
-          backgroundColor: 'transparent !important',
-          transition: 'opacity 0.15s ease-in-out, transform 0.15s ease-in-out',
+          color: tokens.text.secondary,
+          backgroundColor: 'transparent',
+          borderRadius: '4px',
+          width: '24px',
+          height: '24px',
+          transition: 'color 0.15s ease-in-out',
           '&:hover': {
-            opacity: 0.8,
-            transform: 'scale(1.1)',
+            color: tokens.text.primary,
+            backgroundColor: 'transparent',
           },
         }}
       >
