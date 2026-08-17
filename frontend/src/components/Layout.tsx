@@ -8,7 +8,6 @@ import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 import MenuIcon from '@mui/icons-material/Menu';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import BiotechIcon from '@mui/icons-material/Biotech';
 import ScheduleIcon from '@mui/icons-material/Schedule';
@@ -24,7 +23,6 @@ const Layout: React.FC = () => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(true);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [hoverLive, setHoverLive] = useState(false);
 
   const isDark = mode === 'dark';
   const drawerWidth = collapsed ? 56 : 240;
@@ -87,71 +85,68 @@ const Layout: React.FC = () => {
         sx={{ 
           width: `calc(100% - ${drawerWidth}px)`, 
           ml: `${drawerWidth}px`, 
-          bgcolor: tokens.background.header, 
-          backdropFilter: 'blur(12px)',
+          bgcolor: tokens.background.default, 
           backgroundImage: 'none', 
           borderBottom: `1px solid ${tokens.border.main}`,
-          boxShadow: tokens.shadows.card,
+          boxShadow: 'none',
           transition: 'width 0.15s ease-in-out, margin-left 0.15s ease-in-out', 
           zIndex: 1100 
         }}
       >
         <Toolbar sx={{ minHeight: '56px !important', height: 56, px: '24px !important', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Left: Breadcrumb */}
-          <Box sx={{ display: 'flex', alignItems: 'center', overflow: 'hidden', mr: 2 }}>
-            <Typography
-              noWrap
-              sx={{
-                fontFamily: tokens.typography.fontFamily,
-                fontSize: '12px',
-                fontWeight: 500,
-                color: tokens.text.secondary,
-                letterSpacing: '0.25px',
-              }}
-            >
-              {currentItem.breadcrumb}
-            </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', overflow: 'hidden', mr: 2, gap: '8px' }}>
+            {(() => {
+              const parts = currentItem.breadcrumb.split(' / ');
+              const hasParent = parts.length > 1;
+              const parentText = hasParent ? parts[0] : '';
+              const childText = hasParent ? parts[1] : parts[0];
+              return (
+                <Typography noWrap sx={{ fontFamily: tokens.typography.fontFamily, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {hasParent && (
+                    <>
+                      <Box component="span" sx={{ color: tokens.text.tertiary, fontWeight: 500 }}>{parentText}</Box>
+                      <Box component="span" sx={{ color: tokens.border.main }}>/</Box>
+                    </>
+                  )}
+                  <Box component="span" sx={{ color: tokens.text.primary, fontWeight: 600 }}>{childText}</Box>
+                </Typography>
+              );
+            })()}
           </Box>
 
           {/* Right: System Live + Theme Toggle + User Chip */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
-            {/* System Live Pill */}
             <Tooltip title="Real-time data feeds active">
               <Box
-                onMouseEnter={() => setHoverLive(true)}
-                onMouseLeave={() => setHoverLive(false)}
                 onClick={() => window.location.reload()}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  height: '28px',
-                  padding: '4px 12px',
-                  borderRadius: '16px',
-                  backgroundColor: tokens.status.success.pillBg,
-                  color: tokens.status.success.main,
-                  border: `1px solid ${tokens.status.success.border}`,
-                  fontSize: '11px',
-                  fontWeight: 500,
-                  fontFamily: tokens.typography.fontFamily,
                   cursor: 'pointer',
                   userSelect: 'none',
-                  transition: 'all 0.15s ease-in-out',
+                  '&:hover .live-text': { color: tokens.text.primary },
+                  '&:hover .live-dot': { opacity: 0.8 },
                 }}
               >
-                {hoverLive ? (
-                  <RefreshIcon sx={{ fontSize: 13, color: tokens.status.success.main, animation: 'spin 1s linear infinite' }} />
-                ) : (
-                  <FiberManualRecordIcon sx={{ fontSize: 6, color: tokens.status.success.main }} />
-                )}
-                <span>System Live</span>
+                <FiberManualRecordIcon className="live-dot" sx={{ fontSize: 8, color: tokens.status.success.main, transition: 'opacity 0.15s' }} />
+                <Typography className="live-text" sx={{ fontSize: '12px', fontWeight: 500, color: tokens.text.secondary, transition: 'color 0.15s' }}>
+                  System Live
+                </Typography>
               </Box>
             </Tooltip>
+
+            {/* Subtle Separator */}
+            <Box sx={{ width: '1px', height: '14px', bgcolor: tokens.border.main }} />
 
             {/* Theme Toggle Button */}
             <ThemeModeToggle />
 
-            {/* User Chip */}
+            {/* Subtle Separator */}
+            <Box sx={{ width: '1px', height: '14px', bgcolor: tokens.border.main }} />
+
+            {/* User Profile */}
             <Box
               role="button"
               tabIndex={0}
@@ -160,26 +155,24 @@ const Layout: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '4px 8px',
-                borderRadius: '12px',
-                backgroundColor: tokens.background.card,
-                border: `1px solid ${tokens.border.main}`,
                 cursor: 'pointer',
-                transition: 'border-color 0.15s ease-in-out, background-color 0.15s ease-in-out',
+                borderRadius: '4px',
+                padding: '2px 4px',
+                transition: 'background-color 0.15s ease-in-out',
                 '&:hover': {
                   backgroundColor: tokens.background.cardHover,
-                  borderColor: tokens.border.light,
                 },
               }}
             >
               <Avatar
                 sx={{
-                  width: 28,
-                  height: 28,
-                  backgroundColor: tokens.primary.main,
-                  color: isDark ? '#0A0A0C' : '#FFFFFF',
-                  fontSize: '12px',
-                  fontWeight: 700,
+                  width: 20,
+                  height: 20,
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${tokens.border.main}`,
+                  color: tokens.text.secondary,
+                  fontSize: '10px',
+                  fontWeight: 600,
                 }}
               >
                 {user?.email?.charAt(0).toUpperCase() || 'A'}
@@ -187,16 +180,17 @@ const Layout: React.FC = () => {
               <Typography
                 noWrap
                 sx={{
-                  color: tokens.text.primary,
+                  color: tokens.text.secondary,
                   fontSize: '12px',
                   fontWeight: 500,
-                  display: { xs: 'none', md: 'block' },
-                  maxWidth: '130px',
+                  fontFamily: tokens.typography.fontFamily,
+                  transition: 'color 0.15s',
+                  '.MuiBox-root:hover &': { color: tokens.text.primary }
                 }}
               >
-                {user?.email || 'Analyst Session'}
+                {user?.email || 'admin@qeps.com'}
               </Typography>
-              <ExpandMoreIcon sx={{ fontSize: 16, color: tokens.text.secondary }} />
+              <ExpandMoreIcon sx={{ fontSize: 14, color: tokens.text.tertiary }} />
             </Box>
             <Menu
               anchorEl={anchorEl}

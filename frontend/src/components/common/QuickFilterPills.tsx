@@ -49,7 +49,7 @@ export const QuickFilterPills: React.FC<QuickFilterPillsProps> = ({
                     sx={{
                       fontSize: '11px',
                       fontWeight: 600,
-                      color: isSelected ? '#FFFFFF' : tokens.text.secondary,
+                      color: isSelected ? tokens.text.primary : tokens.text.secondary,
                     }}
                   >
                     ({opt.count})
@@ -62,19 +62,19 @@ export const QuickFilterPills: React.FC<QuickFilterPillsProps> = ({
               cursor: 'pointer',
               height: '32px',
               px: '4px',
-              borderRadius: '16px', // Pill shape
-              fontSize: '12px',
+              borderRadius: '4px',
+              fontSize: '11px',
               fontFamily: tokens.typography.fontFamily,
-              fontWeight: 500,
+              fontWeight: 600,
               lineHeight: '16px',
-              transition: 'all 0.15s ease-in-out',
-              backgroundColor: isSelected ? tokens.accent.main : 'transparent',
-              color: isSelected ? '#FFFFFF' : tokens.text.secondary,
-              border: isSelected ? `1px solid ${tokens.accent.main}` : `1px solid ${tokens.border.main}`,
+              transition: 'all 0.1s ease-in-out',
+              backgroundColor: isSelected ? (tokens.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)') : 'transparent',
+              color: isSelected ? tokens.text.primary : tokens.text.secondary,
+              border: `1px solid ${isSelected ? tokens.border.focus : tokens.border.main}`,
               boxShadow: 'none',
               '&:hover': {
-                backgroundColor: isSelected ? tokens.primary.dark : tokens.background.cardHover,
-                color: isSelected ? '#FFFFFF' : tokens.text.primary,
+                backgroundColor: tokens.background.cardHover,
+                color: tokens.text.primary,
               },
               '& .MuiChip-label': {
                 padding: '0 8px',

@@ -20,6 +20,7 @@ export interface ThemeTokens {
     primary: string;
     secondary: string;
     tertiary: string;
+    muted: string;
     disabled: string;
   };
   primary: {
@@ -102,29 +103,30 @@ export const getThemeTokens = (mode: PaletteMode): ThemeTokens => {
   return {
     mode,
     background: {
-      default: isDark ? '#0A0A0C' : '#F7F8FA',
-      paper: isDark ? '#131316' : '#FFFFFF',
-      card: isDark ? '#131316' : '#FFFFFF',
-      cardHover: isDark ? '#1A1A1E' : '#F5F6F8',
-      header: isDark ? '#0E0E12' : '#F8FAFC',
+      default: isDark ? '#0B0C0E' : '#F7F8FA',
+      paper: isDark ? '#111316' : '#FFFFFF',
+      card: isDark ? '#111316' : '#FFFFFF',
+      cardHover: isDark ? '#15181B' : '#F5F6F8',
+      header: isDark ? '#111316' : '#F8FAFC',
     },
     border: {
-      main: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
-      light: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)',
-      focus: isDark ? '#3DFFA2' : '#0FAE64',
+      main: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.06)',
+      light: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+      focus: isDark ? '#3B82F6' : '#2563EB',
     },
     text: {
-      primary: isDark ? 'rgba(255, 255, 255, 0.95)' : 'rgba(0, 0, 0, 0.87)',
-      secondary: isDark ? 'rgba(255, 255, 255, 0.60)' : 'rgba(0, 0, 0, 0.60)',
-      tertiary: isDark ? 'rgba(255, 255, 255, 0.40)' : 'rgba(0, 0, 0, 0.40)',
+      primary: isDark ? 'rgba(255, 255, 255, 0.95)' : 'rgba(0, 0, 0, 0.90)',
+      secondary: isDark ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.75)',
+      tertiary: isDark ? 'rgba(255, 255, 255, 0.55)' : 'rgba(0, 0, 0, 0.60)',
+      muted: isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.50)',
       disabled: isDark ? 'rgba(255, 255, 255, 0.30)' : 'rgba(0, 0, 0, 0.38)',
     },
     primary: {
-      main: isDark ? '#3DFFA2' : '#0FAE64',
-      light: isDark ? '#6FFFB6' : '#34D399',
-      dark: isDark ? '#1EAF6A' : '#059669',
-      tint: isDark ? 'rgba(61, 255, 162, 0.08)' : 'rgba(15, 174, 100, 0.08)',
-      border: isDark ? 'rgba(61, 255, 162, 0.30)' : 'rgba(15, 174, 100, 0.30)',
+      main: isDark ? '#3B82F6' : '#2563EB',
+      light: isDark ? '#60A5FA' : '#3B82F6',
+      dark: isDark ? '#2563EB' : '#1D4ED8',
+      tint: isDark ? 'rgba(59, 130, 246, 0.08)' : 'rgba(37, 99, 235, 0.08)',
+      border: isDark ? 'rgba(59, 130, 246, 0.30)' : 'rgba(37, 99, 235, 0.30)',
     },
     secondary: {
       main: '#6366f1',
@@ -132,46 +134,46 @@ export const getThemeTokens = (mode: PaletteMode): ThemeTokens => {
       wash: isDark ? 'rgba(99, 102, 241, 0.08)' : '#f3f4f6',
     },
     accent: {
-      main: isDark ? '#3DFFA2' : '#0FAE64',
-      tint: isDark ? 'rgba(61, 255, 162, 0.10)' : 'rgba(15, 174, 100, 0.10)',
-      glow: isDark ? '0 0 12px rgba(61, 255, 162, 0.25)' : '0 2px 8px rgba(15, 174, 100, 0.15)',
+      main: isDark ? '#3B82F6' : '#2563EB',
+      tint: isDark ? 'rgba(59, 130, 246, 0.10)' : 'rgba(37, 99, 235, 0.10)',
+      glow: isDark ? 'none' : 'none',
     },
     rowTint: {
-      buy: isDark ? 'rgba(61, 255, 162, 0.08)' : 'rgba(15, 174, 100, 0.08)',
-      avoid: isDark ? 'rgba(255, 71, 87, 0.08)' : 'rgba(229, 57, 53, 0.08)',
-      neutral: isDark ? 'rgba(255, 165, 2, 0.08)' : 'rgba(245, 124, 0, 0.08)',
-      attention: isDark ? 'rgba(255, 71, 87, 0.08)' : 'rgba(229, 57, 53, 0.08)',
-      child: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
-      hoverOverlay: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)',
+      buy: 'transparent',
+      avoid: 'transparent',
+      neutral: 'transparent',
+      attention: 'transparent',
+      child: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.01)',
+      hoverOverlay: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.03)',
     },
     status: {
       success: {
-        main: isDark ? '#3DFFA2' : '#0FAE64',
-        wash: isDark ? 'rgba(61, 255, 162, 0.08)' : 'rgba(15, 174, 100, 0.08)',
-        pillBg: isDark ? 'rgba(61, 255, 162, 0.20)' : 'rgba(15, 174, 100, 0.15)',
-        border: isDark ? 'rgba(61, 255, 162, 0.40)' : 'rgba(15, 174, 100, 0.35)',
-        tint: isDark ? 'rgba(61, 255, 162, 0.10)' : '#d1fae5',
+        main: isDark ? '#20C997' : '#0FAE64',
+        wash: isDark ? 'rgba(32, 201, 151, 0.08)' : 'rgba(15, 174, 100, 0.08)',
+        pillBg: isDark ? 'rgba(32, 201, 151, 0.10)' : 'rgba(15, 174, 100, 0.10)',
+        border: isDark ? 'rgba(32, 201, 151, 0.20)' : 'rgba(15, 174, 100, 0.20)',
+        tint: isDark ? 'rgba(32, 201, 151, 0.10)' : '#d1fae5',
       },
       error: {
-        main: isDark ? '#FF4757' : '#E53935',
-        wash: isDark ? 'rgba(255, 71, 87, 0.08)' : 'rgba(229, 57, 53, 0.08)',
-        pillBg: isDark ? 'rgba(255, 71, 87, 0.20)' : 'rgba(229, 57, 53, 0.15)',
-        border: isDark ? 'rgba(255, 71, 87, 0.40)' : 'rgba(229, 57, 53, 0.35)',
-        tint: isDark ? 'rgba(255, 71, 87, 0.10)' : '#fee2e2',
+        main: isDark ? '#F05A67' : '#E53935',
+        wash: isDark ? 'rgba(240, 90, 103, 0.08)' : 'rgba(229, 57, 53, 0.08)',
+        pillBg: isDark ? 'rgba(240, 90, 103, 0.10)' : 'rgba(229, 57, 53, 0.10)',
+        border: isDark ? 'rgba(240, 90, 103, 0.20)' : 'rgba(229, 57, 53, 0.20)',
+        tint: isDark ? 'rgba(240, 90, 103, 0.10)' : '#fee2e2',
       },
       warning: {
-        main: isDark ? '#FFA502' : '#F57C00',
-        wash: isDark ? 'rgba(255, 165, 2, 0.08)' : 'rgba(245, 124, 0, 0.08)',
-        pillBg: isDark ? 'rgba(255, 165, 2, 0.20)' : 'rgba(245, 124, 0, 0.15)',
-        border: isDark ? 'rgba(255, 165, 2, 0.40)' : 'rgba(245, 124, 0, 0.35)',
-        tint: isDark ? 'rgba(255, 165, 2, 0.10)' : '#fef3c7',
+        main: isDark ? '#E5A93D' : '#F57C00',
+        wash: isDark ? 'rgba(229, 169, 61, 0.08)' : 'rgba(245, 124, 0, 0.08)',
+        pillBg: isDark ? 'rgba(229, 169, 61, 0.10)' : 'rgba(245, 124, 0, 0.10)',
+        border: isDark ? 'rgba(229, 169, 61, 0.20)' : 'rgba(245, 124, 0, 0.20)',
+        tint: isDark ? 'rgba(229, 169, 61, 0.10)' : '#fef3c7',
       },
       neutral: {
-        main: isDark ? 'rgba(255, 255, 255, 0.60)' : 'rgba(0, 0, 0, 0.60)',
-        wash: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
-        pillBg: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-        border: isDark ? 'rgba(255, 255, 255, 0.20)' : 'rgba(0, 0, 0, 0.15)',
-        tint: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f8fafc',
+        main: isDark ? '#8B949E' : 'rgba(0, 0, 0, 0.60)',
+        wash: isDark ? 'rgba(139, 148, 158, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+        pillBg: isDark ? 'rgba(139, 148, 158, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+        border: isDark ? 'rgba(139, 148, 158, 0.20)' : 'rgba(0, 0, 0, 0.15)',
+        tint: isDark ? 'rgba(139, 148, 158, 0.05)' : '#f8fafc',
       },
       info: {
         main: isDark ? '#00B4D8' : '#0096C7',
@@ -235,7 +237,7 @@ export const createAppTheme = (mode: PaletteMode): Theme => {
       button: { textTransform: 'none', fontSize: '12px', fontWeight: 600, letterSpacing: '0.25px' },
     },
     shape: {
-      borderRadius: 12,
+      borderRadius: 4,
     },
     components: {
       MuiPaper: {
