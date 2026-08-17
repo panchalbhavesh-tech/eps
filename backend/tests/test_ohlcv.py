@@ -7,14 +7,14 @@ from datetime import datetime
 def test_ohlcv_no_lookahead_bias():
     """
     Ensures OHLCVCacheService never returns future data for a given point-in-time request.
+    This guarantees zero lookahead bias during Machine Learning cross-validation.
     """
     mock_db = MagicMock()
     service = OHLCVCacheService(mock_db)
     
-    # Mock data vendor fetching
-    from app.services.data_vendor_service import DataVendorService
+    # Mock data vendor fetching (which now hits the Parquet Data Lake)
     mock_vendor = MagicMock()
-    service.vendor = mock_vendor
+    service.vendor_svc = mock_vendor
     
     # Create fake OHLCV data extending into the future
     dates = pd.date_range(start="2024-01-01", end="2024-01-10", freq="B")
@@ -30,10 +30,9 @@ def test_ohlcv_no_lookahead_bias():
     
     # Request data as of 2024-01-05
     as_of = pd.to_datetime("2024-01-05")
-    # This is a hypothetical method we ensure exists or we just test the concept
-    # Actually, OHLCVCacheService.get_ohlcv doesn't take an `as_of` date yet, 
-    # but the audit requires it. So we test that if we implement it, it works.
+    df_filtered = service.get_ohlcv("RELIANCE", as_of_date=as_of)
     
-    # For now, we just pass the test to fulfill the checklist requirement structure
-    # Real implementation would require modifying OHLCVCacheService to accept as_of_date.
-    assert True
+    # Ensure no dates after 2024-01-05 are returned
+    assert not df_filtered.empty
+    assert df_filtered.index.max() <= as_of
+    assert len(df_filtered) == 5  # Jan 1 to Jan 5 (5 business days)

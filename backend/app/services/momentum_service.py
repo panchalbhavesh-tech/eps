@@ -8,7 +8,6 @@ from app.infrastructure.models import Company, MomentumSignal
 from app.services.quant_service import QuantService
 import uuid
 import time
-import yfinance as yf
 
 _REGIME_CACHE: Dict[str, Any] = {}
 _REGIME_CACHE_TIME: float = 0
@@ -18,8 +17,7 @@ class MomentumService:
         self.db = db
         self.quant = QuantService()
         
-    @staticmethod
-    def get_market_regime() -> Dict[str, Any]:
+    def get_market_regime(self) -> Dict[str, Any]:
         """
         Evaluates current Market Regime using Nifty 50 (^NSEI) real-time data.
         Uses a 15-minute TTL memory cache to prevent blocking API requests on repeated page loads.
@@ -30,10 +28,8 @@ class MomentumService:
             return _REGIME_CACHE
 
         try:
-            nifty_df = yf.download('^NSEI', period='1y', progress=False)
+            nifty_df = self.quant.fetch_historical_ohlcv('^NSEI', years=1)
             if not nifty_df.empty and len(nifty_df) > 50:
-                if isinstance(nifty_df.columns, pd.MultiIndex):
-                    nifty_df.columns = nifty_df.columns.get_level_values(0)
                 
                 close_series = nifty_df['Close']
                 dma_50 = float(close_series.rolling(window=50).mean().iloc[-1])
@@ -473,13 +469,15 @@ class MomentumService:
             return
             
         # Fetch returns for covariance
-        import yfinance as yf
         # We need historical returns for HRP. 252 days is standard.
         try:
-            data = yf.download(tickers, period="1y", progress=False)['Close']
-            if len(tickers) == 1:
-                data = pd.DataFrame(data)
-                data.columns = tickers
+            close_series_dict = {}
+            for t in tickers:
+                df = self.quant.fetch_historical_ohlcv(t, years=1)
+                if not df.empty:
+                    close_series_dict[t] = df['Close']
+            
+            data = pd.DataFrame(close_series_dict)
             returns = data.pct_change().dropna()
             if returns.empty:
                 return

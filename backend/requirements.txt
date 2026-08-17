@@ -25,3 +25,4 @@ xgboost
 shap
 curl-cffi
 feedparser
+pyarrow
