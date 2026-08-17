@@ -1,7 +1,9 @@
 from celery.signals import task_prerun, task_success, task_failure
 from app.infrastructure.database import SessionLocal
-from app.infrastructure.models import BackgroundJob
+from app.infrastructure.models import BackgroundJob, AdminActivityLog
 from datetime import datetime
+from app.services.activity_logger import log_activity_finish, log_activity_start
+from app.worker.task_mappings import get_task_metadata
 
 @task_prerun.connect
 def task_prerun_handler(task_id, task, *args, **kwargs):
@@ -19,6 +21,18 @@ def task_prerun_handler(task_id, task, *args, **kwargs):
         job.status = "RUNNING"
         job.started_at = datetime.utcnow()
         db.commit()
+
+        # Update or Create AdminActivityLog
+        admin_log = db.query(AdminActivityLog).filter(AdminActivityLog.celery_task_id == task_id).first()
+        if admin_log:
+            admin_log.status = "RUNNING"
+            admin_log.started_at = datetime.utcnow()
+            db.commit()
+        else:
+            # It's a CRON task (scheduled)
+            meta = get_task_metadata(task.name)
+            log_activity_start(db, "SYSTEM", meta["event_type"], meta["event_name"], task_id, status="RUNNING")
+
     except Exception as e:
         db.rollback()
         print(f"Error in task_prerun_handler: {e}")
@@ -36,6 +50,10 @@ def task_success_handler(sender, result, **kwargs):
             job.finished_at = datetime.utcnow()
             job.result = str(result)
             db.commit()
+        
+        # Finish AdminActivityLog
+        log_activity_finish(db, task_id, "SUCCESS", metadata={"result": str(result)[:200]})
+
     except Exception as e:
         db.rollback()
         print(f"Error in task_success_handler: {e}")
@@ -53,6 +71,12 @@ def task_failure_handler(task_id, exception, traceback, einfo, *args, **kwargs):
             import traceback as tb
             job.error_message = "".join(tb.format_exception(type(exception), exception, traceback)) if traceback else str(exception)
             db.commit()
+            
+        # Finish AdminActivityLog
+        import traceback as tb
+        error_msg = "".join(tb.format_exception(type(exception), exception, traceback)) if traceback else str(exception)
+        log_activity_finish(db, task_id, "FAILED", error_message=error_msg)
+
     except Exception as e:
         db.rollback()
         print(f"Error in task_failure_handler: {e}")

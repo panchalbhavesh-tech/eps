@@ -11,10 +11,11 @@ import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import BiotechIcon from '@mui/icons-material/Biotech';
 import ScheduleIcon from '@mui/icons-material/Schedule';
+import HistoryIcon from '@mui/icons-material/History';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { useThemeMode } from '../theme/ThemeContext';
-import { ErrorBoundary, ThemeModeToggle } from './common';
+import { ErrorBoundary, ThemeModeToggle, LiveClock } from './common';
 
 const Layout: React.FC = () => {
   const { logout, user } = useAuth();
@@ -69,6 +70,13 @@ const Layout: React.FC = () => {
       breadcrumb: 'Celery Schedules / Beat Timers & Automated Research Workflows',
       description: 'Inspect all scheduled Celery Beat tasks, intervals, and automated execution loops' 
     },
+    { 
+      text: 'Admin Logs', 
+      icon: <HistoryIcon sx={{ fontSize: 20 }} />, 
+      path: '/admin-logs',
+      breadcrumb: 'Admin Logs / System Activity & Execution History',
+      description: 'Centralized Admin Logs / Activity Logs page where you can see important system actions' 
+    },
   ];
 
   const currentItem = menuItems.find(m => m.path === location.pathname) || {
@@ -117,6 +125,8 @@ const Layout: React.FC = () => {
 
           {/* Right: System Live + Theme Toggle + User Chip */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
+            <LiveClock />
+            
             <Tooltip title="Real-time data feeds active">
               <Box
                 onClick={() => window.location.reload()}

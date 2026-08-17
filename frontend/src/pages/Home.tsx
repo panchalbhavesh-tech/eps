@@ -514,6 +514,18 @@ const MASS_CALCULATE_HEALTH = gql`
   }
 `;
 
+const GET_LATEST_ADMIN_ACTIVITY = gql`
+  query GetLatestAdminActivity($eventName: String!) {
+    latestAdminActivity(eventName: $eventName) {
+      id
+      userEmail
+      status
+      startedAt
+      completedAt
+    }
+  }
+`;
+
 const Home: React.FC = () => {
   const { mode, tokens } = useThemeMode();
   const isDark = mode === 'dark';
@@ -531,6 +543,22 @@ const Home: React.FC = () => {
       alert("Mass financial health analysis queued for all stocks! Check Tasks page for progress and refresh to view scores.");
     }
   });
+
+  const { data: latestLogData } = useQuery(GET_LATEST_ADMIN_ACTIVITY, {
+    variables: { eventName: 'Calculate Health' },
+    fetchPolicy: 'network-only'
+  });
+  const latestLog = latestLogData?.latestAdminActivity;
+
+  const handleCalculateHealth = useCallback(() => {
+    if (latestLog && latestLog.status === 'SUCCESS') {
+      const timeStr = new Date(Number(latestLog.completedAt) || latestLog.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      if (!window.confirm(`Calculate Health was already completed today by ${latestLog.userEmail} at ${timeStr}.\n\nDo you want to run it again?`)) {
+        return;
+      }
+    }
+    massCalculate();
+  }, [latestLog, massCalculate]);
 
   const handlePopulate = useCallback(() => {
     populateData();
@@ -1050,9 +1078,9 @@ const Home: React.FC = () => {
       label: 'Mass Calculate Health',
       isPrimary: true,
       icon: 'calc' as const,
-      onClick: () => massCalculate()
+      onClick: () => handleCalculateHealth()
     }
-  ], [massCalculate]);
+  ], [handleCalculateHealth]);
 
   const activeColumns = useMemo(() => {
     const qtrs = [

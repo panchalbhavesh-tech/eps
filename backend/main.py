@@ -7,6 +7,7 @@ from app.infrastructure.database import engine, Base, SessionLocal
 from app.infrastructure.models import User
 from app.core.security import get_password_hash
 from app.worker.celery_app import celery_app
+from app.core.config import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,16 +21,31 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Automatic migration check failed or skipped: {e}")
     
-    # Seed default admin user and Trigger Automated NSE Sync
+    # Seed developer accounts and deactivate old admin
     db = SessionLocal()
     try:
-        admin = db.query(User).filter(User.email == "admin@qeps.com").first()
-        if not admin:
-            hashed_pw = get_password_hash("adminpassword")
-            admin = User(email="admin@qeps.com", hashed_password=hashed_pw)
-            db.add(admin)
+        # Safely deactivate old admin account if it exists
+        old_admin = db.query(User).filter(User.email == "admin@qeps.com").first()
+        if old_admin and old_admin.is_active:
+            old_admin.is_active = False
             db.commit()
-            print("Default admin user created.")
+            print("Old admin account deactivated.")
+
+        # Ensure configured developer accounts exist
+        developer_accounts = [
+            {"email": settings.AUTH_USER_1_EMAIL, "password": settings.AUTH_USER_1_PASSWORD},
+            {"email": settings.AUTH_USER_2_EMAIL, "password": settings.AUTH_USER_2_PASSWORD},
+        ]
+
+        for acc in developer_accounts:
+            user = db.query(User).filter(User.email == acc["email"]).first()
+            if not user:
+                hashed_pw = get_password_hash(acc["password"])
+                new_user = User(email=acc["email"], hashed_password=hashed_pw, is_active=True)
+                db.add(new_user)
+                print(f"Developer account created: {acc['email']}")
+        
+        db.commit()
             
         # Dispatch the NSE sync task asynchronously to populate database in background
         print("Dispatching automated NSE Calendar sync...")

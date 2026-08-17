@@ -9,6 +9,7 @@ import TaskManager from './pages/TaskManager'
 import MomentumTracker from './pages/MomentumTracker'
 import HypothesisLaboratory from './pages/HypothesisLaboratory'
 import Schedules from './pages/Schedules'
+import AdminLogs from './pages/AdminLogs'
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -32,6 +33,7 @@ function App() {
           <Route path="companies/:id" element={<CompanyDetail />} />
           <Route path="tasks" element={<TaskManager />} />
           <Route path="schedules" element={<Schedules />} />
+          <Route path="admin-logs" element={<AdminLogs />} />
           <Route path="research" element={<HypothesisLaboratory />} />
         </Route>
       </Routes>
