@@ -31,3 +31,4 @@ export { StatusChip } from './StatusChip';
 export type { StatusVariant } from './StatusChip';
 export { BulkActionBar } from './BulkActionBar';
 export type { BulkActionItem } from './BulkActionBar';
+export { LiveClock } from './LiveClock';

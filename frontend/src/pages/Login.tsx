@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
-import { Box, Button, TextField, Typography, Paper, CircularProgress, Alert, InputAdornment } from '@mui/material';
+import { Box, Button, TextField, Typography, Paper, CircularProgress, Alert, InputAdornment, IconButton } from '@mui/material';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import { useMutation } from '@apollo/client';
 import { LOGIN_MUTATION } from '../graphql/operations';
 import { useAuth } from '../store/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { saasTokens } from '../theme/theme';
+import { useThemeMode } from '../theme/ThemeContext';
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState('admin@qeps.com');
-  const [password, setPassword] = useState('adminpassword');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { tokens, mode } = useThemeMode();
+  const isDark = mode === 'dark';
 
   const [loginMutation, { loading, error }] = useMutation(LOGIN_MUTATION, {
     onCompleted: (data) => {
@@ -27,6 +33,39 @@ const Login: React.FC = () => {
     loginMutation({ variables: { email, password } });
   };
 
+  const handleClickShowPassword = () => setShowPassword((show) => !show);
+
+  // Common input styles matching institutional theme
+  const inputStyles = {
+    '& .MuiOutlinedInput-root': {
+      backgroundColor: tokens.background.default,
+      color: tokens.text.primary,
+      fontSize: '14px',
+      fontWeight: 500,
+      transition: 'all 0.2s ease-in-out',
+      '& fieldset': {
+        borderColor: tokens.border.main,
+        borderWidth: '1px',
+        transition: 'border-color 0.2s',
+      },
+      '&:hover fieldset': {
+        borderColor: tokens.border.main,
+      },
+      '&.Mui-focused fieldset': {
+        borderColor: tokens.accent.main,
+        borderWidth: '1px',
+      },
+      '& input': {
+        padding: '12px 14px',
+        color: tokens.text.primary,
+        '&::placeholder': {
+          color: tokens.text.tertiary,
+          opacity: 1,
+        }
+      }
+    }
+  };
+
   return (
     <Box 
       sx={{ 
@@ -34,7 +73,7 @@ const Login: React.FC = () => {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
-        bgcolor: 'transparent', // Uses ambient body gradient
+        background: `radial-gradient(circle at 50% 0%, ${tokens.background.cardHover}, ${tokens.background.default} 60%)`,
         position: 'relative',
         overflow: 'hidden',
         px: 2,
@@ -45,14 +84,14 @@ const Login: React.FC = () => {
         sx={{ 
           p: { xs: 4, md: 5 }, 
           width: '100%', 
-          maxWidth: 440, 
+          maxWidth: 420, 
           display: 'flex', 
           flexDirection: 'column', 
           gap: 3.5,
-          bgcolor: '#ffffff',
-          border: `1px solid ${saasTokens.border.main}`,
-          borderRadius: 4,
-          boxShadow: '0 10px 30px -5px rgba(15, 23, 42, 0.08)',
+          bgcolor: tokens.background.card,
+          border: `1px solid ${tokens.border.light}`,
+          borderRadius: 3,
+          boxShadow: isDark ? '0 12px 40px -10px rgba(0, 0, 0, 0.5)' : '0 10px 30px -5px rgba(15, 23, 42, 0.08)',
           zIndex: 1,
           position: 'relative',
         }}
@@ -63,22 +102,22 @@ const Login: React.FC = () => {
               width: 52, 
               height: 52, 
               borderRadius: 3, 
-              bgcolor: '#0f172a', 
+              bgcolor: tokens.background.cardHover, 
+              border: `1px solid ${tokens.border.light}`,
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)',
               mb: 1
             }}
           >
-            <ShowChartIcon sx={{ color: '#ffffff', fontSize: 28 }} />
+            <ShowChartIcon sx={{ color: tokens.accent.main, fontSize: 26 }} />
           </Box>
           
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 800, color: saasTokens.text.primary, letterSpacing: '-0.02em' }}>
+          <Typography variant="h5" component="h1" sx={{ fontWeight: 700, color: tokens.text.primary, letterSpacing: '-0.02em', fontSize: '1.4rem' }}>
             QEPS Quant Lab
           </Typography>
           
-          <Typography variant="body2" sx={{ color: saasTokens.text.secondary, fontSize: '0.9rem', maxWidth: '320px', lineHeight: 1.5 }}>
+          <Typography variant="body2" sx={{ color: tokens.text.secondary, fontSize: '0.85rem', maxWidth: '320px', lineHeight: 1.5, fontWeight: 400 }}>
             Enterprise Quantitative Earnings Prediction & Institutional AI Market Analytics
           </Typography>
         </Box>
@@ -87,20 +126,23 @@ const Login: React.FC = () => {
           <Alert 
             severity="error" 
             sx={{ 
-              bgcolor: '#fff1f2', 
-              color: '#e11d48', 
-              border: '1px solid #fda4af',
+              bgcolor: tokens.status.error.wash, 
+              color: tokens.status.error.main, 
+              border: `1px solid ${tokens.status.error.border || tokens.status.error.main}`,
               borderRadius: 2,
               fontSize: '0.85rem',
+              '& .MuiAlert-icon': {
+                color: tokens.status.error.main
+              }
             }}
           >
             {error.message || 'Authentication failed. Please verify credentials.'}
           </Alert>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
           <Box>
-            <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: saasTokens.text.secondary, mb: 0.8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: tokens.text.secondary, mb: 1, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Analyst Email
             </Typography>
             <TextField
@@ -111,10 +153,11 @@ const Login: React.FC = () => {
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="name@qeps.com"
+              sx={inputStyles}
               InputProps={{
                 startAdornment: (
-                  <InputAdornment position="start">
-                    <EmailOutlinedIcon sx={{ color: saasTokens.text.secondary, fontSize: 20 }} />
+                  <InputAdornment position="start" sx={{ ml: 0.5 }}>
+                    <EmailOutlinedIcon sx={{ color: tokens.text.tertiary, fontSize: 18 }} />
                   </InputAdornment>
                 ),
               }}
@@ -122,23 +165,36 @@ const Login: React.FC = () => {
           </Box>
 
           <Box>
-            <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: saasTokens.text.secondary, mb: 0.8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: tokens.text.secondary, mb: 1, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Security Token / Password
             </Typography>
             <TextField
               variant="outlined"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               fullWidth
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="••••••••••••"
+              sx={inputStyles}
               InputProps={{
                 startAdornment: (
-                  <InputAdornment position="start">
-                    <LockOutlinedIcon sx={{ color: saasTokens.text.secondary, fontSize: 20 }} />
+                  <InputAdornment position="start" sx={{ ml: 0.5 }}>
+                    <LockOutlinedIcon sx={{ color: tokens.text.tertiary, fontSize: 18 }} />
                   </InputAdornment>
                 ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label="toggle password visibility"
+                      onClick={handleClickShowPassword}
+                      edge="end"
+                      sx={{ color: tokens.text.tertiary, '&:hover': { color: tokens.text.primary } }}
+                    >
+                      {showPassword ? <VisibilityOffOutlinedIcon sx={{ fontSize: 18 }} /> : <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />}
+                    </IconButton>
+                  </InputAdornment>
+                )
               }}
             />
           </Box>
@@ -146,30 +202,38 @@ const Login: React.FC = () => {
           <Button 
             type="submit" 
             variant="contained" 
-            color="primary" 
-            size="large" 
             disabled={loading}
             fullWidth
             sx={{ 
-              height: 46, 
-              fontSize: '0.95rem', 
+              height: 48, 
+              fontSize: '0.9rem', 
               fontWeight: 600,
               mt: 1,
-              bgcolor: '#0f172a',
-              color: '#ffffff',
-              boxShadow: '0 2px 8px rgba(15, 23, 42, 0.15)',
+              bgcolor: tokens.primary.main,
+              color: '#000000', // Ensure contrast on primary button
+              textTransform: 'none',
+              borderRadius: '4px',
+              border: `1px solid ${tokens.primary.border || tokens.primary.main}`,
+              boxShadow: 'none',
               '&:hover': {
-                bgcolor: '#1e293b',
+                bgcolor: tokens.primary.dark,
+                boxShadow: 'none',
+              },
+              '&.Mui-disabled': {
+                bgcolor: tokens.primary.tint,
+                color: tokens.text.tertiary,
               }
             }}
           >
-            {loading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : 'Initialize Institutional Session →'}
+            {loading ? <CircularProgress size={24} sx={{ color: '#000000' }} /> : 'Initialize Institutional Session →'}
           </Button>
         </form>
 
-        <Box sx={{ pt: 2, borderTop: `1px solid ${saasTokens.border.main}`, textAlign: 'center' }}>
-          <Typography sx={{ fontSize: '0.72rem', color: saasTokens.text.secondary, opacity: 0.8 }}>
-            Protected by QEPS Zero-Trust Authentication. Powered by Docker & Celery Workers.
+        <Box sx={{ pt: 2.5, mt: 1, borderTop: `1px solid ${tokens.border.light}`, textAlign: 'center' }}>
+          <Typography sx={{ fontSize: '0.72rem', color: tokens.text.muted || tokens.text.tertiary, fontWeight: 500 }}>
+            Protected by QEPS Zero-Trust Authentication.
+            <br />
+            Powered by Docker & Celery Workers.
           </Typography>
         </Box>
       </Paper>

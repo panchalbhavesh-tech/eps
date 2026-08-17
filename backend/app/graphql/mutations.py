@@ -30,31 +30,31 @@ class Mutation:
     @strawberry.mutation
     def trigger_prediction(self, info: Info[Context, None], company_id: str) -> str:
         task = celery_app.send_task("app.worker.tasks.generate_prediction_task", args=[company_id])
-        _log_queued_task(info.context.db, task.id, "app.worker.tasks.generate_prediction_task")
+        _log_queued_task(info.context.db, task.id, "app.worker.tasks.generate_prediction_task", info.context.user.email)
         return f"Prediction task {task.id} started."
         
     @strawberry.mutation
     def populate_companies_data(self, info: Info[Context, None]) -> str:
         task = celery_app.send_task("app.worker.tasks.populate_companies_data_task")
-        _log_queued_task(info.context.db, task.id, "app.worker.tasks.populate_companies_data_task")
+        _log_queued_task(info.context.db, task.id, "app.worker.tasks.populate_companies_data_task", info.context.user.email)
         return f"Populate data task {task.id} started in the background."
         
     @strawberry.mutation
     def sync_nse_calendar(self, info: Info[Context, None]) -> str:
         task = celery_app.send_task("app.worker.tasks.sync_nse_calendar_task")
-        _log_queued_task(info.context.db, task.id, "app.worker.tasks.sync_nse_calendar_task")
+        _log_queued_task(info.context.db, task.id, "app.worker.tasks.sync_nse_calendar_task", info.context.user.email)
         return f"NSE Sync task queued with ID: {task.id}"
 
     @strawberry.mutation
     def analyze_company(self, info: Info[Context, None], company_id: str) -> str:
         task = celery_app.send_task("app.worker.tasks.generate_deep_research_report_task", args=[company_id])
-        _log_queued_task(info.context.db, task.id, "app.worker.tasks.generate_deep_research_report_task")
+        _log_queued_task(info.context.db, task.id, "app.worker.tasks.generate_deep_research_report_task", info.context.user.email)
         return f"Deep research analysis task {task.id} started in the background."
 
     @strawberry.mutation
     def mass_calculate_financial_health(self, info: Info[Context, None]) -> str:
         task = celery_app.send_task("app.worker.tasks.mass_calculate_financial_health_task")
-        _log_queued_task(info.context.db, task.id, "app.worker.tasks.mass_calculate_financial_health_task")
+        _log_queued_task(info.context.db, task.id, "app.worker.tasks.mass_calculate_financial_health_task", info.context.user.email)
         return f"Mass financial health calculation task {task.id} queued in background."
 
     @strawberry.mutation
@@ -135,7 +135,7 @@ class Mutation:
     @strawberry.mutation
     def trigger_momentum_scan(self, info: Info[Context, None]) -> str:
         task = celery_app.send_task("app.worker.tasks.run_nse_momentum_scan_task")
-        _log_queued_task(info.context.db, task.id, "app.worker.tasks.run_nse_momentum_scan_task")
+        _log_queued_task(info.context.db, task.id, "app.worker.tasks.run_nse_momentum_scan_task", info.context.user.email)
         return f"Momentum scanner task {task.id} started in the background."
 
     @strawberry.mutation
@@ -167,7 +167,7 @@ class Mutation:
         
         try:
             task = celery_app.send_task("app.worker.tasks.evaluate_single_hypothesis_task", args=[res["hypothesis_id"]])
-            _log_queued_task(db, task.id, "app.worker.tasks.evaluate_single_hypothesis_task")
+            _log_queued_task(db, task.id, "app.worker.tasks.evaluate_single_hypothesis_task", info.context.user.email)
         except Exception as e:
             print(f"Notice: Background hypothesis evaluation trigger bypassed: {e}")
             
@@ -176,20 +176,28 @@ class Mutation:
     @strawberry.mutation
     def trigger_automated_hypothesis_research(self, info: Info[Context, None]) -> str:
         task = celery_app.send_task("app.worker.tasks.run_automated_hypothesis_research_task")
-        _log_queued_task(info.context.db, task.id, "app.worker.tasks.run_automated_hypothesis_research_task")
+        _log_queued_task(info.context.db, task.id, "app.worker.tasks.run_automated_hypothesis_research_task", info.context.user.email)
         return f"Automated AI hypothesis research task {task.id} started in background."
 
     @strawberry.mutation
     def trigger_celery_task(self, info: Info[Context, None], task_name: str) -> str:
         try:
             task = celery_app.send_task(task_name)
-            _log_queued_task(info.context.db, task.id, task_name)
+            _log_queued_task(info.context.db, task.id, task_name, info.context.user.email)
             return f"Successfully queued task '{task_name}' in background (ID: {task.id})."
         except Exception as e:
             return f"Failed to queue task '{task_name}': {str(e)}"
 
-def _log_queued_task(db, task_id: str, name: str):
+def _log_queued_task(db, task_id: str, name: str, user_email: str):
     from app.infrastructure.models import BackgroundJob
+    from app.services.activity_logger import log_activity_start
+    from app.worker.task_mappings import get_task_metadata
+    
+    # Maintain existing background job table for backwards compatibility
     job = BackgroundJob(celery_task_id=task_id, task_name=name, status="QUEUED")
     db.add(job)
     db.commit()
+    
+    # Also log to Admin Activity logs
+    meta = get_task_metadata(name)
+    log_activity_start(db, user_email, meta["event_type"], meta["event_name"], task_id, status="QUEUED")

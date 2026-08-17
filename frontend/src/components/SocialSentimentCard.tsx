@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useThemeMode } from '../theme/ThemeContext';
 import { 
   Box, Typography, Paper, Grid, CircularProgress, Alert, Chip, Button, Stack, 
   LinearProgress, Drawer, IconButton, Tooltip, Card, CardContent 
@@ -77,6 +78,7 @@ interface SmartMoneyItem {
 }
 
 const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) => {
+  const { tokens } = useThemeMode();
   const [data, setData] = useState<SentimentData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -118,9 +120,9 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
 
   if (loading && !data) {
     return (
-      <Box sx={{ p: 4, textAlign: 'center', bgcolor: '#0f172a', borderRadius: 3, my: 3, border: '1px solid #1e293b' }}>
-        <CircularProgress sx={{ color: '#38bdf8', mb: 2 }} />
-        <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 600 }}>
+      <Box sx={{ p: 4, textAlign: 'center', bgcolor: tokens.background.paper, borderRadius: 3, my: 3, border: '1px solid #1e293b' }}>
+        <CircularProgress sx={{ color: tokens.primary.main, mb: 2 }} />
+        <Typography variant="body2" sx={{ color: tokens.text.secondary, fontWeight: 600 }}>
           Synthesizing News headlines & Reddit r/IndianStreetBets Discussion vectors...
         </Typography>
       </Box>
@@ -129,17 +131,17 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
 
   if (error || !data) {
     return (
-      <Alert severity="warning" sx={{ my: 3, borderRadius: 2, bgcolor: '#1e293b', color: '#f8fafc', border: '1px solid #334155' }}>
+      <Alert severity="warning" sx={{ my: 3, borderRadius: 2, bgcolor: tokens.border.main, color: tokens.text.primary, border: '1px solid #334155' }}>
         Unable to evaluate multi-source social sentiment: {error || 'No data returned'}
-        <Button size="small" onClick={fetchSentiment} sx={{ ml: 2, color: '#38bdf8', fontWeight: 700 }}>Retry</Button>
+        <Button size="small" onClick={fetchSentiment} sx={{ ml: 2, color: tokens.primary.main, fontWeight: 700 }}>Retry</Button>
       </Alert>
     );
   }
 
   const getStatusColor = (status: string) => {
-    if (status.includes('Accumulation') || status.includes('Bullish')) return { bg: '#064e3b', border: '#10b981', text: '#34d399', glow: '0 0 16px rgba(16, 185, 129, 0.25)' };
-    if (status.includes('Balanced') || status.includes('Neutral')) return { bg: '#1e3a8a', border: '#3b82f6', text: '#60a5fa', glow: '0 0 16px rgba(59, 130, 246, 0.25)' };
-    return { bg: '#711831', border: '#f43f5e', text: '#fda4af', glow: '0 0 16px rgba(244, 63, 94, 0.25)' };
+    if (status.includes('Accumulation') || status.includes('Bullish')) return { bg: tokens.background.card, border: tokens.border.main, text: tokens.status.success.main, glow: 'none' };
+    if (status.includes('Balanced') || status.includes('Neutral')) return { bg: tokens.background.card, border: tokens.border.main, text: tokens.status.info.main, glow: 'none' };
+    return { bg: tokens.background.card, border: tokens.border.main, text: tokens.status.error.main, glow: 'none' };
   };
 
   const statusTheme = getStatusColor(data.smart_money_divergence_status);
@@ -388,9 +390,9 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
   ];
 
   const getTagStyles = (type: string) => {
-    if (type === 'positive') return { bg: 'rgba(16, 185, 129, 0.15)', text: '#34d399', border: '#10b981', accent: '#10b981' };
-    if (type === 'negative') return { bg: 'rgba(244, 63, 94, 0.15)', text: '#fda4af', border: '#f43f5e', accent: '#f43f5e' };
-    return { bg: 'rgba(59, 130, 246, 0.15)', text: '#60a5fa', border: '#3b82f6', accent: '#3b82f6' };
+    if (type === 'positive') return { bg: tokens.background.cardHover, text: tokens.status.success.main, border: tokens.status.success.main, accent: tokens.status.success.main };
+    if (type === 'negative') return { bg: tokens.background.cardHover, text: tokens.status.error.main, border: tokens.status.error.main, accent: tokens.status.error.main };
+    return { bg: tokens.background.cardHover, text: tokens.status.info.main, border: tokens.status.info.main, accent: tokens.status.info.main };
   };
 
   const openExternalLink = (url?: string) => {
@@ -401,11 +403,11 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
 
   return (
     <Box sx={{ my: 4 }}>
-      <Typography variant="h6" sx={{ color: '#f8fafc', mb: 2, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-        <PsychologyOutlinedIcon sx={{ color: '#38bdf8', fontSize: 28 }} />
+      <Typography variant="h6" sx={{ color: tokens.text.primary, mb: 2, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <PsychologyOutlinedIcon sx={{ color: tokens.primary.main, fontSize: 28 }} />
         Multi-Source News Sentiment & Reddit Crowd Psychology Deck
         <Tooltip title="Click on any card below to launch interactive methodology calculation panels & impact analytics">
-          <InfoOutlinedIcon sx={{ fontSize: 18, color: '#94a3b8', cursor: 'help' }} />
+          <InfoOutlinedIcon sx={{ fontSize: 18, color: tokens.text.secondary, cursor: 'help' }} />
         </Tooltip>
       </Typography>
 
@@ -413,11 +415,11 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
         elevation={10} 
         sx={{ 
           p: { xs: 2.5, md: 3.5 }, 
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)', 
-          color: '#ffffff', 
+          background: tokens.background.paper, 
+          color: tokens.text.primary, 
           borderRadius: 3.5, 
           border: '1px solid rgba(148, 163, 184, 0.15)', 
-          boxShadow: '0 12px 32px rgba(15, 23, 42, 0.18)',
+          boxShadow: 'none',
           position: 'relative',
           overflow: 'hidden'
         }}
@@ -426,21 +428,21 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
         <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2} pb={2.5} borderBottom="1px solid rgba(148, 163, 184, 0.15)">
           <Box>
             <Stack direction="row" spacing={1.5} alignItems="center">
-              <Typography variant="h5" sx={{ fontWeight: 800, color: '#f8fafc', letterSpacing: 0.5 }}>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: tokens.text.primary, letterSpacing: 0.5 }}>
                 {data.ticker} Behavioral Matrix
               </Typography>
               <Chip 
                 label={`Composite Index: ${data.composite_sentiment_index} / 100`} 
                 sx={{ 
-                  bgcolor: 'rgba(56, 189, 248, 0.15)', 
-                  color: '#38bdf8', 
+                  bgcolor: tokens.background.cardHover, 
+                  color: tokens.primary.main, 
                   fontWeight: 800, 
                   border: '1px solid rgba(56, 189, 248, 0.4)',
                   fontSize: '0.85rem'
                 }} 
               />
             </Stack>
-            <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', mt: 0.5 }}>
+            <Typography variant="caption" sx={{ color: tokens.text.secondary, display: 'block', mt: 0.5 }}>
               Institutional NLP synthesis aggregating financial press density & Reddit retail community volume. Click cards for quantitative methodology & impact breakdown.
             </Typography>
           </Box>
@@ -452,12 +454,12 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
             disabled={refreshing}
             startIcon={<RefreshIcon sx={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />}
             sx={{
-              color: '#38bdf8',
-              borderColor: 'rgba(56, 189, 248, 0.4)',
+              color: tokens.primary.main,
+              borderColor: tokens.primary.main,
               textTransform: 'none',
               fontWeight: 700,
               borderRadius: 2,
-              '&:hover': { bgcolor: 'rgba(56, 189, 248, 0.1)', borderColor: '#38bdf8' },
+              '&:hover': { bgcolor: tokens.background.cardHover, borderColor: tokens.primary.main },
               '@keyframes spin': {
                 '0%': { transform: 'rotate(0deg)' },
                 '100%': { transform: 'rotate(360deg)' }
@@ -476,7 +478,7 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
               onClick={() => setActiveDrawer('NEWS')}
               sx={{ 
                 p: 2.5, 
-                bgcolor: 'rgba(15, 23, 42, 0.65)', 
+                bgcolor: tokens.background.card, 
                 borderRadius: 2.5, 
                 border: '1px solid rgba(148, 163, 184, 0.25)',
                 height: '100%',
@@ -487,45 +489,45 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
                 transition: 'all 0.2s ease-in-out',
                 '&:hover': {
                   transform: 'translateY(-4px)',
-                  borderColor: '#38bdf8',
-                  bgcolor: 'rgba(15, 23, 42, 0.85)',
-                  boxShadow: '0 8px 24px rgba(56, 189, 248, 0.15)',
-                  '& .action-text': { color: '#38bdf8', textDecoration: 'underline' }
+                  borderColor: tokens.primary.main,
+                  bgcolor: tokens.background.cardHover,
+                  boxShadow: 'none',
+                  '& .action-text': { color: tokens.primary.main, textDecoration: 'underline' }
                 }
               }}
             >
               <Box>
                 <Box display="flex" alignItems="center" justifyContent="space-between" mb={1.5}>
                   <Box display="flex" alignItems="center" gap={1.2}>
-                    <NewspaperOutlinedIcon sx={{ color: '#38bdf8' }} />
-                    <Typography variant="subtitle2" fontWeight={800} color="#e2e8f0" textTransform="uppercase" letterSpacing={0.5}>
+                    <NewspaperOutlinedIcon sx={{ color: tokens.primary.main }} />
+                    <Typography variant="subtitle2" fontWeight={800} color={tokens.text.primary} textTransform="uppercase" letterSpacing={0.5}>
                       News Sentiment Score
                     </Typography>
                   </Box>
                   <Tooltip title="View calculation algorithm & news impact analysis">
-                    <InfoOutlinedIcon sx={{ fontSize: 16, color: '#64748b' }} />
+                    <InfoOutlinedIcon sx={{ fontSize: 16, color: tokens.text.tertiary }} />
                   </Tooltip>
                 </Box>
                 <Box display="flex" alignItems="baseline" gap={1} mb={1}>
-                  <Typography variant="h3" fontWeight={800} color="#38bdf8">
+                  <Typography variant="h3" fontWeight={800} color={tokens.primary.main}>
                     {data.news_sentiment_score}
                   </Typography>
-                  <Typography variant="caption" color="#94a3b8" fontWeight={700}>/ 100</Typography>
+                  <Typography variant="caption" color={tokens.text.secondary} fontWeight={700}>/ 100</Typography>
                 </Box>
                 <LinearProgress 
                   variant="determinate" 
                   value={data.news_sentiment_score} 
-                  sx={{ height: 6, borderRadius: 3, bgcolor: '#1e293b', '& .MuiLinearProgress-bar': { bgcolor: '#38bdf8' }, mb: 2 }} 
+                  sx={{ height: 6, borderRadius: 3, bgcolor: tokens.border.main, '& .MuiLinearProgress-bar': { bgcolor: tokens.primary.main }, mb: 2 }} 
                 />
-                <Typography variant="body2" color="#cbd5e1" sx={{ lineHeight: 1.6, fontSize: '0.88rem' }}>
+                <Typography variant="body2" color={tokens.text.secondary} sx={{ lineHeight: 1.6, fontSize: '0.88rem' }}>
                   {data.news_summary}
                 </Typography>
               </Box>
               <Box mt={3} pt={1.5} borderTop="1px solid rgba(148, 163, 184, 0.15)" display="flex" justifyContent="space-between" alignItems="center">
-                <Typography variant="caption" color="#64748b" noWrap sx={{ fontStyle: 'italic', maxWidth: '75%' }}>
+                <Typography variant="caption" color={tokens.text.tertiary} noWrap sx={{ fontStyle: 'italic', maxWidth: '75%' }}>
                   &bull; FT, Business Standard, NSE Feeds
                 </Typography>
-                <Typography className="action-text" variant="caption" sx={{ color: '#94a3b8', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, transition: 'color 0.15s' }}>
+                <Typography className="action-text" variant="caption" sx={{ color: tokens.text.secondary, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, transition: 'color 0.15s' }}>
                   Analyze <ArrowForwardIcon sx={{ fontSize: 13 }} />
                 </Typography>
               </Box>
@@ -538,7 +540,7 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
               onClick={() => setActiveDrawer('REDDIT')}
               sx={{ 
                 p: 2.5, 
-                bgcolor: 'rgba(15, 23, 42, 0.65)', 
+                bgcolor: tokens.background.card, 
                 borderRadius: 2.5, 
                 border: '1px solid rgba(148, 163, 184, 0.25)',
                 height: '100%',
@@ -549,45 +551,45 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
                 transition: 'all 0.2s ease-in-out',
                 '&:hover': {
                   transform: 'translateY(-4px)',
-                  borderColor: '#a78bfa',
-                  bgcolor: 'rgba(15, 23, 42, 0.85)',
-                  boxShadow: '0 8px 24px rgba(167, 139, 250, 0.15)',
-                  '& .action-text': { color: '#a78bfa', textDecoration: 'underline' }
+                  borderColor: tokens.secondary.main,
+                  bgcolor: tokens.background.cardHover,
+                  boxShadow: 'none',
+                  '& .action-text': { color: tokens.secondary.main, textDecoration: 'underline' }
                 }
               }}
             >
               <Box>
                 <Box display="flex" alignItems="center" justifyContent="space-between" mb={1.5}>
                   <Box display="flex" alignItems="center" gap={1.2}>
-                    <ForumOutlinedIcon sx={{ color: '#a78bfa' }} />
-                    <Typography variant="subtitle2" fontWeight={800} color="#e2e8f0" textTransform="uppercase" letterSpacing={0.5}>
+                    <ForumOutlinedIcon sx={{ color: tokens.secondary.main }} />
+                    <Typography variant="subtitle2" fontWeight={800} color={tokens.text.primary} textTransform="uppercase" letterSpacing={0.5}>
                       Reddit Forum Velocity
                     </Typography>
                   </Box>
                   <Tooltip title="View retail FOMO formula & live thread chatter breakdown">
-                    <InfoOutlinedIcon sx={{ fontSize: 16, color: '#64748b' }} />
+                    <InfoOutlinedIcon sx={{ fontSize: 16, color: tokens.text.tertiary }} />
                   </Tooltip>
                 </Box>
                 <Box display="flex" alignItems="baseline" gap={1} mb={1}>
-                  <Typography variant="h3" fontWeight={800} color="#a78bfa">
+                  <Typography variant="h3" fontWeight={800} color={tokens.secondary.main}>
                     {data.reddit_discussion_score}
                   </Typography>
-                  <Typography variant="caption" color="#94a3b8" fontWeight={700}>/ 100 FOMO Index</Typography>
+                  <Typography variant="caption" color={tokens.text.secondary} fontWeight={700}>/ 100 FOMO Index</Typography>
                 </Box>
                 <LinearProgress 
                   variant="determinate" 
                   value={data.reddit_discussion_score} 
-                  sx={{ height: 6, borderRadius: 3, bgcolor: '#1e293b', '& .MuiLinearProgress-bar': { bgcolor: '#a78bfa' }, mb: 2 }} 
+                  sx={{ height: 6, borderRadius: 3, bgcolor: tokens.border.main, '& .MuiLinearProgress-bar': { bgcolor: tokens.secondary.main }, mb: 2 }} 
                 />
-                <Typography variant="body2" color="#cbd5e1" sx={{ lineHeight: 1.6, fontSize: '0.88rem' }}>
+                <Typography variant="body2" color={tokens.text.secondary} sx={{ lineHeight: 1.6, fontSize: '0.88rem' }}>
                   {data.reddit_sentiment_summary}
                 </Typography>
               </Box>
               <Box mt={3} pt={1.5} borderTop="1px solid rgba(148, 163, 184, 0.15)" display="flex" justifyContent="space-between" alignItems="center">
-                <Typography variant="caption" color="#64748b" noWrap sx={{ fontStyle: 'italic', maxWidth: '75%' }}>
+                <Typography variant="caption" color={tokens.text.tertiary} noWrap sx={{ fontStyle: 'italic', maxWidth: '75%' }}>
                   &bull; r/IndianStreetBets, r/IndiaInvestments
                 </Typography>
-                <Typography className="action-text" variant="caption" sx={{ color: '#94a3b8', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, transition: 'color 0.15s' }}>
+                <Typography className="action-text" variant="caption" sx={{ color: tokens.text.secondary, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, transition: 'color 0.15s' }}>
                   Analyze <ArrowForwardIcon sx={{ fontSize: 13 }} />
                 </Typography>
               </Box>
@@ -602,7 +604,7 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
                 p: 2.5, 
                 bgcolor: statusTheme.bg, 
                 borderRadius: 2.5, 
-                border: `1.5px solid ${statusTheme.border}`,
+                border: `1px solid ${tokens.border.main}`,
                 boxShadow: statusTheme.glow,
                 height: '100%',
                 display: 'flex',
@@ -612,8 +614,8 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
                 transition: 'all 0.2s ease-in-out',
                 '&:hover': {
                   transform: 'translateY(-4px)',
-                  boxShadow: '0 12px 28px rgba(16, 185, 129, 0.35)',
-                  '& .action-text': { color: '#ffffff', textDecoration: 'underline' }
+                  boxShadow: 'none',
+                  '& .action-text': { color: tokens.text.primary, textDecoration: 'underline' }
                 }
               }}
             >
@@ -621,12 +623,12 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
                 <Box display="flex" alignItems="center" justifyContent="space-between" mb={1.5}>
                   <Box display="flex" alignItems="center" gap={1.2}>
                     <InsightsOutlinedIcon sx={{ color: statusTheme.text }} />
-                    <Typography variant="subtitle2" fontWeight={800} color="#f8fafc" textTransform="uppercase" letterSpacing={0.5}>
+                    <Typography variant="subtitle2" fontWeight={800} color={tokens.text.primary} textTransform="uppercase" letterSpacing={0.5}>
                       Smart Money Divergence
                     </Typography>
                   </Box>
                   <Tooltip title="View institutional FII/DII accumulation algorithms & block flows">
-                    <InfoOutlinedIcon sx={{ fontSize: 16, color: '#e2e8f0' }} />
+                    <InfoOutlinedIcon sx={{ fontSize: 16, color: tokens.text.primary }} />
                   </Tooltip>
                 </Box>
                 <Chip 
@@ -644,18 +646,18 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
                     pl: 1
                   }} 
                 />
-                <Typography variant="body2" color="#f1f5f9" sx={{ lineHeight: 1.6, fontSize: '0.88rem', fontWeight: 500 }}>
+                <Typography variant="body2" color={tokens.text.primary} sx={{ lineHeight: 1.6, fontSize: '0.88rem', fontWeight: 500 }}>
                   {data.divergence_summary}
                 </Typography>
               </Box>
               <Box mt={2} pt={1.5} borderTop="1px solid rgba(255, 255, 255, 0.15)" display="flex" justifyContent="space-between" alignItems="center">
                 <Box display="flex" alignItems="center" gap={0.8}>
                   <TrendingUpIcon sx={{ color: statusTheme.text, fontSize: 16 }} />
-                  <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 700 }}>
+                  <Typography variant="caption" sx={{ color: tokens.text.primary, fontWeight: 700 }}>
                     Institutional Alpha Active
                   </Typography>
                 </Box>
-                <Typography className="action-text" variant="caption" sx={{ color: '#cbd5e1', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, transition: 'color 0.15s' }}>
+                <Typography className="action-text" variant="caption" sx={{ color: tokens.text.secondary, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, transition: 'color 0.15s' }}>
                   Details <ArrowForwardIcon sx={{ fontSize: 13 }} />
                 </Typography>
               </Box>
@@ -672,13 +674,13 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
         PaperProps={{
           sx: {
             width: { xs: '100%', sm: 600, md: 760 },
-            bgcolor: '#0B1120',
-            color: '#f8fafc',
+            bgcolor: tokens.background.default,
+            color: tokens.text.primary,
             p: 0, // Zero padding so grid rows touch left & right borders!
             borderLeft: '1px solid #1e293b',
             borderRadius: 0,
             overflowY: 'auto',
-            boxShadow: '-12px 0 36px rgba(0, 0, 0, 0.7)'
+            boxShadow: tokens.shadows.card
           }
         }}
       >
@@ -687,57 +689,57 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
             {/* Panel Header */}
             <Box sx={{ p: 3.5, pb: 2.5, borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Box display="flex" alignItems="center" gap={1.5}>
-                <NewspaperOutlinedIcon sx={{ color: '#38bdf8', fontSize: 32 }} />
+                <NewspaperOutlinedIcon sx={{ color: tokens.primary.main, fontSize: 32 }} />
                 <Box>
                   <Box display="flex" alignItems="center" gap={1}>
-                    <Typography variant="h5" fontWeight={800} color="#f8fafc">
+                    <Typography variant="h5" fontWeight={800} color={tokens.text.primary}>
                       News Sentiment Architecture
                     </Typography>
                     <Tooltip title="This score aggregates natural language sentiment from verified institutional wire services and NSE disclosures, weighted by source authority and timestamp decay.">
-                      <InfoOutlinedIcon sx={{ color: '#38bdf8', fontSize: 20, cursor: 'help' }} />
+                      <InfoOutlinedIcon sx={{ color: tokens.primary.main, fontSize: 20, cursor: 'help' }} />
                     </Tooltip>
                   </Box>
-                  <Typography variant="caption" color="#94a3b8" display="block">
+                  <Typography variant="caption" color={tokens.text.secondary} display="block">
                     {data.ticker} ({data.company_name}) &bull; Score: {data.news_sentiment_score} / 100
                   </Typography>
                 </Box>
               </Box>
-              <IconButton onClick={() => setActiveDrawer(null)} sx={{ color: '#94a3b8', '&:hover': { color: '#f8fafc', bgcolor: '#1e293b', borderRadius: 0 } }}>
+              <IconButton onClick={() => setActiveDrawer(null)} sx={{ color: tokens.text.secondary, '&:hover': { color: tokens.text.primary, bgcolor: tokens.border.main, borderRadius: 0 } }}>
                 <CloseIcon />
               </IconButton>
             </Box>
 
             {/* Information Banner (Touching Left & Right Borders) */}
-            <Box sx={{ px: 3.5, py: 2.5, bgcolor: '#0f172a', borderBottom: '1px solid #1e293b', borderLeft: 'none', borderRight: 'none', borderRadius: 0 }}>
-              <Typography variant="subtitle2" fontWeight={700} color="#38bdf8" gutterBottom display="flex" alignItems="center" gap={1}>
+            <Box sx={{ px: 3.5, py: 2.5, bgcolor: tokens.background.paper, borderBottom: '1px solid #1e293b', borderLeft: 'none', borderRight: 'none', borderRadius: 0 }}>
+              <Typography variant="subtitle2" fontWeight={700} color={tokens.primary.main} gutterBottom display="flex" alignItems="center" gap={1}>
                 <InfoOutlinedIcon sx={{ fontSize: 18 }} /> What This Score Means for Traders
               </Typography>
-              <Typography variant="body2" color="#cbd5e1" sx={{ fontSize: '0.86rem', lineHeight: 1.55 }}>
+              <Typography variant="body2" color={tokens.text.secondary} sx={{ fontSize: '0.86rem', lineHeight: 1.55 }}>
                 A News Sentiment Score above 65 indicates an institutional consensus shift toward fundamental operational momentum. Quantitative trading algorithms utilize this score as a filter to reject short setups and pyramid into bullish breakouts during market dips.
               </Typography>
             </Box>
 
             {/* How the Score is Calculated Section (Touching Left & Right Borders) */}
             <Box sx={{ px: 3.5, py: 3, borderBottom: '1px solid #1e293b', borderLeft: 'none', borderRight: 'none', borderRadius: 0 }}>
-              <Typography variant="subtitle1" fontWeight={800} color="#e2e8f0" mb={1.5} display="flex" alignItems="center" gap={1}>
-                <CalculateOutlinedIcon sx={{ color: '#38bdf8' }} /> How the Score is Calculated
+              <Typography variant="subtitle1" fontWeight={800} color={tokens.text.primary} mb={1.5} display="flex" alignItems="center" gap={1}>
+                <CalculateOutlinedIcon sx={{ color: tokens.primary.main }} /> How the Score is Calculated
               </Typography>
-              <Card sx={{ bgcolor: '#0f172a', border: '1px solid #1e293b', color: '#cbd5e1', borderRadius: 0, boxShadow: 'none' }}>
+              <Card sx={{ bgcolor: tokens.background.paper, border: '1px solid #1e293b', color: tokens.text.secondary, borderRadius: 0, boxShadow: 'none' }}>
                 <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-                  <Typography variant="body2" className="mono-font" sx={{ bgcolor: '#020617', p: 1.5, borderRadius: 0, mb: 2.5, color: '#38bdf8', fontSize: '0.86rem', fontWeight: 600, border: '1px dashed #334155' }}>
+                  <Typography variant="body2" className="mono-font" sx={{ bgcolor: tokens.background.paper, p: 1.5, borderRadius: 0, mb: 2.5, color: tokens.primary.main, fontSize: '0.86rem', fontWeight: 600, border: '1px dashed #334155' }}>
                     Score = &Sigma; ( Polarity_Density &times; Source_Authority_Weight &times; e<sup>-&lambda;&middot;Time_Decay</sup> ) &times; 100
                   </Typography>
                   <Grid container spacing={2.5}>
                     <Grid item xs={6}>
-                      <Typography variant="caption" color="#94a3b8" fontWeight={700} textTransform="uppercase" display="block">Source Authority Weighting</Typography>
-                      <Typography variant="body2" color="#e2e8f0" fontWeight={600} mt={0.5} sx={{ fontSize: '0.84rem' }}>
+                      <Typography variant="caption" color={tokens.text.secondary} fontWeight={700} textTransform="uppercase" display="block">Source Authority Weighting</Typography>
+                      <Typography variant="body2" color={tokens.text.primary} fontWeight={600} mt={0.5} sx={{ fontSize: '0.84rem' }}>
                         Tier 1 Feeds (FT, Reuters, NSE): 1.5x<br />
                         Tier 2 Regional Press: 0.8x
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
-                      <Typography variant="caption" color="#94a3b8" fontWeight={700} textTransform="uppercase" display="block">Exponential Time Decay (&lambda;)</Typography>
-                      <Typography variant="body2" color="#e2e8f0" fontWeight={600} mt={0.5} sx={{ fontSize: '0.84rem' }}>
+                      <Typography variant="caption" color={tokens.text.secondary} fontWeight={700} textTransform="uppercase" display="block">Exponential Time Decay (&lambda;)</Typography>
+                      <Typography variant="body2" color={tokens.text.primary} fontWeight={600} mt={0.5} sx={{ fontSize: '0.84rem' }}>
                         Half-Life: 24 Hours<br />
                         Intraday headlines carry 3.2x higher significance.
                       </Typography>
@@ -748,18 +750,18 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
             </Box>
 
             {/* Section Header for Feed */}
-            <Box sx={{ px: 3.5, py: 2, bgcolor: '#020617', borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="subtitle1" fontWeight={800} color="#e2e8f0" sx={{ letterSpacing: 0.3 }}>
+            <Box sx={{ px: 3.5, py: 2, bgcolor: tokens.background.paper, borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="subtitle1" fontWeight={800} color={tokens.text.primary} sx={{ letterSpacing: 0.3 }}>
                 Related News Feed & Market Impact Analysis
               </Typography>
               <Chip 
                 label={`${newsList.length} Live Articles Analyzed`} 
-                sx={{ bgcolor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', fontWeight: 800, borderRadius: 0, border: '1px solid #38bdf8', fontSize: '0.75rem', height: 24 }} 
+                sx={{ bgcolor: tokens.background.cardHover, color: tokens.primary.main, fontWeight: 800, borderRadius: 0, border: '1px solid #38bdf8', fontSize: '0.75rem', height: 24 }} 
               />
             </Box>
 
             {/* Master Grid Row-Wise Terminal Feed (No Left/Right Borders, Touchable Rows) */}
-            <Box sx={{ bgcolor: '#0B1120', borderRadius: 0 }}>
+            <Box sx={{ bgcolor: tokens.background.default, borderRadius: 0 }}>
               {newsList.map((item, idx) => {
                 const style = getTagStyles(item.sentimentType);
                 return (
@@ -776,15 +778,15 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
                       cursor: 'pointer',
                       transition: 'all 0.15s ease-in-out',
                       '&:hover': { 
-                        bgcolor: 'rgba(56, 189, 248, 0.04)',
-                        '& .item-headline': { color: '#38bdf8', textDecoration: 'underline' },
-                        '& .source-link': { color: '#38bdf8' }
+                        bgcolor: tokens.background.cardHover,
+                        '& .item-headline': { color: tokens.primary.main, textDecoration: 'underline' },
+                        '& .source-link': { color: tokens.primary.main }
                       } 
                     }}
                   >
                     {/* Line 1: Headline on left, Flag Badge in Right Top Corner */}
                     <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={2} mb={0.8}>
-                      <Typography className="item-headline" variant="subtitle2" fontWeight={800} color="#f8fafc" sx={{ fontSize: '0.98rem', lineHeight: 1.4, transition: 'color 0.15s' }}>
+                      <Typography className="item-headline" variant="subtitle2" fontWeight={800} color={tokens.text.primary} sx={{ fontSize: '0.98rem', lineHeight: 1.4, transition: 'color 0.15s' }}>
                         {item.headline}
                       </Typography>
                       <Chip 
@@ -805,25 +807,25 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
 
                     {/* Line 2: Clickable Source & Timestamp directly underneath headline */}
                     <Box display="flex" alignItems="center" gap={1} mb={1.5}>
-                      <Typography className="source-link" variant="caption" sx={{ color: '#94a3b8', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, transition: 'color 0.15s', fontSize: '0.78rem' }}>
+                      <Typography className="source-link" variant="caption" sx={{ color: tokens.text.secondary, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5, transition: 'color 0.15s', fontSize: '0.78rem' }}>
                         {item.source} <OpenInNewIcon sx={{ fontSize: 13 }} />
                       </Typography>
-                      <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.78rem' }}>
+                      <Typography variant="caption" sx={{ color: tokens.text.tertiary, fontSize: '0.78rem' }}>
                         &bull; {item.timestamp}
                       </Typography>
                     </Box>
 
                     {/* Line 3: Summary Body */}
-                    <Typography variant="body2" color="#cbd5e1" sx={{ fontSize: '0.86rem', mb: 2, lineHeight: 1.6 }}>
+                    <Typography variant="body2" color={tokens.text.secondary} sx={{ fontSize: '0.86rem', mb: 2, lineHeight: 1.6 }}>
                       {item.body}
                     </Typography>
 
                     {/* Line 4: Market Impact Derivative Sub-box */}
-                    <Box p={1.5} sx={{ bgcolor: '#020617', borderRadius: 0, border: '1px solid #1e293b', borderLeft: `3px solid ${style.accent}` }}>
+                    <Box p={1.5} sx={{ bgcolor: tokens.background.paper, borderRadius: 0, border: '1px solid #1e293b', borderLeft: `3px solid ${style.accent}` }}>
                       <Typography variant="caption" sx={{ color: style.text, fontWeight: 800, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                         {item.impactTitle}
                       </Typography>
-                      <Typography variant="body2" color="#e2e8f0" sx={{ fontSize: '0.82rem', mt: 0.4, lineHeight: 1.45 }}>
+                      <Typography variant="body2" color={tokens.text.primary} sx={{ fontSize: '0.82rem', mt: 0.4, lineHeight: 1.45 }}>
                         {item.impactDesc}
                       </Typography>
                     </Box>
@@ -839,57 +841,57 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
             {/* Panel Header */}
             <Box sx={{ p: 3.5, pb: 2.5, borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Box display="flex" alignItems="center" gap={1.5}>
-                <ForumOutlinedIcon sx={{ color: '#a78bfa', fontSize: 32 }} />
+                <ForumOutlinedIcon sx={{ color: tokens.secondary.main, fontSize: 32 }} />
                 <Box>
                   <Box display="flex" alignItems="center" gap={1}>
-                    <Typography variant="h5" fontWeight={800} color="#f8fafc">
+                    <Typography variant="h5" fontWeight={800} color={tokens.text.primary}>
                       Reddit Forum Velocity Engine
                     </Typography>
                     <Tooltip title="Tracks retail trading community discussions across r/IndianStreetBets and r/IndiaInvestments to measure crowd sentiment and speculative FOMO index.">
-                      <InfoOutlinedIcon sx={{ color: '#a78bfa', fontSize: 20, cursor: 'help' }} />
+                      <InfoOutlinedIcon sx={{ color: tokens.secondary.main, fontSize: 20, cursor: 'help' }} />
                     </Tooltip>
                   </Box>
-                  <Typography variant="caption" color="#94a3b8" display="block">
+                  <Typography variant="caption" color={tokens.text.secondary} display="block">
                     {data.ticker} Crowd Psychology &bull; FOMO Index: {data.reddit_discussion_score} / 100
                   </Typography>
                 </Box>
               </Box>
-              <IconButton onClick={() => setActiveDrawer(null)} sx={{ color: '#94a3b8', '&:hover': { color: '#f8fafc', bgcolor: '#1e293b', borderRadius: 0 } }}>
+              <IconButton onClick={() => setActiveDrawer(null)} sx={{ color: tokens.text.secondary, '&:hover': { color: tokens.text.primary, bgcolor: tokens.border.main, borderRadius: 0 } }}>
                 <CloseIcon />
               </IconButton>
             </Box>
 
             {/* Information Banner (Touching Left & Right Borders) */}
-            <Box sx={{ px: 3.5, py: 2.5, bgcolor: '#0f172a', borderBottom: '1px solid #1e293b', borderLeft: 'none', borderRight: 'none', borderRadius: 0 }}>
-              <Typography variant="subtitle2" fontWeight={700} color="#a78bfa" gutterBottom display="flex" alignItems="center" gap={1}>
+            <Box sx={{ px: 3.5, py: 2.5, bgcolor: tokens.background.paper, borderBottom: '1px solid #1e293b', borderLeft: 'none', borderRight: 'none', borderRadius: 0 }}>
+              <Typography variant="subtitle2" fontWeight={700} color={tokens.secondary.main} gutterBottom display="flex" alignItems="center" gap={1}>
                 <InfoOutlinedIcon sx={{ fontSize: 18 }} /> What This Score Means for Traders
               </Typography>
-              <Typography variant="body2" color="#cbd5e1" sx={{ fontSize: '0.86rem', lineHeight: 1.55 }}>
+              <Typography variant="body2" color={tokens.text.secondary} sx={{ fontSize: '0.86rem', lineHeight: 1.55 }}>
                 The Reddit Forum Velocity Index measures retail enthusiasm. A moderate score (40–65) reflects healthy long-term retail investor trust without excessive hype. Scores exceeding 85 flag speculative option retail bubbles, often serving as a contrarian distribution warning.
               </Typography>
             </Box>
 
             {/* How the Score is Calculated Section (Touching Left & Right Borders) */}
             <Box sx={{ px: 3.5, py: 3, borderBottom: '1px solid #1e293b', borderLeft: 'none', borderRight: 'none', borderRadius: 0 }}>
-              <Typography variant="subtitle1" fontWeight={800} color="#e2e8f0" mb={1.5} display="flex" alignItems="center" gap={1}>
-                <CalculateOutlinedIcon sx={{ color: '#a78bfa' }} /> How the Reddit FOMO Index is Calculated
+              <Typography variant="subtitle1" fontWeight={800} color={tokens.text.primary} mb={1.5} display="flex" alignItems="center" gap={1}>
+                <CalculateOutlinedIcon sx={{ color: tokens.secondary.main }} /> How the Reddit FOMO Index is Calculated
               </Typography>
-              <Card sx={{ bgcolor: '#0f172a', border: '1px solid #1e293b', color: '#cbd5e1', borderRadius: 0, boxShadow: 'none' }}>
+              <Card sx={{ bgcolor: tokens.background.paper, border: '1px solid #1e293b', color: tokens.text.secondary, borderRadius: 0, boxShadow: 'none' }}>
                 <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-                  <Typography variant="body2" className="mono-font" sx={{ bgcolor: '#020617', p: 1.5, borderRadius: 0, mb: 2.5, color: '#a78bfa', fontSize: '0.86rem', fontWeight: 600, border: '1px dashed #334155' }}>
+                  <Typography variant="body2" className="mono-font" sx={{ bgcolor: tokens.background.paper, p: 1.5, borderRadius: 0, mb: 2.5, color: tokens.secondary.main, fontSize: '0.86rem', fontWeight: 600, border: '1px dashed #334155' }}>
                     FOMO_Index = ( &Delta;Mention_Velocity &times; 0.45 ) + ( Emoji_Hype_Density &times; 0.25 ) + ( Call_Put_Chatter &times; 0.30 )
                   </Typography>
                   <Grid container spacing={2.5}>
                     <Grid item xs={6}>
-                      <Typography variant="caption" color="#94a3b8" fontWeight={700} textTransform="uppercase" display="block">Forum Source Breakdown</Typography>
-                      <Typography variant="body2" color="#e2e8f0" fontWeight={600} mt={0.5} sx={{ fontSize: '0.84rem' }}>
+                      <Typography variant="caption" color={tokens.text.secondary} fontWeight={700} textTransform="uppercase" display="block">Forum Source Breakdown</Typography>
+                      <Typography variant="body2" color={tokens.text.primary} fontWeight={600} mt={0.5} sx={{ fontSize: '0.84rem' }}>
                         r/IndianStreetBets: Speculative option sentiment & momentum hype.<br />
                         r/IndiaInvestments: Fundamental value trust & retention.
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
-                      <Typography variant="caption" color="#94a3b8" fontWeight={700} textTransform="uppercase" display="block">Emoji & Rhetoric Density</Typography>
-                      <Typography variant="body2" color="#e2e8f0" fontWeight={600} mt={0.5} sx={{ fontSize: '0.84rem' }}>
+                      <Typography variant="caption" color={tokens.text.secondary} fontWeight={700} textTransform="uppercase" display="block">Emoji & Rhetoric Density</Typography>
+                      <Typography variant="body2" color={tokens.text.primary} fontWeight={600} mt={0.5} sx={{ fontSize: '0.84rem' }}>
                         Monitors rocket symbols (🚀, 📈) vs structural financial terms to separate impulsive gambling from rational long positions.
                       </Typography>
                     </Grid>
@@ -899,18 +901,18 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
             </Box>
 
             {/* Section Header for Reddit Forum Threads */}
-            <Box sx={{ px: 3.5, py: 2, bgcolor: '#020617', borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="subtitle1" fontWeight={800} color="#e2e8f0" sx={{ letterSpacing: 0.3 }}>
+            <Box sx={{ px: 3.5, py: 2, bgcolor: tokens.background.paper, borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="subtitle1" fontWeight={800} color={tokens.text.primary} sx={{ letterSpacing: 0.3 }}>
                 Live Retail Forum Thread Surveillance
               </Typography>
               <Chip 
                 label={`${redditList.length} Active Threads Tracked`} 
-                sx={{ bgcolor: 'rgba(167, 139, 250, 0.15)', color: '#a78bfa', fontWeight: 800, borderRadius: 0, border: '1px solid #a78bfa', fontSize: '0.75rem', height: 24 }} 
+                sx={{ bgcolor: 'rgba(167, 139, 250, 0.15)', color: tokens.secondary.main, fontWeight: 800, borderRadius: 0, border: '1px solid #a78bfa', fontSize: '0.75rem', height: 24 }} 
               />
             </Box>
 
             {/* Master Grid Row-Wise Forum Panel Container */}
-            <Box sx={{ bgcolor: '#0B1120', borderRadius: 0 }}>
+            <Box sx={{ bgcolor: tokens.background.default, borderRadius: 0 }}>
               {redditList.map((item, idx) => {
                 const style = getTagStyles(item.tagType);
                 return (
@@ -928,14 +930,14 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
                       transition: 'all 0.15s ease-in-out',
                       '&:hover': { 
                         bgcolor: 'rgba(167, 139, 250, 0.05)',
-                        '& .item-headline': { color: '#a78bfa', textDecoration: 'underline' },
-                        '& .source-link': { color: '#a78bfa' }
+                        '& .item-headline': { color: tokens.secondary.main, textDecoration: 'underline' },
+                        '& .source-link': { color: tokens.secondary.main }
                       } 
                     }}
                   >
                     {/* Line 1: Headline on left, Flag Badge in Right Top Corner */}
                     <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={2} mb={0.8}>
-                      <Typography className="item-headline" variant="subtitle2" fontWeight={800} color="#f8fafc" sx={{ fontSize: '0.98rem', lineHeight: 1.4, transition: 'color 0.15s' }}>
+                      <Typography className="item-headline" variant="subtitle2" fontWeight={800} color={tokens.text.primary} sx={{ fontSize: '0.98rem', lineHeight: 1.4, transition: 'color 0.15s' }}>
                         {item.headline}
                       </Typography>
                       <Chip 
@@ -956,25 +958,25 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
 
                     {/* Line 2: Clickable Forum Name & Stats directly underneath headline */}
                     <Box display="flex" alignItems="center" gap={1} mb={1.5} flexWrap="wrap">
-                      <Typography className="source-link" variant="caption" sx={{ color: '#a78bfa', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 0.5, transition: 'color 0.15s', fontSize: '0.78rem' }}>
+                      <Typography className="source-link" variant="caption" sx={{ color: tokens.secondary.main, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 0.5, transition: 'color 0.15s', fontSize: '0.78rem' }}>
                         {item.forum} <OpenInNewIcon sx={{ fontSize: 13 }} />
                       </Typography>
-                      <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.78rem' }}>
+                      <Typography variant="caption" sx={{ color: tokens.text.tertiary, fontSize: '0.78rem' }}>
                         &bull; {item.stats}
                       </Typography>
                     </Box>
 
                     {/* Line 3: Summary Body */}
-                    <Typography variant="body2" color="#cbd5e1" sx={{ fontSize: '0.86rem', mb: 2, lineHeight: 1.6, fontStyle: 'italic' }}>
+                    <Typography variant="body2" color={tokens.text.secondary} sx={{ fontSize: '0.86rem', mb: 2, lineHeight: 1.6, fontStyle: 'italic' }}>
                       {item.body}
                     </Typography>
 
                     {/* Line 4: Algorithmic Takeaway Sub-box */}
-                    <Box p={1.5} sx={{ bgcolor: '#020617', borderRadius: 0, border: '1px solid #1e293b', borderLeft: `3px solid ${style.accent}` }}>
+                    <Box p={1.5} sx={{ bgcolor: tokens.background.paper, borderRadius: 0, border: '1px solid #1e293b', borderLeft: `3px solid ${style.accent}` }}>
                       <Typography variant="caption" sx={{ color: style.text, fontWeight: 800, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                         {item.impactTitle}
                       </Typography>
-                      <Typography variant="body2" color="#e2e8f0" sx={{ fontSize: '0.82rem', mt: 0.4, lineHeight: 1.45 }}>
+                      <Typography variant="body2" color={tokens.text.primary} sx={{ fontSize: '0.82rem', mt: 0.4, lineHeight: 1.45 }}>
                         {item.impactDesc}
                       </Typography>
                     </Box>
@@ -993,53 +995,53 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
                 <InsightsOutlinedIcon sx={{ color: statusTheme.text, fontSize: 32 }} />
                 <Box>
                   <Box display="flex" alignItems="center" gap={1}>
-                    <Typography variant="h5" fontWeight={800} color="#f8fafc">
+                    <Typography variant="h5" fontWeight={800} color={tokens.text.primary}>
                       Smart Money Divergence Engine
                     </Typography>
                     <Tooltip title="Identifies divergence between institutional FII/DII net block capital flows and retail social discussion velocity.">
                       <InfoOutlinedIcon sx={{ color: statusTheme.text, fontSize: 20, cursor: 'help' }} />
                     </Tooltip>
                   </Box>
-                  <Typography variant="caption" color="#94a3b8" display="block">
+                  <Typography variant="caption" color={tokens.text.secondary} display="block">
                     {data.ticker} Institutional Flow &bull; Status: {data.smart_money_divergence_status}
                   </Typography>
                 </Box>
               </Box>
-              <IconButton onClick={() => setActiveDrawer(null)} sx={{ color: '#94a3b8', '&:hover': { color: '#f8fafc', bgcolor: '#1e293b', borderRadius: 0 } }}>
+              <IconButton onClick={() => setActiveDrawer(null)} sx={{ color: tokens.text.secondary, '&:hover': { color: tokens.text.primary, bgcolor: tokens.border.main, borderRadius: 0 } }}>
                 <CloseIcon />
               </IconButton>
             </Box>
 
             {/* Information Banner (Touching Left & Right Borders) */}
-            <Box sx={{ px: 3.5, py: 2.5, bgcolor: '#0f172a', borderBottom: '1px solid #1e293b', borderLeft: 'none', borderRight: 'none', borderRadius: 0 }}>
+            <Box sx={{ px: 3.5, py: 2.5, bgcolor: tokens.background.paper, borderBottom: '1px solid #1e293b', borderLeft: 'none', borderRight: 'none', borderRadius: 0 }}>
               <Typography variant="subtitle2" fontWeight={700} color={statusTheme.text} gutterBottom display="flex" alignItems="center" gap={1}>
                 <InfoOutlinedIcon sx={{ fontSize: 18 }} /> What This Engine Means for Traders
               </Typography>
-              <Typography variant="body2" color="#cbd5e1" sx={{ fontSize: '0.86rem', lineHeight: 1.55 }}>
+              <Typography variant="body2" color={tokens.text.secondary} sx={{ fontSize: '0.86rem', lineHeight: 1.55 }}>
                 Smart Money Divergence occurs when institutional investors (FIIs/DIIs) systematically accumulate shares via off-market block deals and high delivery percentage settlements while retail social hype remains low or neutral. This constitutes the highest-probability entry setup before institutional mark-up phases begin.
               </Typography>
             </Box>
 
             {/* How the Score is Calculated Section (Touching Left & Right Borders) */}
             <Box sx={{ px: 3.5, py: 3, borderBottom: '1px solid #1e293b', borderLeft: 'none', borderRight: 'none', borderRadius: 0 }}>
-              <Typography variant="subtitle1" fontWeight={800} color="#e2e8f0" mb={1.5} display="flex" alignItems="center" gap={1}>
+              <Typography variant="subtitle1" fontWeight={800} color={tokens.text.primary} mb={1.5} display="flex" alignItems="center" gap={1}>
                 <CalculateOutlinedIcon sx={{ color: statusTheme.text }} /> How Smart Money Divergence is Computed
               </Typography>
-              <Card sx={{ bgcolor: '#0f172a', border: '1px solid #1e293b', color: '#cbd5e1', borderRadius: 0, boxShadow: 'none' }}>
+              <Card sx={{ bgcolor: tokens.background.paper, border: '1px solid #1e293b', color: tokens.text.secondary, borderRadius: 0, boxShadow: 'none' }}>
                 <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-                  <Typography variant="body2" className="mono-font" sx={{ bgcolor: '#020617', p: 1.5, borderRadius: 0, mb: 2.5, color: statusTheme.text, fontSize: '0.86rem', fontWeight: 600, border: '1px dashed #334155' }}>
+                  <Typography variant="body2" className="mono-font" sx={{ bgcolor: tokens.background.paper, p: 1.5, borderRadius: 0, mb: 2.5, color: statusTheme.text, fontSize: '0.86rem', fontWeight: 600, border: '1px dashed #334155' }}>
                     Divergence = Norm( FII_DII_Net_Block_Flows &times; Delivery_% ) &minus; Norm( Retail_FOMO_Index )
                   </Typography>
                   <Grid container spacing={2.5}>
                     <Grid item xs={6}>
-                      <Typography variant="caption" color="#94a3b8" fontWeight={700} textTransform="uppercase" display="block">Delivery % Absorption</Typography>
-                      <Typography variant="body2" color="#e2e8f0" fontWeight={600} mt={0.5} sx={{ fontSize: '0.84rem' }}>
+                      <Typography variant="caption" color={tokens.text.secondary} fontWeight={700} textTransform="uppercase" display="block">Delivery % Absorption</Typography>
+                      <Typography variant="body2" color={tokens.text.primary} fontWeight={600} mt={0.5} sx={{ fontSize: '0.84rem' }}>
                         Filters out intraday algorithmic speculation (&lt;40% delivery) to strictly weigh genuine custodial transfer volumes (&gt;65% delivery).
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
-                      <Typography variant="caption" color="#94a3b8" fontWeight={700} textTransform="uppercase" display="block">Block Deal VWAP Verification</Typography>
-                      <Typography variant="body2" color="#e2e8f0" fontWeight={600} mt={0.5} sx={{ fontSize: '0.84rem' }}>
+                      <Typography variant="caption" color={tokens.text.secondary} fontWeight={700} textTransform="uppercase" display="block">Block Deal VWAP Verification</Typography>
+                      <Typography variant="body2" color={tokens.text.primary} fontWeight={600} mt={0.5} sx={{ fontSize: '0.84rem' }}>
                         Tracks transactions &ge;₹15 Crores executed at or above prevailing intraday Volume Weighted Average Price (VWAP).
                       </Typography>
                     </Grid>
@@ -1049,18 +1051,18 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
             </Box>
 
             {/* Section Header for Institutional Signatures */}
-            <Box sx={{ px: 3.5, py: 2, bgcolor: '#020617', borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="subtitle1" fontWeight={800} color="#e2e8f0" sx={{ letterSpacing: 0.3 }}>
+            <Box sx={{ px: 3.5, py: 2, bgcolor: tokens.background.paper, borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="subtitle1" fontWeight={800} color={tokens.text.primary} sx={{ letterSpacing: 0.3 }}>
                 Institutional Block Deal & Delivery Signatures
               </Typography>
               <Chip 
                 label={`${smartMoneyList.length} Verified Signatures`} 
-                sx={{ bgcolor: 'rgba(16, 185, 129, 0.15)', color: '#34d399', fontWeight: 800, borderRadius: 0, border: '1px solid #10b981', fontSize: '0.75rem', height: 24 }} 
+                sx={{ bgcolor: tokens.background.cardHover, color: tokens.status.success.main, fontWeight: 800, borderRadius: 0, border: '1px solid #10b981', fontSize: '0.75rem', height: 24 }} 
               />
             </Box>
 
             {/* Master Grid Row-Wise Institutional Panel Container */}
-            <Box sx={{ bgcolor: '#0B1120', borderRadius: 0 }}>
+            <Box sx={{ bgcolor: tokens.background.default, borderRadius: 0 }}>
               {smartMoneyList.map((item, idx) => {
                 const style = getTagStyles(item.tagType);
                 return (
@@ -1078,14 +1080,14 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
                       transition: 'all 0.15s ease-in-out',
                       '&:hover': { 
                         bgcolor: 'rgba(16, 185, 129, 0.05)',
-                        '& .item-headline': { color: '#34d399', textDecoration: 'underline' },
-                        '& .source-link': { color: '#34d399' }
+                        '& .item-headline': { color: tokens.status.success.main, textDecoration: 'underline' },
+                        '& .source-link': { color: tokens.status.success.main }
                       } 
                     }}
                   >
                     {/* Line 1: Headline on left, Flag Badge in Right Top Corner */}
                     <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={2} mb={0.8}>
-                      <Typography className="item-headline" variant="subtitle2" fontWeight={800} color="#f8fafc" sx={{ fontSize: '0.98rem', lineHeight: 1.4, transition: 'color 0.15s' }}>
+                      <Typography className="item-headline" variant="subtitle2" fontWeight={800} color={tokens.text.primary} sx={{ fontSize: '0.98rem', lineHeight: 1.4, transition: 'color 0.15s' }}>
                         {item.headline}
                       </Typography>
                       <Chip 
@@ -1106,25 +1108,25 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
 
                     {/* Line 2: Clickable Source & Timestamp directly underneath headline */}
                     <Box display="flex" alignItems="center" gap={1} mb={1.5}>
-                      <Typography className="source-link" variant="caption" sx={{ color: '#34d399', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 0.5, transition: 'color 0.15s', fontSize: '0.78rem' }}>
+                      <Typography className="source-link" variant="caption" sx={{ color: tokens.status.success.main, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 0.5, transition: 'color 0.15s', fontSize: '0.78rem' }}>
                         {item.source} <OpenInNewIcon sx={{ fontSize: 13 }} />
                       </Typography>
-                      <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.78rem' }}>
+                      <Typography variant="caption" sx={{ color: tokens.text.tertiary, fontSize: '0.78rem' }}>
                         &bull; {item.timestamp}
                       </Typography>
                     </Box>
 
                     {/* Line 3: Summary Body */}
-                    <Typography variant="body2" color="#cbd5e1" sx={{ fontSize: '0.86rem', mb: 2, lineHeight: 1.6 }}>
+                    <Typography variant="body2" color={tokens.text.secondary} sx={{ fontSize: '0.86rem', mb: 2, lineHeight: 1.6 }}>
                       {item.body}
                     </Typography>
 
                     {/* Line 4: Quantitative Interpretation Sub-box */}
-                    <Box p={1.5} sx={{ bgcolor: '#020617', borderRadius: 0, border: '1px solid #1e293b', borderLeft: `3px solid #10b981` }}>
-                      <Typography variant="caption" sx={{ color: '#34d399', fontWeight: 800, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    <Box p={1.5} sx={{ bgcolor: tokens.background.paper, borderRadius: 0, border: '1px solid #1e293b', borderLeft: `3px solid #10b981` }}>
+                      <Typography variant="caption" sx={{ color: tokens.status.success.main, fontWeight: 800, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                         {item.impactTitle}
                       </Typography>
-                      <Typography variant="body2" color="#e2e8f0" sx={{ fontSize: '0.82rem', mt: 0.4, lineHeight: 1.45 }}>
+                      <Typography variant="body2" color={tokens.text.primary} sx={{ fontSize: '0.82rem', mt: 0.4, lineHeight: 1.45 }}>
                         {item.impactDesc}
                       </Typography>
                     </Box>

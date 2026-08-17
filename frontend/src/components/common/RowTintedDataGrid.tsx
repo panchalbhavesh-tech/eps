@@ -79,41 +79,6 @@ export const RowTintedDataGrid: React.FC<RowTintedDataGridProps> = ({
           '&:hover': {
             backgroundColor: tokens.rowTint.hoverOverlay,
           },
-          '&.row-tint-buy': {
-            backgroundColor: tokens.rowTint.buy,
-            '&:hover': {
-              backgroundColor: tokens.rowTint.buy,
-              backgroundImage: `linear-gradient(${tokens.rowTint.hoverOverlay}, ${tokens.rowTint.hoverOverlay})`,
-            },
-          },
-          '&.row-tint-avoid': {
-            backgroundColor: tokens.rowTint.avoid,
-            '&:hover': {
-              backgroundColor: tokens.rowTint.avoid,
-              backgroundImage: `linear-gradient(${tokens.rowTint.hoverOverlay}, ${tokens.rowTint.hoverOverlay})`,
-            },
-          },
-          '&.row-tint-neutral': {
-            backgroundColor: tokens.rowTint.neutral,
-            '&:hover': {
-              backgroundColor: tokens.rowTint.neutral,
-              backgroundImage: `linear-gradient(${tokens.rowTint.hoverOverlay}, ${tokens.rowTint.hoverOverlay})`,
-            },
-          },
-          '&.row-tint-attention': {
-            backgroundColor: tokens.rowTint.attention,
-            '&:hover': {
-              backgroundColor: tokens.rowTint.attention,
-              backgroundImage: `linear-gradient(${tokens.rowTint.hoverOverlay}, ${tokens.rowTint.hoverOverlay})`,
-            },
-          },
-          '&.row-tint-child': {
-            backgroundColor: tokens.rowTint.child,
-            '&:hover': {
-              backgroundColor: tokens.rowTint.child,
-              backgroundImage: `linear-gradient(${tokens.rowTint.hoverOverlay}, ${tokens.rowTint.hoverOverlay})`,
-            },
-          },
         },
         '& .MuiDataGrid-footerContainer': {
           borderTop: `1px solid ${tokens.border.main}`,
@@ -138,6 +103,124 @@ export const RowTintedDataGrid: React.FC<RowTintedDataGridProps> = ({
           backgroundColor: tokens.background.paper,
         },
         ...sx,
+      }}
+      slotProps={{
+        panel: {
+          placement: 'bottom-start',
+          sx: {
+            mt: 1, // small margin top to separate from header
+            '& .MuiDataGrid-paper': {
+              backgroundColor: tokens.background.card,
+              border: `1px solid ${tokens.border.main}`,
+              boxShadow: tokens.shadows.card || '0 4px 16px rgba(0,0,0,0.15)',
+              borderRadius: '6px',
+              overflow: 'hidden',
+              minWidth: '320px',
+            },
+            '& .MuiDataGrid-filterForm': {
+              padding: '16px',
+              gap: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              backgroundColor: 'transparent',
+            },
+            '& .MuiDataGrid-filterFormColumnInput, & .MuiDataGrid-filterFormOperatorInput, & .MuiDataGrid-filterFormValueInput': {
+              width: '100%',
+              margin: 0,
+              '& .MuiInputBase-root': {
+                backgroundColor: tokens.background.paper,
+                borderRadius: '4px',
+                border: `1px solid ${tokens.border.main}`,
+                fontSize: '13px',
+                '&:hover': {
+                  borderColor: tokens.border.light,
+                },
+                '&.Mui-focused': {
+                  borderColor: tokens.border.focus,
+                  boxShadow: `0 0 0 1px ${tokens.border.focus}`,
+                }
+              },
+              '& .MuiInput-underline:before, & .MuiInput-underline:after': {
+                display: 'none',
+              },
+              '& .MuiInputBase-input': {
+                padding: '6px 12px',
+                height: 'auto',
+                color: tokens.text.primary,
+              },
+              '& .MuiInputLabel-root': {
+                color: tokens.text.secondary,
+                fontSize: '11px',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                transform: 'none',
+                position: 'relative',
+                marginBottom: '4px',
+                display: 'block',
+              },
+            },
+            '& .MuiDataGrid-filterFormDeleteIcon': {
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              mt: '20px', // align with inputs
+              '& .MuiIconButton-root': {
+                color: tokens.text.secondary,
+                padding: '4px',
+                borderRadius: '4px',
+                '&:hover': {
+                  backgroundColor: tokens.background.cardHover,
+                  color: tokens.status.error.main,
+                }
+              }
+            },
+            '& .MuiDataGrid-panelHeader': {
+              padding: '12px 16px',
+              borderBottom: `1px solid ${tokens.border.main}`,
+              backgroundColor: tokens.background.header,
+              fontSize: '13px',
+              fontWeight: 600,
+              color: tokens.text.primary,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            },
+            '& .MuiDataGrid-panelContent': {
+              display: 'flex',
+              flexDirection: 'column',
+            },
+            '& .MuiDataGrid-panelFooter': {
+              padding: '12px 16px',
+              borderTop: `1px solid ${tokens.border.main}`,
+              backgroundColor: tokens.background.header,
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '8px',
+              '& .MuiButton-root': {
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '12px',
+                padding: '4px 12px',
+                minWidth: 'auto',
+                borderRadius: '4px',
+                color: tokens.text.primary,
+                border: `1px solid ${tokens.border.main}`,
+                '&:hover': {
+                  backgroundColor: tokens.background.cardHover,
+                }
+              },
+              '& .MuiButton-textPrimary': {
+                backgroundColor: tokens.accent.main,
+                color: tokens.mode === 'dark' ? '#0A0A0C' : '#FFFFFF',
+                borderColor: tokens.accent.main,
+                '&:hover': {
+                  backgroundColor: tokens.accent.main,
+                  opacity: 0.9,
+                }
+              }
+            }
+          }
+        }
       }}
       {...props}
     />

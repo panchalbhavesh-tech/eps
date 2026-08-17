@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
-import { Typography, Box, CircularProgress, Chip, IconButton, InputBase, Tooltip, Button, Dialog, DialogTitle, DialogContent, Grid, DialogActions, LinearProgress, Collapse } from '@mui/material';
+import { Typography, Box, CircularProgress, Chip, IconButton, InputBase, Tooltip, Button, Dialog, DialogTitle, DialogContent, Grid, DialogActions, Popover } from '@mui/material';
 import { GridColDef, GridRenderCellParams, GridRowSelectionModel } from '@mui/x-data-grid';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import SearchIcon from '@mui/icons-material/Search';
@@ -8,7 +8,11 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import NewspaperIcon from '@mui/icons-material/Newspaper';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import { FilterChipGroup, ErrorBoundary, StatusChip, StatusBadge, BulkActionBar, RowTintedDataGrid } from '../components/common';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import { StatusBadge, ErrorBoundary, FilterChipGroup, BulkActionBar, RowTintedDataGrid } from '../components/common';
+import { sentimentCache, SentimentData } from '../store/sentimentCache';
 import { useThemeMode } from '../theme/ThemeContext';
 
 // ─── Standalone News Cell ──────────────────────────────────────────────────────
@@ -31,53 +35,42 @@ const NewsCell: React.FC<{ ticker: string; name: string }> = ({ ticker, name }) 
         const data = await res.json();
         setNews(data.news || []);
       }
-    } catch (_) {}
+    } catch (_) { }
     setFetched(true);
     setLoading(false);
   }, [ticker, name, fetched]);
-
-  const first = news[0];
-
   return (
-    <Box sx={{ width: '100%', py: 0.5 }}>
-      {/* Table cell row */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', height: '100%' }}>
-        <NewspaperIcon sx={{ fontSize: 13, color: tokens.text.tertiary, flexShrink: 0 }} />
-        <Typography
-          noWrap
-          sx={{ fontSize: '11px', color: first ? tokens.text.primary : tokens.text.tertiary, flex: 1, lineHeight: '15px', fontWeight: first ? 500 : 400 }}
-        >
-          {first ? first.title : (fetched ? 'No recent news' : 'Latest news…')}
-        </Typography>
-        <Button
-          size="small"
-          onClick={(e) => { e.stopPropagation(); fetchNews(); }}
-          sx={{
-            minWidth: 0,
-            px: '8px',
-            py: '2px',
-            fontSize: '10px',
-            fontWeight: 700,
-            color: tokens.text.primary,
-            backgroundColor: tokens.background.card,
-            border: `1px solid ${tokens.border.light}`,
-            textTransform: 'none',
-            flexShrink: 0,
-            lineHeight: '16px',
-            borderRadius: '4px',
-            '&:hover': {
-              borderColor: tokens.accent.main,
-              color: tokens.accent.main
-            }
-          }}
-        >
-          {loading ? '…' : 'VIEW ↗'}
-        </Button>
-      </Box>
+    <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {/* Table cell row - Only the VIEW button */}
+      <Button
+        size="small"
+        onClick={(e) => { e.stopPropagation(); fetchNews(); }}
+        sx={{
+          minWidth: 0,
+          px: '12px',
+          py: '4px',
+          fontSize: '10px',
+          fontWeight: 700,
+          color: tokens.text.primary,
+          backgroundColor: 'transparent',
+          border: `1px solid ${tokens.text.tertiary}`,
+          textTransform: 'none',
+          lineHeight: '16px',
+          borderRadius: '4px',
+          transition: 'all 0.15s ease-in-out',
+          '&:hover': {
+            borderColor: tokens.border.focus,
+            backgroundColor: tokens.background.cardHover,
+            color: tokens.text.primary
+          }
+        }}
+      >
+        {loading ? '…' : 'VIEW ↗'}
+      </Button>
 
       {/* Popup Dialog */}
-      <Dialog 
-        open={expanded} 
+      <Dialog
+        open={expanded}
         onClose={(e: any) => { e.stopPropagation(); setExpanded(false); }}
         maxWidth="sm"
         fullWidth
@@ -102,7 +95,7 @@ const NewsCell: React.FC<{ ticker: string; name: string }> = ({ ticker, name }) 
             ✕
           </Button>
         </DialogTitle>
-        
+
         <DialogContent sx={{ p: 0, maxHeight: '60vh' }}>
           {loading && (
             <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center', justifyContent: 'center' }}>
@@ -131,11 +124,11 @@ const NewsCell: React.FC<{ ticker: string; name: string }> = ({ ticker, name }) 
                 cursor: 'pointer',
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
                 <Typography sx={{ fontSize: '13px', fontWeight: 600, color: tokens.text.primary, lineHeight: '18px', flex: 1 }}>
                   {item.title}
                 </Typography>
-                <OpenInNewIcon sx={{ fontSize: 14, color: tokens.text.tertiary, flexShrink: 0, mt: '2px' }} />
+                <OpenInNewIcon sx={{ fontSize: 16, color: tokens.text.tertiary, flexShrink: 0 }} />
               </Box>
               <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'center' }}>
                 <Chip size="small" label={item.source} sx={{ height: '20px', fontSize: '10px', fontWeight: 700, backgroundColor: tokens.primary.tint, color: tokens.text.primary, border: `1px solid ${tokens.border.light}` }} />
@@ -150,6 +143,287 @@ const NewsCell: React.FC<{ ticker: string; name: string }> = ({ ticker, name }) 
           ))}
         </DialogContent>
       </Dialog>
+    </Box>
+  );
+};
+// ──────────────────────────────────────────────────────────────────────────────
+
+// ─── Standalone News Sentiment Cell ────────────────────────────────────────────
+const NewsSentimentCell: React.FC<{ ticker: string; name: string }> = ({ ticker, name }) => {
+  const { tokens } = useThemeMode();
+  // Read initial from cache synchronously
+  const [data, setData] = useState<SentimentData | null>(() => sentimentCache.get(ticker));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Subscribe to cache updates
+    const unsubscribe = sentimentCache.subscribe(ticker, (newData, newError) => {
+      setData(newData);
+      setError(newError);
+      setLoading(false);
+    });
+
+    // If we already have data synchronously, we don't fetch. 
+    // Otherwise, observe visibility to fetch.
+    if (!data && !error) {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) {
+            // Already cached check inside fetch, but sets in-flight
+            setLoading(true);
+            setTimeout(() => {
+              sentimentCache.fetch(ticker, name).catch(() => setError(true));
+            }, Math.random() * 500);
+            observer.disconnect();
+          }
+        },
+        { threshold: 0.1 }
+      );
+
+      if (containerRef.current) {
+        observer.observe(containerRef.current);
+      }
+      return () => {
+        unsubscribe();
+        observer.disconnect();
+      };
+    }
+
+    return unsubscribe;
+  }, [ticker, name, data, error]);
+
+  const handleRefresh = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (loading) return;
+    setLoading(true);
+    sentimentCache.fetch(ticker, name, true).catch(() => setError(true)).finally(() => setLoading(false));
+  };
+
+  const getSentimentColor = (sentiment: string) => {
+    switch (sentiment) {
+      case 'BULLISH': return tokens.status.success.main;
+      case 'BEARISH': return tokens.status.error.main;
+      case 'MIXED': return tokens.status.warning.main;
+      case 'NEUTRAL': return tokens.text.tertiary;
+      default: return tokens.text.disabled;
+    }
+  };
+
+  const formatScore = (score: number) => {
+    const sign = score >= 0 ? '+' : '';
+    return `${sign}${score}`;
+  };
+
+  if (!data && !error) {
+    return (
+      <Box ref={containerRef} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
+        <Typography sx={{ fontSize: '10px', color: tokens.text.tertiary, fontStyle: 'italic' }}>
+          {loading ? 'Analyzing…' : '—'}
+        </Typography>
+      </Box>
+    );
+  }
+
+  if ((error && !data) || (data && data.overallSentiment === 'INSUFFICIENT_DATA')) {
+    return (
+      <Box ref={containerRef} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
+        <Typography sx={{ fontSize: '10px', color: tokens.text.disabled }}>—</Typography>
+      </Box>
+    );
+  }
+
+  const sentColor = data ? getSentimentColor(data.overallSentiment) : tokens.text.disabled;
+  const open = Boolean(anchorEl);
+
+  return (
+    <Box ref={containerRef} sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+      {/* Compact inline indicator */}
+      <Box
+        onClick={(e) => { e.stopPropagation(); setAnchorEl(e.currentTarget); }}
+        sx={{
+          cursor: 'pointer',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '1px',
+          py: '2px',
+          px: '6px',
+          borderRadius: '4px',
+          transition: 'background-color 0.15s',
+          '&:hover': { backgroundColor: tokens.background.cardHover }
+        }}
+      >
+        {/* Row 1: Sentiment label + score + refresh */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <Typography className="mono-font tabular-nums" sx={{ fontSize: '10px', fontWeight: 700, color: sentColor, letterSpacing: '0.3px' }}>
+            {data!.overallSentiment}
+          </Typography>
+          <Typography className="mono-font tabular-nums" sx={{ fontSize: '10px', fontWeight: 700, color: sentColor }}>
+            {formatScore(data!.sentimentScore)}
+          </Typography>
+          <Box
+            onClick={handleRefresh}
+            title="Refresh sentiment"
+            sx={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: '28px', height: '28px', borderRadius: '4px',
+              color: tokens.text.tertiary,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease-in-out',
+              '&:hover': { color: tokens.text.primary, backgroundColor: tokens.background.cardHover },
+              animation: loading ? 'spin 1s linear infinite' : 'none',
+              '@keyframes spin': { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } }
+            }}
+          >
+            <RefreshIcon sx={{ fontSize: 15 }} />
+          </Box>
+        </Box>
+        {/* Row 2: Confidence dot + theme */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+          <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: sentColor, flexShrink: 0 }} />
+          <Typography sx={{ fontSize: '9px', fontWeight: 500, color: loading ? tokens.text.tertiary : tokens.text.secondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '90px' }}>
+            {loading ? 'Analyzing...' : `${data!.confidence} · ${data!.dominantTheme || data!.trend}`}
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* Detail Popover */}
+      {data && (
+        <Popover
+          open={open}
+          anchorEl={anchorEl}
+          onClose={(e: any) => { e?.stopPropagation?.(); setAnchorEl(null); }}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+          slotProps={{
+            paper: {
+              sx: {
+                backgroundColor: tokens.background.card,
+                border: `1px solid ${tokens.border.main}`,
+                borderRadius: '8px',
+                boxShadow: tokens.shadows.dropdown,
+                p: 0,
+                width: 300,
+                maxHeight: '400px',
+                overflow: 'auto'
+              }
+            }
+          }}
+        >
+          {/* Popover Header */}
+          <Box sx={{ p: 2, borderBottom: `1px solid ${tokens.border.main}` }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+              <Typography sx={{ fontSize: '11px', fontWeight: 700, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                N. Sentiment
+              </Typography>
+              <Typography sx={{ fontSize: '10px', color: tokens.text.tertiary }}>
+                {data.articleCount} articles
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <Typography className="mono-font" sx={{ fontSize: '18px', fontWeight: 800, color: sentColor }}>
+                {data.overallSentiment}
+              </Typography>
+              <Typography className="mono-font tabular-nums" sx={{ fontSize: '16px', fontWeight: 700, color: sentColor }}>
+                {formatScore(data.sentimentScore)}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: '12px', mt: 1 }}>
+              <Typography sx={{ fontSize: '10px', color: tokens.text.secondary }}>
+                <span style={{ fontWeight: 600 }}>Confidence:</span> {data.confidence}
+              </Typography>
+              <Typography sx={{ fontSize: '10px', color: tokens.text.secondary }}>
+                <span style={{ fontWeight: 600 }}>Impact:</span> {data.impact}
+              </Typography>
+              <Typography sx={{ fontSize: '10px', color: tokens.text.secondary }}>
+                <span style={{ fontWeight: 600 }}>Trend:</span> {data.trend}
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* Article Breakdown */}
+          <Box sx={{ p: 2, borderBottom: `1px solid ${tokens.border.main}` }}>
+            <Typography sx={{ fontSize: '10px', fontWeight: 700, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.3px', mb: 1 }}>
+              Article Breakdown
+            </Typography>
+            <Box sx={{ display: 'flex', gap: '6px', mb: 1 }}>
+              {(['bullish', 'neutral', 'bearish', 'mixed'] as const).map(key => {
+                const count = data.articleBreakdown[key] || 0;
+                if (count === 0) return null;
+                const colorMap = { bullish: tokens.status.success.main, bearish: tokens.status.error.main, neutral: tokens.text.tertiary, mixed: tokens.status.warning.main };
+                return (
+                  <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                    <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: colorMap[key] }} />
+                    <Typography sx={{ fontSize: '10px', color: tokens.text.secondary, fontWeight: 500 }}>
+                      {key.charAt(0).toUpperCase() + key.slice(1)}: {count}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+            {/* Visual bar */}
+            <Box sx={{ display: 'flex', height: '4px', borderRadius: '2px', overflow: 'hidden', backgroundColor: tokens.border.main }}>
+              {(() => {
+                const total = (data.articleBreakdown.bullish || 0) + (data.articleBreakdown.bearish || 0) + (data.articleBreakdown.neutral || 0) + (data.articleBreakdown.mixed || 0);
+                if (total === 0) return null;
+                return (
+                  <>
+                    {data.articleBreakdown.bullish > 0 && <Box sx={{ width: `${(data.articleBreakdown.bullish / total) * 100}%`, backgroundColor: tokens.status.success.main }} />}
+                    {data.articleBreakdown.neutral > 0 && <Box sx={{ width: `${(data.articleBreakdown.neutral / total) * 100}%`, backgroundColor: tokens.text.tertiary }} />}
+                    {data.articleBreakdown.mixed > 0 && <Box sx={{ width: `${(data.articleBreakdown.mixed / total) * 100}%`, backgroundColor: tokens.status.warning.main }} />}
+                    {data.articleBreakdown.bearish > 0 && <Box sx={{ width: `${(data.articleBreakdown.bearish / total) * 100}%`, backgroundColor: tokens.status.error.main }} />}
+                  </>
+                );
+              })()}
+            </Box>
+          </Box>
+
+          {/* Theme & Drivers */}
+          <Box sx={{ p: 2, borderBottom: data.contradictions ? `1px solid ${tokens.border.main}` : 'none' }}>
+            {data.dominantTheme && (
+              <Box sx={{ mb: 1 }}>
+                <Typography sx={{ fontSize: '10px', fontWeight: 700, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.3px', mb: 0.5 }}>
+                  Dominant Theme
+                </Typography>
+                <Typography sx={{ fontSize: '11px', fontWeight: 600, color: tokens.text.primary }}>
+                  {data.dominantTheme}
+                </Typography>
+              </Box>
+            )}
+            <Typography sx={{ fontSize: '10px', fontWeight: 700, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.3px', mb: 0.5 }}>
+              Key Drivers
+            </Typography>
+            <Typography sx={{ fontSize: '11px', color: tokens.text.secondary, lineHeight: 1.5 }}>
+              {data.keyDrivers}
+            </Typography>
+          </Box>
+
+          {/* Contradictions */}
+          {data.contradictions && (
+            <Box sx={{ p: 2, borderBottom: `1px solid ${tokens.border.main}` }}>
+              <Typography sx={{ fontSize: '10px', fontWeight: 700, color: tokens.status.warning.main, textTransform: 'uppercase', letterSpacing: '0.3px', mb: 0.5 }}>
+                Conflicting Signals
+              </Typography>
+              <Typography sx={{ fontSize: '11px', color: tokens.text.secondary, lineHeight: 1.5 }}>
+                {data.contradictions}
+              </Typography>
+            </Box>
+          )}
+
+          {/* Footer */}
+          <Box sx={{ px: 2, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography sx={{ fontSize: '9px', color: tokens.text.disabled }}>
+              Updated: {data.lastUpdated ? new Date(data.lastUpdated).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+            </Typography>
+            <Typography sx={{ fontSize: '9px', color: tokens.text.disabled }}>
+              {data.articleCount} articles analyzed
+            </Typography>
+          </Box>
+        </Popover>
+      )}
     </Box>
   );
 };
@@ -240,6 +514,18 @@ const MASS_CALCULATE_HEALTH = gql`
   }
 `;
 
+const GET_LATEST_ADMIN_ACTIVITY = gql`
+  query GetLatestAdminActivity($eventName: String!) {
+    latestAdminActivity(eventName: $eventName) {
+      id
+      userEmail
+      status
+      startedAt
+      completedAt
+    }
+  }
+`;
+
 const Home: React.FC = () => {
   const { mode, tokens } = useThemeMode();
   const isDark = mode === 'dark';
@@ -258,6 +544,22 @@ const Home: React.FC = () => {
     }
   });
 
+  const { data: latestLogData } = useQuery(GET_LATEST_ADMIN_ACTIVITY, {
+    variables: { eventName: 'Calculate Health' },
+    fetchPolicy: 'network-only'
+  });
+  const latestLog = latestLogData?.latestAdminActivity;
+
+  const handleCalculateHealth = useCallback(() => {
+    if (latestLog && latestLog.status === 'SUCCESS') {
+      const timeStr = new Date(Number(latestLog.completedAt) || latestLog.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      if (!window.confirm(`Calculate Health was already completed today by ${latestLog.userEmail} at ${timeStr}.\n\nDo you want to run it again?`)) {
+        return;
+      }
+    }
+    massCalculate();
+  }, [latestLog, massCalculate]);
+
   const handlePopulate = useCallback(() => {
     populateData();
   }, [populateData]);
@@ -265,8 +567,8 @@ const Home: React.FC = () => {
   const baseRows = useMemo(() => {
     if (!data?.companies) return [];
     const lowerSearch = (search || '').trim().toLowerCase();
-    return data.companies.filter((c: any) => 
-      (c.ticker || '').toLowerCase().includes(lowerSearch) || 
+    return data.companies.filter((c: any) =>
+      (c.ticker || '').toLowerCase().includes(lowerSearch) ||
       (c.name || '').toLowerCase().includes(lowerSearch)
     ).map((c: any) => ({
       id: c.id,
@@ -336,40 +638,22 @@ const Home: React.FC = () => {
     const amber = tokens.status.warning.main;
     const cyan = tokens.status.info?.main || '#00B4D8';
 
-    const colorMap: Record<string, { bg: string; text: string; border: string; icon: string }> = {
-      'BUY PRE-RELEASE': { bg: tokens.status.success.wash || 'rgba(61, 255, 162, 0.2)', text: green, border: `${green}50`, icon: '✓' },
-      'AVOID PRE-RELEASE': { bg: tokens.status.error.wash || 'rgba(255, 71, 87, 0.2)', text: red, border: `${red}50`, icon: '✕' },
-      'NEUTRAL / HOLD': { bg: tokens.status.warning.wash || 'rgba(255, 165, 2, 0.2)', text: amber, border: `${amber}50`, icon: '⚠' },
-      'TARGET HIT / WIN': { bg: tokens.status.success.wash || 'rgba(61, 255, 162, 0.2)', text: green, border: `${green}50`, icon: '✓' },
-      'PREDICTION FAILED': { bg: tokens.status.error.wash || 'rgba(255, 71, 87, 0.2)', text: red, border: `${red}50`, icon: '✕' },
-      'CONTRARY SURGE': { bg: tokens.status.warning.wash || 'rgba(255, 165, 2, 0.2)', text: amber, border: `${amber}50`, icon: '⚠' },
-      'HOLD VALIDATED': { bg: tokens.status.info?.wash || 'rgba(0, 180, 216, 0.2)', text: cyan, border: `${cyan}50`, icon: '—' },
-      'LOSSES AVOIDED': { bg: tokens.status.success.wash || 'rgba(61, 255, 162, 0.2)', text: green, border: `${green}50`, icon: '✓' },
+    const colorMap: Record<string, { color: string; icon: string }> = {
+      'BUY PRE-RELEASE': { color: green, icon: '•' },
+      'AVOID PRE-RELEASE': { color: red, icon: '•' },
+      'NEUTRAL / HOLD': { color: amber, icon: '•' },
+      'TARGET HIT / WIN': { color: green, icon: '✓' },
+      'PREDICTION FAILED': { color: red, icon: '✕' },
+      'CONTRARY SURGE': { color: amber, icon: '•' },
+      'HOLD VALIDATED': { color: cyan, icon: '•' },
+      'LOSSES AVOIDED': { color: green, icon: '✓' },
     };
 
-    const style = colorMap[status] || { bg: tokens.background.cardHover, text: tokens.text.secondary, border: tokens.border.main, icon: '—' };
+    const style = colorMap[status] || { color: tokens.text.secondary, icon: '•' };
 
     return (
-      <Box
-        sx={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '5px',
-          backgroundColor: style.bg,
-          color: style.text,
-          padding: '4px 10px',
-          borderRadius: '6px',
-          fontSize: '11px',
-          fontWeight: 600,
-          border: `1px solid ${style.border}`,
-          whiteSpace: 'nowrap',
-          maxWidth: '100%',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis'
-        }}
-      >
-        <span>{style.icon}</span>
+      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 500, color: tokens.text.secondary }}>
+        <span style={{ color: style.color, fontSize: '14px', lineHeight: 1 }}>{style.icon}</span>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{status}</span>
       </Box>
     );
@@ -425,24 +709,27 @@ const Home: React.FC = () => {
         {renderSubRow('EPS', currEps, prevEps, false)}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', pt: '4px' }}>
           <Typography component="span" sx={{ fontSize: '11px', color: tokens.text.secondary, fontWeight: 500 }}>Trend:</Typography>
-          <StatusChip label={trendLabel} variant={isUp ? 'success' : 'error'} size="small" />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 500, color: tokens.text.secondary }}>
+            <span style={{ color: isUp ? tokens.status.success.main : tokens.status.error.main, fontSize: '14px', lineHeight: 1 }}>•</span>
+            <span>{trendLabel}</span>
+          </Box>
         </Box>
       </Box>
     );
   }, [tokens]);
 
   const columns: GridColDef[] = useMemo(() => [
-    { 
-      field: 'name', 
-      headerName: 'COMPANY / TICKER', 
-      width: 240, 
-      minWidth: 240, 
-      type: 'string', 
+    {
+      field: 'name',
+      headerName: 'COMPANY / TICKER',
+      width: 240,
+      minWidth: 240,
+      type: 'string',
       headerAlign: 'left',
       align: 'left',
       sortable: true,
       renderCell: (p) => (
-        <Box 
+        <Box
           onClick={() => window.open(`/companies/${p.row?.id}`, '_blank', 'noopener,noreferrer')}
           sx={{ display: 'flex', flexDirection: 'column', gap: '2px', justifyContent: 'center', height: '100%', cursor: 'pointer', overflow: 'hidden', width: '100%', '&:hover .company-name': { color: tokens.accent.main, textDecoration: 'underline' } }}
         >
@@ -455,12 +742,12 @@ const Home: React.FC = () => {
         </Box>
       )
     },
-    { 
-      field: 'currentPrice', 
-      headerName: 'PRICE', 
-      width: 110, 
-      type: 'number', 
-      headerAlign: 'right', 
+    {
+      field: 'currentPrice',
+      headerName: 'PRICE',
+      width: 110,
+      type: 'number',
+      headerAlign: 'right',
       align: 'right',
       valueGetter: (_v: any, row: any) => row?.currentPrice != null && !isNaN(row.currentPrice) ? Number(row.currentPrice) : -Infinity,
       renderCell: (p) => (
@@ -471,12 +758,12 @@ const Home: React.FC = () => {
         </Box>
       )
     },
-    { 
-      field: 'marketCap', 
-      headerName: 'MKTCAP', 
-      width: 125, 
-      type: 'number', 
-      headerAlign: 'right', 
+    {
+      field: 'marketCap',
+      headerName: 'MKTCAP',
+      width: 125,
+      type: 'number',
+      headerAlign: 'right',
       align: 'right',
       valueGetter: (_v: any, row: any) => row?.marketCap != null && !isNaN(row.marketCap) ? Number(row.marketCap) : -Infinity,
       renderCell: (p) => (
@@ -487,13 +774,13 @@ const Home: React.FC = () => {
         </Box>
       )
     },
-    { 
-      field: 'financialHealthScore', 
-      headerName: 'HEALTH', 
-      width: 70, 
-      type: 'number', 
-      headerAlign: 'center', 
-      align: 'center', 
+    {
+      field: 'financialHealthScore',
+      headerName: 'HEALTH',
+      width: 70,
+      type: 'number',
+      headerAlign: 'center',
+      align: 'center',
       sortable: true,
       valueGetter: (_v: any, row: any) => row?.financialHealthScore != null && !isNaN(row.financialHealthScore) ? Number(row.financialHealthScore) : -Infinity,
       renderCell: (p) => {
@@ -523,48 +810,29 @@ const Home: React.FC = () => {
           else letter = 'F';
         }
 
-        let chipBg = tokens.status.warning.main;
-        let chipText = isDark ? '#0A0A0C' : '#000000';
-        if (letter === 'A' || letter === 'B' || score >= 70) {
-          chipBg = tokens.status.success.main;
-          chipText = '#0A0A0C';
-        } else if (letter === 'C' || letter === 'D') {
-          chipBg = tokens.status.warning.main;
-          chipText = '#0A0A0C';
-        } else {
-          chipBg = tokens.status.error.main;
-          chipText = '#FFFFFF';
-        }
+        let letterColor = tokens.status.warning.main;
+        if (letter === 'A' || letter === 'B' || score >= 70) letterColor = tokens.status.success.main;
+        else if (letter === 'C' || letter === 'D') letterColor = tokens.status.warning.main;
+        else letterColor = tokens.status.error.main;
 
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
             <Tooltip title={`Financial Health: ${Number(score).toFixed(0)} / 100 (${p.row?.financialHealthGrade || 'Grade ' + letter})`} placement="top">
-              <Chip
-                label={letter}
-                size="small"
-                sx={{
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  backgroundColor: chipBg,
-                  color: chipText,
-                  borderRadius: '6px',
-                  height: '28px',
-                  width: '32px',
-                  '& .MuiChip-label': { padding: 0 },
-                }}
-              />
+              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: letterColor, cursor: 'help' }}>
+                {letter}
+              </Typography>
             </Tooltip>
           </Box>
         );
       }
     },
-    { 
-      field: 'momentumProbability', 
-      headerName: 'MOM PROB', 
-      width: 105, 
-      type: 'number', 
-      headerAlign: 'center', 
-      align: 'center', 
+    {
+      field: 'momentumProbability',
+      headerName: 'MOM PROB',
+      width: 105,
+      type: 'number',
+      headerAlign: 'right',
+      align: 'right',
       sortable: true,
       valueGetter: (_v: any, row: any) => row?.momentumProbability != null && !isNaN(row.momentumProbability) ? Number(row.momentumProbability) : -Infinity,
       renderCell: (p) => {
@@ -572,9 +840,11 @@ const Home: React.FC = () => {
         if (isNaN(prob) || prob < 0) {
           return (
             <Tooltip title="View Deep-Dive Financial Report" placement="top">
-              <Box onClick={() => setDetailModalRow(p.row)} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', cursor: 'pointer', '&:hover .zoom-icon': { color: tokens.accent.main } }}>
+              <Box onClick={() => setDetailModalRow(p.row)} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', width: '100%', height: '100%', cursor: 'pointer', '&:hover .zoom-icon': { color: tokens.accent.main } }}>
                 <Typography sx={{ fontSize: '11px', color: tokens.text.tertiary, mr: 0.5 }}>—</Typography>
-                <ZoomInIcon className="zoom-icon" sx={{ fontSize: 15, color: tokens.text.tertiary, transition: 'color 0.15s' }} />
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '4px' }}>
+                  <ZoomInIcon className="zoom-icon" sx={{ fontSize: 16, color: tokens.text.tertiary, transition: 'color 0.15s' }} />
+                </Box>
               </Box>
             </Tooltip>
           );
@@ -585,55 +855,39 @@ const Home: React.FC = () => {
 
         return (
           <Tooltip title="View Deep-Dive Financial Report" placement="top">
-            <Box 
+            <Box
               onClick={() => setDetailModalRow(p.row)}
-              sx={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                gap: '4px', 
-                width: '100%', 
-                height: '100%', 
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                width: '100%',
+                height: '100%',
                 cursor: 'pointer',
-                borderRadius: '6px',
-                transition: 'background-color 0.15s ease-in-out',
-                '&:hover': { backgroundColor: tokens.background.cardHover },
-                '&:hover .prob-text, &:hover .zoom-icon': { color: tokens.accent.main } 
+                transition: 'none',
+                '&:hover .prob-text': { color: tokens.accent.main },
+                '&:hover .zoom-icon': { color: tokens.accent.main, opacity: 1 }
               }}
             >
-              <LinearProgress
-                variant="determinate"
-                value={Math.min(100, Math.max(0, prob))}
-                sx={{
-                  width: '64px',
-                  height: '4px',
-                  borderRadius: '2px',
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-                  '& .MuiLinearProgress-bar': {
-                    backgroundColor: barColor,
-                    borderRadius: '2px',
-                  },
-                }}
-              />
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                <Typography className="mono-font tabular-nums prob-text" sx={{ fontSize: '12px', fontWeight: 600, color: tokens.text.primary, lineHeight: '14px', transition: 'color 0.15s' }}>
-                  {Number(prob).toFixed(0)}%
-                </Typography>
-                <ZoomInIcon className="zoom-icon" sx={{ fontSize: 14, color: tokens.text.tertiary, transition: 'color 0.15s' }} />
+              <Typography className="mono-font tabular-nums prob-text" sx={{ fontSize: '12px', fontWeight: 600, color: tokens.text.primary }}>
+                {Number(prob).toFixed(0)}%
+              </Typography>
+              <Box sx={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: barColor, mx: '6px' }} />
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '4px' }}>
+                <ZoomInIcon className="zoom-icon" sx={{ fontSize: 16, color: tokens.text.tertiary, transition: 'color 0.1s, opacity 0.1s' }} />
               </Box>
             </Box>
           </Tooltip>
         );
       }
     },
-    { 
-      field: 'avgPostEarningsMomentum', 
-      headerName: 'AVG MOMENTUM / BUY INDICATOR', 
-      width: 250, 
-      type: 'number', 
-      headerAlign: 'left', 
-      align: 'left', 
+    {
+      field: 'avgPostEarningsMomentum',
+      headerName: 'AVG MOMENTUM / BUY INDICATOR',
+      width: 250,
+      type: 'number',
+      headerAlign: 'left',
+      align: 'left',
       sortable: true,
       valueGetter: (_v: any, row: any) => row?.avgPostEarningsMomentum != null && !isNaN(row.avgPostEarningsMomentum) ? Number(row.avgPostEarningsMomentum) : -Infinity,
       renderCell: (p) => {
@@ -642,7 +896,7 @@ const Home: React.FC = () => {
         if (isNaN(avgMom)) {
           return (
             <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', py: 0.5, gap: '2px' }}>
-              <Typography sx={{ fontSize: '11px', color: tokens.text.tertiary }}>Not Calc</Typography>
+              <Typography sx={{ fontSize: '11px', color: tokens.text.secondary, fontWeight: 500 }}>Not Calc</Typography>
               {renderSignalBadge('NEUTRAL / HOLD')}
             </Box>
           );
@@ -670,13 +924,13 @@ const Home: React.FC = () => {
         );
       }
     },
-    { 
-      field: 'postReleaseValidation', 
-      headerName: 'POST-RELEASE RESULT', 
-      width: 250, 
-      type: 'number', 
-      headerAlign: 'left', 
-      align: 'left', 
+    {
+      field: 'postReleaseValidation',
+      headerName: 'POST-RELEASE RESULT',
+      width: 250,
+      type: 'number',
+      headerAlign: 'left',
+      align: 'left',
       sortable: true,
       valueGetter: (_v: any, row: any) => row?.postReleaseReturn != null && !isNaN(row.postReleaseReturn) ? Number(row.postReleaseReturn) : -Infinity,
       renderCell: (p: GridRenderCellParams) => {
@@ -688,7 +942,7 @@ const Home: React.FC = () => {
         if (isNaN(prRet)) {
           return (
             <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', py: 0.5, gap: '4px' }}>
-              <Typography sx={{ fontSize: '11px', color: tokens.text.tertiary, fontWeight: 500 }}>Post-Release: Pending</Typography>
+              <Typography sx={{ fontSize: '11px', color: tokens.text.secondary, fontWeight: 500 }}>Post-Release: Pending</Typography>
               {renderSignalBadge(upcoming ? `Due: ${formatRelativeDate(upcoming)}` : 'HOLD VALIDATED')}
             </Box>
           );
@@ -721,16 +975,16 @@ const Home: React.FC = () => {
         );
       }
     },
-    { 
-      field: 'upcomingDate', 
-      headerName: 'REPORT DATE', 
-      width: 110, 
+    {
+      field: 'upcomingDate',
+      headerName: 'REPORT DATE',
+      width: 110,
       headerAlign: 'center',
       align: 'center',
       sortComparator: dateSortComparator,
       renderCell: (p: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
-          <Typography className="mono-font tabular-nums" sx={{ fontSize: '12px', fontWeight: 500, color: tokens.text.secondary }}>
+          <Typography className="mono-font tabular-nums" sx={{ fontSize: '12px', fontWeight: 600, color: tokens.text.primary }}>
             {formatRelativeDate(p.value) || '—'}
           </Typography>
         </Box>
@@ -738,82 +992,105 @@ const Home: React.FC = () => {
     },
     {
       field: 'latestNews',
-      headerName: 'LATEST NEWS (30d)',
-      width: 320,
+      headerName: 'LATEST NEWS',
+      width: 120,
       sortable: false,
-      headerAlign: 'left',
-      align: 'left',
+      headerAlign: 'center',
+      align: 'center',
       renderCell: (p: GridRenderCellParams) => (
         <NewsCell ticker={p.row?.ticker || ''} name={p.row?.name || ''} />
       )
     },
-    ...(expandQuarters ? [
-      { field: 'q1Clubbed', headerName: `${q1Prefix.trim()} (Q1)`, width: 185, sortable: true, renderCell: (p: any) => renderClubbedQuarterCell(p.row?.q1Revenue, p.row?.q0Revenue, p.row?.q1Profit, p.row?.q0Profit, p.row?.q1Eps, p.row?.q0Eps) },
-      { field: 'q2Clubbed', headerName: `${q2Prefix.trim()} (Q2)`, width: 185, sortable: true, renderCell: (p: any) => renderClubbedQuarterCell(p.row?.q2Revenue, p.row?.q1Revenue, p.row?.q2Profit, p.row?.q1Profit, p.row?.q2Eps, p.row?.q1Eps, (p.row?.historicalTrend || '').split(',')[0] || 'UP') },
-      { field: 'q3Clubbed', headerName: `${q3Prefix.trim()} (Q3)`, width: 185, sortable: true, renderCell: (p: any) => renderClubbedQuarterCell(p.row?.q3Revenue, p.row?.q2Revenue, p.row?.q3Profit, p.row?.q2Profit, p.row?.q3Eps, p.row?.q2Eps, (p.row?.historicalTrend || '').split(',')[1] || 'UP') },
-      { 
-        field: 'q4Clubbed', 
-        headerName: `${q4Prefix.trim()} (Q4 - LATEST)`, 
-        minWidth: 220, 
-        flex: 1.2, 
-        sortable: true,
-        renderHeader: () => (
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', pr: 1 }}>
-            <span style={{ fontSize: '11px', fontWeight: 600 }}>{q4Prefix.trim()} (LATEST)</span>
-            <Chip label="COLLAPSE ◄" onClick={(e) => { e.stopPropagation(); setExpandQuarters(false); }} size="small" sx={{ backgroundColor: tokens.status.error.pillBg, color: tokens.status.error.main, border: `1px solid ${tokens.status.error.border}`, fontSize: '10px', fontWeight: 600, height: '22px', cursor: 'pointer' }} />
-          </Box>
-        ),
-        renderCell: (p: any) => renderClubbedQuarterCell(p.row?.q4Revenue, p.row?.q3Revenue, p.row?.q4Profit, p.row?.q3Profit, p.row?.q4Eps, p.row?.q3Eps, (p.row?.historicalTrend || '').split(',')[2] || 'UP')
-      }
-    ] as GridColDef[] : [
-      { 
-        field: 'quarterlySummary', 
-        headerName: 'QUARTERLY RESULTS', 
-        width: 120, 
-        headerAlign: 'center' as const,
-        align: 'center' as const,
-        sortable: false,
-        renderHeader: () => (
-          <Box onClick={() => setExpandQuarters(true)} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, cursor: 'pointer', width: '100%', color: tokens.accent.main, '&:hover': { opacity: 0.8 } }}>
-            <span style={{ fontWeight: 600, fontSize: '11px' }}>QTRS</span>
-            <Chip label="EXPAND ►" size="small" sx={{ backgroundColor: tokens.primary.tint, color: tokens.text.primary, border: `1px solid ${tokens.border.light}`, fontSize: '9px', fontWeight: 700, height: '20px', cursor: 'pointer' }} />
-          </Box>
-        ),
-        renderCell: (p: GridRenderCellParams) => {
-          const eps = p.row?.q4Eps;
-          return (
-            <Box onClick={() => setDetailModalRow(p.row)} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', cursor: 'pointer', '&:hover .qtr-text': { color: tokens.accent.main } }}>
-              <Chip
-                label={eps != null && !isNaN(eps) ? `₹${eps} EPS` : 'DETAILS ↗'}
-                size="small"
-                variant="outlined"
-                onClick={() => setDetailModalRow(p.row)}
-                className="qtr-text"
-                sx={{
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  borderColor: tokens.border.light,
-                  color: tokens.text.primary,
-                  height: '26px',
-                  cursor: 'pointer',
-                  '&:hover': { backgroundColor: tokens.background.cardHover, borderColor: tokens.accent.main }
-                }}
-              />
+    {
+      field: 'newsSentiment',
+      headerName: 'N. SENTIMENT',
+      width: 150,
+      sortable: false,
+      headerAlign: 'center' as const,
+      align: 'center' as const,
+      renderHeader: () => {
+        const [isRefreshing, setIsRefreshing] = useState(false);
+        const { tokens } = useThemeMode();
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', width: '100%' }}>
+            <span style={{ fontWeight: 600, fontSize: '11px', color: tokens.text.secondary }}>N. SENTIMENT</span>
+            <Box
+              title="Refresh all sentiment analysis"
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (isRefreshing) return;
+                setIsRefreshing(true);
+                const itemsToRefresh = rows.map((r: any) => ({ ticker: r.ticker, name: r.name || r.ticker }));
+                await sentimentCache.refreshBatch(itemsToRefresh, 3);
+                setIsRefreshing(false);
+              }}
+              sx={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: '28px', height: '28px', borderRadius: '4px',
+                cursor: 'pointer',
+                color: tokens.text.tertiary,
+                transition: 'all 0.15s ease-in-out',
+                '&:hover': { color: tokens.text.primary, backgroundColor: tokens.background.cardHover },
+                animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
+                '@keyframes spin': { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } }
+              }}
+            >
+              <RefreshIcon sx={{ fontSize: 16 }} />
             </Box>
-          );
-        }
+          </Box>
+        );
+      },
+      renderCell: (p: GridRenderCellParams) => (
+        <NewsSentimentCell ticker={p.row?.ticker || ''} name={p.row?.name || ''} />
+      )
+    },
+    {
+      field: 'quarterlySummary',
+      headerName: 'QUARTERLY RESULTS',
+      width: 140,
+      headerAlign: 'center' as const,
+      align: 'center' as const,
+      sortable: false,
+      renderHeader: () => (
+        <Box onClick={() => setExpandQuarters(!expandQuarters)} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px', cursor: 'pointer', width: '100%', height: '100%', color: tokens.text.secondary, '&:hover': { color: tokens.text.primary } }}>
+          <span style={{ fontWeight: 600, fontSize: '11px' }}>QTRS</span>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px', borderRadius: '4px', '&:hover': { backgroundColor: tokens.background.cardHover } }}>
+            {expandQuarters ? <KeyboardArrowDownIcon sx={{ fontSize: 16 }} /> : <KeyboardArrowUpIcon sx={{ fontSize: 16 }} />}
+          </Box>
+        </Box>
+      ),
+      renderCell: (p: GridRenderCellParams) => {
+        const eps = p.row?.q4Eps;
+        const label = eps != null && !isNaN(eps) ? `₹${eps} EPS` : 'Details ↗';
+        return (
+          <Box onClick={() => setDetailModalRow(p.row)} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', cursor: 'pointer', '&:hover .qtr-text': { color: tokens.accent.main, textDecoration: 'underline' } }}>
+            <Typography className="qtr-text" sx={{ fontSize: '12px', fontWeight: 600, color: tokens.text.primary }}>
+              {label}
+            </Typography>
+          </Box>
+        );
       }
-    ] as GridColDef[])
-  ], [expandQuarters, q1Prefix, q2Prefix, q3Prefix, q4Prefix, renderClubbedQuarterCell, tokens, dateSortComparator, isDark, renderSignalBadge]);
+    }
+  ], [expandQuarters, tokens, dateSortComparator]);
 
   const bulkActions = useMemo(() => [
     {
       label: 'Mass Calculate Health',
       isPrimary: true,
       icon: 'calc' as const,
-      onClick: () => massCalculate()
+      onClick: () => handleCalculateHealth()
     }
-  ], [massCalculate]);
+  ], [handleCalculateHealth]);
+
+  const activeColumns = useMemo(() => {
+    const qtrs = [
+      { field: 'q1Clubbed', headerName: `${q1Prefix.trim()} (Q1)`, width: 160, sortable: false, renderCell: (p: any) => renderClubbedQuarterCell(p.row?.q1Revenue, p.row?.q0Revenue, p.row?.q1Profit, p.row?.q0Profit, p.row?.q1Eps, p.row?.q0Eps) },
+      { field: 'q2Clubbed', headerName: `${q2Prefix.trim()} (Q2)`, width: 160, sortable: false, renderCell: (p: any) => renderClubbedQuarterCell(p.row?.q2Revenue, p.row?.q1Revenue, p.row?.q2Profit, p.row?.q1Profit, p.row?.q2Eps, p.row?.q1Eps, (p.row?.historicalTrend || '').split(',')[0] || 'UP') },
+      { field: 'q3Clubbed', headerName: `${q3Prefix.trim()} (Q3)`, width: 160, sortable: false, renderCell: (p: any) => renderClubbedQuarterCell(p.row?.q3Revenue, p.row?.q2Revenue, p.row?.q3Profit, p.row?.q2Profit, p.row?.q3Eps, p.row?.q2Eps, (p.row?.historicalTrend || '').split(',')[1] || 'UP') },
+      { field: 'q4Clubbed', headerName: `${q4Prefix.trim()} (Q4 - LATEST)`, width: 160, sortable: false, renderCell: (p: any) => renderClubbedQuarterCell(p.row?.q4Revenue, p.row?.q3Revenue, p.row?.q4Profit, p.row?.q3Profit, p.row?.q4Eps, p.row?.q3Eps, (p.row?.historicalTrend || '').split(',')[2] || 'UP') }
+    ];
+    return expandQuarters ? [...columns, ...qtrs] : columns;
+  }, [expandQuarters, columns, q1Prefix, q2Prefix, q3Prefix, q4Prefix, renderClubbedQuarterCell]);
 
   if (loading && !data) {
     return (
@@ -837,17 +1114,17 @@ const Home: React.FC = () => {
   return (
     <Box sx={{ height: 'calc(100vh - 56px)', backgroundColor: tokens.background.default, width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Fixed Filter & Controls Bar */}
-      <Box 
-        sx={{ 
-          px: '24px', 
+      <Box
+        sx={{
+          px: '24px',
           minHeight: 48,
-          py: 1, 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          flexWrap: 'wrap', 
-          gap: 2, 
-          borderBottom: `1px solid ${tokens.border.main}`, 
+          py: 1,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2,
+          borderBottom: `1px solid ${tokens.border.main}`,
           backgroundColor: tokens.background.header,
           flexShrink: 0,
         }}
@@ -871,32 +1148,33 @@ const Home: React.FC = () => {
           {/* 240px Search Bar */}
           <Box sx={{ display: 'flex', alignItems: 'center', backgroundColor: tokens.background.card, border: `1px solid ${tokens.border.main}`, borderRadius: '20px', px: '12px', height: '32px', transition: 'border-color 0.15s ease-in-out', '&:focus-within': { borderColor: tokens.border.focus } }}>
             <SearchIcon sx={{ color: tokens.text.secondary, fontSize: 16, mr: '6px' }} />
-            <InputBase 
-              placeholder="Search ticker or name..." 
+            <InputBase
+              placeholder="Search ticker or name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              sx={{ color: tokens.text.primary, fontSize: '12px', width: '200px', fontFamily: tokens.typography.fontFamily }} 
+              sx={{ color: tokens.text.primary, fontSize: '12px', width: '200px', fontFamily: tokens.typography.fontFamily }}
             />
           </Box>
-          
+
           {/* Action Button: Calculate Health */}
           <Tooltip title="Mass Calculate Financial Health Across Universe" placement="top">
-            <Button 
-              onClick={() => massCalculate()} 
+            <Button
+              onClick={() => massCalculate()}
               size="small"
               startIcon={<AssessmentIcon sx={{ fontSize: '16px !important' }} />}
-              sx={{ 
-                backgroundColor: tokens.primary.main,
-                color: isDark ? '#0A0A0C' : '#FFFFFF', 
-                borderRadius: '16px', 
-                px: '14px', 
+              sx={{
+                backgroundColor: 'transparent',
+                border: `1px solid ${tokens.border.main}`,
+                color: tokens.text.primary,
+                borderRadius: '4px',
+                px: '14px',
                 height: '32px',
                 fontWeight: 600,
-                fontSize: '12px',
+                fontSize: '11px',
                 textTransform: 'none',
                 boxShadow: 'none',
-                transition: 'opacity 0.15s ease-in-out',
-                '&:hover': { opacity: 0.88, backgroundColor: tokens.primary.main } 
+                transition: 'border-color 0.15s ease-in-out',
+                '&:hover': { borderColor: tokens.border.focus, backgroundColor: tokens.background.cardHover }
               }}
             >
               Calculate Health
@@ -905,8 +1183,8 @@ const Home: React.FC = () => {
 
           {/* Sync / Reload DB Button */}
           <Tooltip title="Sync & Populate Universe DB (~5 min)" placement="top">
-            <IconButton 
-              onClick={handlePopulate} 
+            <IconButton
+              onClick={handlePopulate}
               size="small"
               sx={{ backgroundColor: tokens.background.card, color: tokens.text.primary, border: `1px solid ${tokens.border.main}`, borderRadius: '8px', width: 32, height: 32, transition: 'border-color 0.15s ease-in-out', '&:hover': { borderColor: tokens.border.light, backgroundColor: tokens.background.cardHover } }}
             >
@@ -928,14 +1206,12 @@ const Home: React.FC = () => {
       {/* Dense Terminal DataGrid with Semantic Row Tinting & Dynamic Viewport Height */}
       <Box sx={{ flexGrow: 1, width: '100%', backgroundColor: tokens.background.paper, overflow: 'hidden', position: 'relative' }}>
         <ErrorBoundary fallbackTitle="Data Grid Table Error">
-          <RowTintedDataGrid 
-            rows={rows} 
-            columns={columns} 
+          <RowTintedDataGrid
+            rows={rows}
+            columns={activeColumns}
             checkboxSelection
             onRowSelectionModelChange={(newSelection) => setSelectedRowIds(newSelection)}
             rowSelectionModel={selectedRowIds}
-            rowHeight={expandQuarters ? 84 : 52}
-            columnHeaderHeight={44}
             pageSizeOptions={[20, 50, 100]}
             initialState={{
               pagination: {
@@ -963,7 +1239,7 @@ const Home: React.FC = () => {
           />
         </ErrorBoundary>
       </Box>
-      
+
       {/* Detail View Modal Dialog */}
       <Dialog open={Boolean(detailModalRow)} onClose={() => setDetailModalRow(null)} maxWidth="md" fullWidth PaperProps={{ sx: { backgroundColor: tokens.background.paper, border: `1px solid ${tokens.border.main}`, borderRadius: '12px', boxShadow: tokens.shadows.dropdown } }}>
         <DialogTitle sx={{ borderBottom: `1px solid ${tokens.border.main}`, pb: 2, pt: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

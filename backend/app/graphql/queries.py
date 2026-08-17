@@ -1,7 +1,7 @@
 import strawberry
 from typing import List, Optional
 from strawberry.types import Info
-from app.graphql.types import CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType, HypothesisSignalType
+from app.graphql.types import CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType, HypothesisSignalType, AdminActivityLogType
 from app.services.company_service import CompanyService
 from app.graphql.context import Context
 import uuid
@@ -635,3 +635,66 @@ class Query:
             )
         return result
 
+    @strawberry.field
+    def admin_activity_logs(self, info: Info[Context, None], limit: int = 50, offset: int = 0, user_email: Optional[str] = None, event_type: Optional[str] = None, status: Optional[str] = None) -> List[AdminActivityLogType]:
+        from app.infrastructure.models import AdminActivityLog
+        db = info.context.db
+        query = db.query(AdminActivityLog)
+        
+        if user_email and user_email != "All Users":
+            query = query.filter(AdminActivityLog.user_email == user_email)
+        if event_type and event_type != "All":
+            query = query.filter(AdminActivityLog.event_type == event_type)
+        if status and status != "All":
+            query = query.filter(AdminActivityLog.status == status)
+            
+        logs = query.order_by(AdminActivityLog.created_at.desc()).offset(offset).limit(limit).all()
+        
+        return [
+            AdminActivityLogType(
+                id=str(log.id),
+                user_email=log.user_email,
+                event_type=log.event_type,
+                event_name=log.event_name,
+                event_description=log.event_description,
+                status=log.status,
+                started_at=str(log.started_at),
+                completed_at=str(log.completed_at) if log.completed_at else None,
+                duration_ms=log.duration_ms,
+                created_at=str(log.created_at),
+                metadata_json=log.metadata_json,
+                celery_task_id=log.celery_task_id
+            ) for log in logs
+        ]
+
+    @strawberry.field
+    def latest_admin_activity(self, info: Info[Context, None], event_name: str) -> Optional[AdminActivityLogType]:
+        from app.infrastructure.models import AdminActivityLog
+        from datetime import datetime, timedelta
+        db = info.context.db
+        
+        # Look for the last execution of this event name within today
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        log = db.query(AdminActivityLog).filter(
+            AdminActivityLog.event_name == event_name,
+            AdminActivityLog.created_at >= today_start
+        ).order_by(AdminActivityLog.created_at.desc()).first()
+        
+        if not log:
+            return None
+            
+        return AdminActivityLogType(
+            id=str(log.id),
+            user_email=log.user_email,
+            event_type=log.event_type,
+            event_name=log.event_name,
+            event_description=log.event_description,
+            status=log.status,
+            started_at=str(log.started_at),
+            completed_at=str(log.completed_at) if log.completed_at else None,
+            duration_ms=log.duration_ms,
+            created_at=str(log.created_at),
+            metadata_json=log.metadata_json,
+            celery_task_id=log.celery_task_id
+        )
