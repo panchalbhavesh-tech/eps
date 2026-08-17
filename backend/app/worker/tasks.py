@@ -830,7 +830,7 @@ def run_weekly_weight_optimization_task():
     finally:
         db.close()
 
-@celery_app.task(name="app.worker.tasks.cleanup_old_activity_logs_task")
+@shared_task(name="app.worker.tasks.cleanup_old_activity_logs_task")
 def cleanup_old_activity_logs_task():
     from app.infrastructure.database import SessionLocal
     from app.services.activity_logger import cleanup_old_activity_logs
