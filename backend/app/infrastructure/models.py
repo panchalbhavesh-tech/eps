@@ -240,6 +240,8 @@ class MomentumSignal(Base):
     smart_money_score = Column(Float, nullable=True)
     derivatives_score = Column(Float, nullable=True)
     composite_score = Column(Float, nullable=True)
+    raw_dma200_dist = Column(Float, nullable=True)
+    raw_rel_vol = Column(Float, nullable=True)
     signal = Column(String, nullable=True)
     confidence = Column(Float, nullable=True)
     stop_loss_price = Column(Float, nullable=True)

@@ -13,68 +13,102 @@ class UpstoxProvider(DataProvider):
     """
     
     def __init__(self):
-        self.access_token = os.environ.get("UPSTOX_ACCESS_TOKEN")
-        if not self.access_token:
-            print("Warning: UPSTOX_ACCESS_TOKEN not found in environment.")
-            
-        self.configuration = upstox_client.Configuration()
-        self.configuration.access_token = self.access_token
-        self.api_client = upstox_client.ApiClient(self.configuration)
+        # Configure Upstox API client from environment variables
+        self.access_token = os.environ.get("UPSTOX_ACCESS_TOKEN", "")
+        configuration = upstox_client.Configuration()
+        configuration.access_token = self.access_token
+        self.api_client = upstox_client.ApiClient(configuration)
+        self._instrument_map = {}
+        self._load_instruments()
         
+    def _load_instruments(self):
+        """Downloads the official Upstox instruments CSV to map tickers to actual instrument keys (ISINs)."""
+        import pandas as pd
+        csv_path = os.path.join(os.path.dirname(__file__), "upstox_instruments.csv.gz")
+        
+        # Download if it doesn't exist or is older than 1 day
+        if not os.path.exists(csv_path) or (datetime.now().timestamp() - os.path.getmtime(csv_path) > 86400):
+            print("Downloading latest Upstox instruments CSV...")
+            url = "https://assets.upstox.com/market-quote/instruments/exchange/complete.csv.gz"
+            df = pd.read_csv(url)
+            df.to_csv(csv_path, compression="gzip", index=False)
+        else:
+            df = pd.read_csv(csv_path, compression="gzip", low_memory=False)
+            
+        # Filter for NSE Equities
+        nse_df = df[df["exchange"] == "NSE_EQ"]
+        
+        # Build lookup dictionary: tradingsymbol -> instrument_key
+        # e.g., 'RELIANCE' -> 'NSE_EQ|INE002A01018'
+        for _, row in nse_df.iterrows():
+            self._instrument_map[row["tradingsymbol"]] = row["instrument_key"]
+            
+        # Add Nifty 50 Index manually for convenience
+        self._instrument_map["NIFTY"] = "NSE_INDEX|Nifty 50"
+        self._instrument_map["^NSEI"] = "NSE_INDEX|Nifty 50"
+
     def _get_instrument_key(self, ticker: str) -> str:
-        # Simplistic mapping: NIFTY/NSEI -> index, else equity
-        if ticker in ["^NSEI", "NIFTY"]:
-            return "NSE_INDEX|Nifty 50"
-        # Clean ticker (remove .NS if present)
         clean_ticker = ticker.replace(".NS", "")
-        # Real mapping requires downloading the instrument list CSV.
-        # ponytail: keeping it abstract for the skeleton. Real impl would load mapping from DB/CSV.
-        return f"NSE_EQ|{clean_ticker}"
+        # Lookup the actual instrument key (fallback to naive mapping if somehow missing)
+        return self._instrument_map.get(clean_ticker, f"NSE_EQ|{clean_ticker}")
         
     def fetch_historical_ohlcv(self, ticker: str, days: int = 365) -> pd.DataFrame:
         """
         Fetches daily historical candles using Upstox HistoryApi.
-        Upstox limits daily data to ~1 year for this endpoint without pagination.
+        Automatically paginates in 1-year chunks to bypass Upstox limits.
         """
+        import time
         api_instance = upstox_client.HistoryApi(self.api_client)
         instrument_key = self._get_instrument_key(ticker)
         
-        to_date = datetime.now().strftime("%Y-%m-%d")
-        from_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        all_records = []
+        days_remaining = days
+        current_to_date = datetime.now()
         
-        try:
-            # interval = 'day'
-            response = api_instance.get_historical_candle_data1(
-                instrument_key=instrument_key,
-                interval='day',
-                to_date=to_date,
-                from_date=from_date,
-                api_version='2.0'
-            )
+        while days_remaining > 0:
+            chunk_days = min(days_remaining, 365)
+            current_from_date = current_to_date - timedelta(days=chunk_days)
             
-            if not response.data or not response.data.candles:
-                return pd.DataFrame()
-                
-            # Candles are lists: [timestamp, open, high, low, close, volume, open_interest]
-            records = []
-            for candle in response.data.candles:
-                records.append({
-                    "Date": pd.to_datetime(candle[0]).tz_localize(None),
-                    "Open": candle[1],
-                    "High": candle[2],
-                    "Low": candle[3],
-                    "Close": candle[4],
-                    "Volume": candle[5]
-                })
-                
-            df = pd.DataFrame(records)
-            df.set_index("Date", inplace=True)
-            df.sort_index(inplace=True)
-            return df
+            to_date_str = current_to_date.strftime("%Y-%m-%d")
+            from_date_str = current_from_date.strftime("%Y-%m-%d")
             
-        except ApiException as e:
-            print(f"Exception calling Upstox HistoryApi for {ticker}: {e}")
+            try:
+                response = api_instance.get_historical_candle_data1(
+                    instrument_key=instrument_key,
+                    interval='day',
+                    to_date=to_date_str,
+                    from_date=from_date_str,
+                    api_version='2.0'
+                )
+                
+                if response.data and response.data.candles:
+                    for candle in response.data.candles:
+                        all_records.append({
+                            "Date": pd.to_datetime(candle[0]).tz_localize(None),
+                            "Open": candle[1],
+                            "High": candle[2],
+                            "Low": candle[3],
+                            "Close": candle[4],
+                            "Volume": candle[5]
+                        })
+                        
+            except ApiException as e:
+                print(f"Exception calling Upstox HistoryApi for {ticker} ({from_date_str} to {to_date_str}): {e}")
+                break # stop paginating on error
+                
+            days_remaining -= chunk_days
+            current_to_date = current_from_date - timedelta(days=1)
+            time.sleep(0.2) # Rate limit protection
+            
+        if not all_records:
             return pd.DataFrame()
+            
+        df = pd.DataFrame(all_records)
+        df.set_index("Date", inplace=True)
+        # Drop duplicates in case of overlap between chunks
+        df = df[~df.index.duplicated(keep='first')]
+        df.sort_index(inplace=True)
+        return df
 
     def fetch_bulk_market_quotes(self, tickers: List[str]) -> List[Dict[str, Any]]:
         """

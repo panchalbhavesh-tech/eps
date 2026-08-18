@@ -395,6 +395,8 @@ class MomentumService:
                     smart_money_score=round(smart_score, 1),
                     derivatives_score=round(deriv_score, 1),
                     composite_score=comp_score,
+                    raw_dma200_dist=float(row['dma200_dist_pct']) / 100.0,
+                    raw_rel_vol=float(row['relative_volume']),
                     signal=signal,
                     confidence=confidence,
                     stop_loss_price=stop_loss,

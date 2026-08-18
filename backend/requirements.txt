@@ -26,3 +26,4 @@ shap
 curl-cffi
 feedparser
 pyarrow
+fastparquet

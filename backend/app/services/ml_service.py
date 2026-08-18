@@ -194,8 +194,8 @@ class MomentumMLService:
                     "raw_roe": f_snap.roe if f_snap and f_snap.roe is not None else 0.0,
                     "raw_de": f_snap.debt_to_equity if f_snap and f_snap.debt_to_equity is not None else 1.0,
                     "raw_pe": f_snap.pe_ratio if f_snap and f_snap.pe_ratio is not None else 30.0,
-                    "raw_rel_vol": raw_rel_vol,
-                    "raw_dma200_dist": (signal.technical_score - 50.0) / 100.0 if signal.technical_score else 0.0, # Proxy if we don't have raw tech snapshot easily
+                    "raw_rel_vol": getattr(signal, 'raw_rel_vol', 1.0) if getattr(signal, 'raw_rel_vol', None) is not None else raw_rel_vol,
+                    "raw_dma200_dist": getattr(signal, 'raw_dma200_dist', 0.0),
                     "target_3d": target_3d,
                     "target_5d": target_5d,
                     "target_10d": target_10d,

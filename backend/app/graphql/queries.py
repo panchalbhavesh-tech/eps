@@ -381,7 +381,8 @@ class Query:
     @strawberry.field
     def market_regime_status(self, info: Info[Context, None]) -> MarketRegimeType:
         from app.services.momentum_service import MomentumService
-        reg_data = MomentumService.get_market_regime()
+        db = info.context.db
+        reg_data = MomentumService(db).get_market_regime()
         return MarketRegimeType(
             status=str(reg_data.get("status", "Neutral")),
             score=float(reg_data.get("score", 50.0)),
@@ -446,7 +447,7 @@ class Query:
 
     @strawberry.field
     def get_intensive_backtest(self, info: Info, ticker: str, years: int = 3) -> IntensiveBacktestReportType:
-        db: Session = info.context["db"]
+        db: Session = info.context.db
         from app.services.backtest_service import IntensiveBacktestEngine
         engine = IntensiveBacktestEngine(db)
         res = engine.run_intensive_backtest(ticker, years=years)
@@ -485,12 +486,17 @@ class Query:
                 avg_trade_return_pct=float(p.get("avg_trade_return_pct", 0.0))
             )
             
+        from app.infrastructure.models import Company
+        company = db.query(Company).filter(Company.ticker == ticker).first()
+        
         return IntensiveBacktestReportType(
-            ticker=res.get("ticker", ticker),
-            status=res.get("status", "Error"),
-            years_tested=res.get("years_tested", years),
-            total_trading_bars=res.get("total_trading_bars", 0),
-            benchmark_nifty_return_pct=res.get("benchmark_nifty_return_pct", 0.0),
+            ticker=ticker,
+            company_name=company.name if company else ticker,
+            status=res.get("status", "Success"),
+            evaluation_horizon_years=years,
+            years_tested=years,
+            total_trading_bars=res.get("total_bars", 0),
+            benchmark_nifty_return_pct=res.get("nifty_return", 0.0),
             momentum_performance=mom_perf,
             event_strategies=event_strats
         )

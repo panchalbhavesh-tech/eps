@@ -9,95 +9,22 @@ class QuantService:
         pass
 
     def fetch_historical_ohlcv(self, ticker: str, years: int = 5) -> pd.DataFrame:
-        import time
-        symbols_to_try = []
-        if ticker.startswith("^") or ticker.endswith(".NS") or ticker.endswith(".BO"):
-            symbols_to_try.append(ticker)
-        else:
-            symbols_to_try.extend([f"{ticker}.NS", f"{ticker}.BO", ticker])
+        from app.services.data_vendor_service import DataVendorService
+        vendor = DataVendorService()
+        df = vendor.fetch_historical_ohlcv(ticker, years=years)
+        
+        if df.empty or len(df) < 5:
+            return pd.DataFrame()
             
-        for yf_ticker in symbols_to_try:
-            df = pd.DataFrame()
-            splits = pd.Series(dtype=float)
-            
-            # Exponential Backoff Retry Loop
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    ticker_obj = yf.Ticker(yf_ticker)
-                    df = ticker_obj.history(period=f"{years}y")
-                    try:
-                        splits = ticker_obj.splits
-                    except Exception:
-                        pass
-                    break
-                except Exception as e:
-                    if attempt == max_retries - 1:
-                        print(f"Ticker history error for {yf_ticker} after {max_retries} attempts: {e}")
-                    else:
-                        time.sleep(2 ** attempt)
+        # Ensure correct column names expected by pandas_ta and other quant functions
+        required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+        for col in required_cols:
+            if col not in df.columns:
+                return pd.DataFrame()
                 
-            if df.empty or len(df) < 5:
-                for attempt in range(max_retries):
-                    try:
-                        df = yf.download(yf_ticker, period=f"{years}y", progress=False)
-                        break
-                    except Exception as e:
-                        if attempt == max_retries - 1:
-                            print(f"Download error for {yf_ticker} after {max_retries} attempts: {e}")
-                        else:
-                            time.sleep(2 ** attempt)
-                    
-            if not df.empty and len(df) > 5:
-                if isinstance(df.columns, pd.MultiIndex):
-                    df.columns = df.columns.get_level_values(0)
-                if 'Date' not in df.columns and not isinstance(df.index, pd.DatetimeIndex):
-                    continue
-                df = df.reset_index()
-                date_col = 'Date' if 'Date' in df.columns else df.columns[0]
-                
-                # Timezone safety: Explicit Asia/Kolkata
-                dt_col = pd.to_datetime(df[date_col])
-                if dt_col.dt.tz is not None:
-                    df[date_col] = dt_col.dt.tz_convert('Asia/Kolkata').dt.tz_localize(None)
-                else:
-                    df[date_col] = dt_col
-
-                df.set_index(date_col, inplace=True)
-                
-                # Corporate action verification & backward adjustment
-                df['pct_ret'] = df['Close'].pct_change()
-                anomalies = df[df['pct_ret'].abs() > 0.3]
-                
-                if not anomalies.empty:
-                    # Convert splits index to naive for matching
-                    if not splits.empty:
-                        if splits.index.tz is not None:
-                            splits.index = splits.index.tz_convert('Asia/Kolkata').tz_localize(None)
-                    
-                    for idx, row in anomalies.iterrows():
-                        gap_date = idx
-                        # If we have a known split near this date
-                        split_ratio = 0
-                        if not splits.empty:
-                            # Check within +/- 2 days
-                            mask = (splits.index >= gap_date - timedelta(days=2)) & (splits.index <= gap_date + timedelta(days=2))
-                            if mask.any():
-                                split_ratio = splits[mask].iloc[0]
-                                
-                        if split_ratio > 0 and split_ratio != 1.0:
-                            # Backward adjust
-                            df.loc[df.index < gap_date, ['Open', 'High', 'Low', 'Close']] /= split_ratio
-                            df.loc[df.index < gap_date, 'Volume'] *= split_ratio
-                            print(f"Adjusted corporate action (split {split_ratio}) for {yf_ticker} on {gap_date.date()}")
-                        else:
-                            print(f"Warning: Unadjusted corporate action jump ({row['pct_ret']:.2f}) detected for {yf_ticker} on {gap_date.date()}.")
-                            
-                df.drop(columns=['pct_ret'], inplace=True)
-                
-                return df
-                
-        return pd.DataFrame()
+        # Drop rows with NaN in critical columns
+        df.dropna(subset=['Close', 'Volume'], inplace=True)
+        return df
 
     def fetch_from_cache(self, ticker: str, db: Any, years: int = 5) -> pd.DataFrame:
         """
