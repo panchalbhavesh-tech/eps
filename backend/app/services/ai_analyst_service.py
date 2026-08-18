@@ -546,5 +546,98 @@ You MUST output strictly valid JSON with the following exact keys:
         # If all predefined have been tested, stop to avoid infinite duplication
         raise Exception("All predefined fallback orthogonal hypotheses have been exhausted.")
 
+    def evaluate_catalyst_batch(self, announcements: list) -> list[dict]:
+        """
+        Evaluates a batch of announcements in parallel to drastically reduce pipeline execution time.
+        announcements should be a list of dicts with keys: ticker, subject, details, context.
+        Returns a list of result dicts in the same order.
+        """
+        import concurrent.futures
+        results = [None] * len(announcements)
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_idx = {
+                executor.submit(
+                    self.evaluate_catalyst_materiality,
+                    ann["ticker"],
+                    ann["subject"],
+                    ann["details"],
+                    ann.get("context")
+                ): idx for idx, ann in enumerate(announcements)
+            }
+            
+            for future in concurrent.futures.as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    result = future.result()
+                    results[idx] = result
+                except Exception as e:
+                    print(f"Error in batch evaluate for {announcements[idx]['ticker']}: {e}")
+                    results[idx] = self._fallback_catalyst_evaluation(announcements[idx]["ticker"], announcements[idx]["subject"])
+                    
+        return results
 
+    def evaluate_catalyst_materiality(self, ticker: str, subject: str, details: str, context: dict = None) -> dict:
+        """
+        Evaluates a corporate announcement to determine if it is a material catalyst.
+        Returns a structured dictionary with impact score, category, and reasoning.
+        """
+        if not self.gemini_api_key or len(self.gemini_api_key) < 5:
+            return self._fallback_catalyst_evaluation(ticker, subject)
 
+        prompt = f"""
+You are an elite quantitative analyst for the Indian Equity Market (NSE).
+Evaluate the following corporate announcement for {ticker} to determine if it is a material pricing catalyst.
+
+Announcement Subject: {subject}
+Announcement Details: {details}
+Company Context: {json.dumps(context or {})}
+
+CRITICAL MANDATE - RELATIVE MATERIALITY:
+1. Do NOT assume an absolute value is material. A ₹500 Cr order is massive for a ₹1,000 Cr market cap company, but irrelevant for a ₹2,00,000 Cr company.
+2. If monetary values or percentages are present, explicitly compare them against the provided Market Cap or Revenue in your reasoning.
+3. We only care about events that could cause a sudden repricing of the stock (e.g., massive orders, FDA approvals, management fraud, huge acquisitions, profit warnings, major fundraising/QIPs, commissioning of large plants).
+4. Ignore routine filings (e.g., AGM notices, ESOP allotments, routine compliance, loss of share certificates).
+
+Output a strict JSON object with EXACTLY these keys:
+- "is_material": boolean (true if impact_score >= 50, else false)
+- "impact_score": integer 0-100 (100 = extreme repricing likely, 50 = moderate, <40 = noise)
+- "category": string (e.g., "LARGE_ORDERS", "CORPORATE_ACTION", "FUNDRAISING", "PROMOTER", "GOVERNANCE", "REGULATORY", "RESULTS_GUIDANCE", "CREDIT_RATING", "NOISE")
+- "event_type": string (short 1-3 word description, e.g., "ACQUISITION", "FDA_APPROVAL", "QIP_ALLOTMENT", "ROUTINE_FILING")
+- "tier": string (S-TIER, A-TIER, B-TIER, C-TIER, NOISE) based on impact. S-Tier >= 90, A-Tier >= 75, B-Tier >= 50.
+- "why_it_matters": string (1-3 sentences explaining the quantitative or strategic impact, explicitly citing relative size if numbers are present)
+
+Respond ONLY with valid JSON. Do not include markdown formatting like ```json.
+"""
+        try:
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"temperature": 0.0, "topK": 10, "topP": 0.95}
+            }
+            headers = {"Content-Type": "application/json"}
+            response = requests.post(self.model_url, headers=headers, json=payload, timeout=20)
+            if response.status_code == 200:
+                data = response.json()
+                text_response = data['candidates'][0]['content']['parts'][0]['text']
+                # Clean markdown blocks if present
+                text_response = text_response.replace('```json', '').replace('```', '').strip()
+                return json.loads(text_response)
+            else:
+                print(f"Gemini API returned {response.status_code} for {ticker} catalyst evaluation.")
+                return self._fallback_catalyst_evaluation(ticker, subject)
+        except Exception as e:
+            print(f"Failed to evaluate catalyst via Gemini for {ticker}: {e}")
+            return self._fallback_catalyst_evaluation(ticker, subject)
+
+    def _fallback_catalyst_evaluation(self, ticker: str, subject: str) -> dict:
+        subj_lower = subject.lower()
+        if "order" in subj_lower or "contract" in subj_lower:
+            return {"is_material": True, "impact_score": 75, "category": "ORDERS", "event_type": "ORDER", "tier": "B-TIER", "why_it_matters": "New order/contract secured."}
+        if "resign" in subj_lower or "fraud" in subj_lower or "cfo" in subj_lower:
+            return {"is_material": True, "impact_score": 85, "category": "GOVERNANCE", "event_type": "MANAGEMENT_CHANGE", "tier": "A-TIER", "why_it_matters": "Significant governance event."}
+        if "acquire" in subj_lower or "merger" in subj_lower:
+            return {"is_material": True, "impact_score": 90, "category": "CORPORATE", "event_type": "M&A", "tier": "S-TIER", "why_it_matters": "Major corporate action."}
+        if "rating" in subj_lower or "crisil" in subj_lower or "icra" in subj_lower or "downgrade" in subj_lower or "upgrade" in subj_lower:
+            return {"is_material": True, "impact_score": 75, "category": "CREDIT_RATING", "event_type": "RATING_CHANGE", "tier": "B-TIER", "why_it_matters": "Credit rating action."}
+        
+        return {"is_material": False, "impact_score": 10, "category": "NOISE", "event_type": "ROUTINE", "tier": "NOISE", "why_it_matters": "Routine filing with low expected impact."}

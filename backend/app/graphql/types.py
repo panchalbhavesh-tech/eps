@@ -309,3 +309,76 @@ class HypothesisSignalType:
     factor_score: Optional[float] = None
     rank_percentile: Optional[float] = None
     direction: str
+
+@strawberry.type
+class CatalystSourceType:
+    id: str
+    event_id: str
+    source_name: str
+    url: Optional[str] = None
+    is_primary: bool
+    published_at: Optional[str] = None
+    created_at: str
+
+@strawberry.type
+class CatalystEventType:
+    id: str
+    ticker: str
+    company_id: Optional[str] = None
+    company_name: Optional[str] = None
+    event_title: str
+    event_type: str
+    category: str
+    impact_score: Optional[float] = None
+    early_score: Optional[float] = None
+    confidence: str
+    status: str
+    tier: str
+    match_status: str
+    why_it_matters: Optional[str] = None
+    reaction_pct: Optional[float] = None
+    relative_volume: Optional[float] = None
+    # Multi-horizon reaction metrics (P1.5)
+    gap_reaction_pct: Optional[float] = None
+    session_reaction_pct: Optional[float] = None
+    reaction_1d: Optional[float] = None
+    reaction_3d: Optional[float] = None
+    reaction_5d: Optional[float] = None
+    pre_event_price: Optional[float] = None
+    market_cap_at_event: Optional[float] = None
+    sector_at_event: Optional[str] = None
+    published_at: Optional[str] = None
+    detected_at: Optional[str] = None
+    verified_at: Optional[str] = None
+    created_at: str
+    updated_at: str
+    sources: Optional[List[CatalystSourceType]] = None
+
+@strawberry.type
+class CatalystPipelineRunType:
+    id: str
+    source_name: str
+    source_status: str
+    http_status_code: Optional[int] = None
+    raw_fetched: int
+    keyword_filtered: int
+    symbol_unresolved: int
+    auto_created_companies: int
+    ai_classified: int
+    ai_rejected: int
+    duplicates: int
+    noise_filtered: int
+    saved: int
+    execution_time_ms: int
+    error_message: Optional[str] = None
+    run_at: str
+
+@strawberry.type
+class EventAnalogStatsType:
+    total_events_analyzed: int
+    avg_gap_reaction: float
+    avg_session_reaction: float
+    avg_1d_return: float
+    avg_3d_return: float
+    avg_5d_return: float
+    win_rate_5d: float

@@ -1,7 +1,7 @@
 import strawberry
 from typing import List, Optional
 from strawberry.types import Info
-from app.graphql.types import CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType, HypothesisSignalType, AdminActivityLogType
+from app.graphql.types import CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType, HypothesisSignalType, AdminActivityLogType, CatalystEventType, CatalystSourceType, CatalystPipelineRunType, EventAnalogStatsType
 from app.services.company_service import CompanyService
 from app.graphql.context import Context
 import uuid
@@ -697,4 +697,214 @@ class Query:
             created_at=str(log.created_at),
             metadata_json=log.metadata_json,
             celery_task_id=log.celery_task_id
+        )
+
+    @strawberry.field
+    def catalyst_events(
+        self, 
+        info: Info[Context, None], 
+        limit: int = 100, 
+        offset: int = 0,
+        tier: Optional[str] = None,
+        status: Optional[str] = None,
+        category: Optional[str] = None,
+        search_query: Optional[str] = None
+    ) -> List[CatalystEventType]:
+        from app.infrastructure.models import CatalystEvent
+        db = info.context.db
+        query = db.query(CatalystEvent)
+        
+        if tier and tier != "ALL":
+            query = query.filter(CatalystEvent.tier == tier)
+        if status and status != "ALL":
+            query = query.filter(CatalystEvent.status == status)
+        if category and category != "ALL":
+            query = query.filter(CatalystEvent.category == category)
+        if search_query:
+            search = f"%{search_query}%"
+            query = query.filter(
+                (CatalystEvent.ticker.ilike(search)) |
+                (CatalystEvent.event_title.ilike(search))
+            )
+            
+        events = query.order_by(CatalystEvent.detected_at.desc()).offset(offset).limit(limit).all()
+        
+        result = []
+        for e in events:
+            sources = []
+            if getattr(e, "sources", None):
+                for s in e.sources:
+                    sources.append(CatalystSourceType(
+                        id=str(s.id),
+                        event_id=str(s.event_id),
+                        source_name=s.source_name,
+                        url=s.url,
+                        is_primary=bool(s.is_primary),
+                        published_at=str(s.published_at) if s.published_at else None,
+                        created_at=str(s.created_at) if s.created_at else ""
+                    ))
+                    
+            result.append(CatalystEventType(
+                id=str(e.id),
+                ticker=e.ticker,
+                company_id=str(e.company_id) if e.company_id else None,
+                company_name=e.company.name if e.company else None,
+                event_title=e.event_title,
+                event_type=e.event_type,
+                category=e.category,
+                impact_score=e.impact_score,
+                early_score=e.early_score,
+                confidence=e.confidence,
+                status=e.status,
+                tier=e.tier,
+                match_status=e.match_status,
+                why_it_matters=e.why_it_matters,
+                reaction_pct=e.reaction_pct,
+                relative_volume=e.relative_volume,
+                gap_reaction_pct=getattr(e, 'gap_reaction_pct', None),
+                session_reaction_pct=getattr(e, 'session_reaction_pct', None),
+                reaction_1d=getattr(e, 'reaction_1d', None),
+                reaction_3d=getattr(e, 'reaction_3d', None),
+                reaction_5d=getattr(e, 'reaction_5d', None),
+                pre_event_price=getattr(e, 'pre_event_price', None),
+                market_cap_at_event=getattr(e, 'market_cap_at_event', None),
+                sector_at_event=getattr(e, 'sector_at_event', None),
+                published_at=str(e.published_at) if e.published_at else None,
+                detected_at=str(e.detected_at) if e.detected_at else None,
+                verified_at=str(e.verified_at) if e.verified_at else None,
+                created_at=str(e.created_at) if e.created_at else "",
+                updated_at=str(e.updated_at) if e.updated_at else "",
+                sources=sources
+            ))
+            
+        return result
+
+    @strawberry.field
+    def catalyst_pipeline_health_logs(self, info: Info[Context, None], limit: int = 50) -> List[CatalystPipelineRunType]:
+        from app.infrastructure.models import CatalystPipelineRun
+        db = info.context.db
+        runs = db.query(CatalystPipelineRun).order_by(CatalystPipelineRun.run_at.desc()).limit(limit).all()
+        
+        return [
+            CatalystPipelineRunType(
+                id=str(r.id),
+                source_name=r.source_name,
+                source_status=r.source_status,
+                http_status_code=r.http_status_code,
+                raw_fetched=r.raw_fetched,
+                keyword_filtered=r.keyword_filtered,
+                symbol_unresolved=r.symbol_unresolved,
+                auto_created_companies=r.auto_created_companies,
+                ai_classified=r.ai_classified,
+                ai_rejected=r.ai_rejected,
+                duplicates=r.duplicates,
+                noise_filtered=r.noise_filtered,
+                saved=r.saved,
+                execution_time_ms=r.execution_time_ms,
+                error_message=r.error_message,
+                run_at=str(r.run_at)
+            ) for r in runs
+        ]
+
+    @strawberry.field
+    def pre_market_catalysts(self, info: Info[Context, None], limit: int = 10) -> List[CatalystEventType]:
+        """
+        P2.3: Pre-Market Briefing. Returns overnight catalysts ranked by priority.
+        Gets catalysts from the last 18 hours (e.g. yesterday post-market + this morning).
+        """
+        from app.infrastructure.models import CatalystEvent, CatalystSource
+        from datetime import datetime, timedelta
+        
+        db = info.context.db
+        lookback_time = datetime.utcnow() - timedelta(hours=18)
+        
+        # We need to compute the rank in python since early_score and impact_score are columns
+        # but weighting is a business rule. We will fetch recent ones and sort.
+        events = db.query(CatalystEvent).filter(
+            CatalystEvent.published_at >= lookback_time,
+            CatalystEvent.tier.in_(["S-TIER", "A-TIER", "B-TIER"])
+        ).all()
+        
+        # Sort manually by priority: (Impact * 0.6) + (Early * 0.4)
+        def get_priority(e):
+            impact = e.impact_score or 0
+            early = e.early_score or 0
+            return (impact * 0.6) + (early * 0.4)
+            
+        events.sort(key=get_priority, reverse=True)
+        events = events[:limit]
+        
+        result = []
+        for e in events:
+            # Reconstruct sources
+            db_sources = db.query(CatalystSource).filter(CatalystSource.event_id == e.id).all()
+            sources = [
+                CatalystSourceType(
+                    id=str(s.id),
+                    event_id=str(s.event_id),
+                    source_name=s.source_name,
+                    url=s.url,
+                    is_primary=s.is_primary,
+                    published_at=str(s.published_at) if s.published_at else "",
+                    created_at=str(s.created_at) if getattr(s, 'created_at', None) else ""
+                ) for s in db_sources
+            ]
+            
+            result.append(CatalystEventType(
+                id=str(e.id),
+                ticker=e.ticker,
+                company_id=str(e.company_id),
+                event_title=e.event_title,
+                event_type=e.event_type,
+                category=e.category,
+                impact_score=e.impact_score,
+                early_score=e.early_score,
+                confidence=e.confidence,
+                status=e.status,
+                tier=e.tier,
+                match_status=e.match_status,
+                why_it_matters=e.why_it_matters,
+                reaction_pct=e.reaction_pct,
+                relative_volume=e.relative_volume,
+                gap_reaction_pct=getattr(e, 'gap_reaction_pct', None),
+                session_reaction_pct=getattr(e, 'session_reaction_pct', None),
+                reaction_1d=getattr(e, 'reaction_1d', None),
+                reaction_3d=getattr(e, 'reaction_3d', None),
+                reaction_5d=getattr(e, 'reaction_5d', None),
+                pre_event_price=getattr(e, 'pre_event_price', None),
+                market_cap_at_event=getattr(e, 'market_cap_at_event', None),
+                sector_at_event=getattr(e, 'sector_at_event', None),
+                published_at=str(e.published_at) if e.published_at else None,
+                detected_at=str(e.detected_at) if e.detected_at else None,
+                verified_at=str(e.verified_at) if e.verified_at else None,
+                created_at=str(e.created_at) if e.created_at else "",
+                updated_at=str(e.updated_at) if e.updated_at else "",
+                sources=sources
+            ))
+            
+        return result
+
+    @strawberry.field
+    def historical_event_analog(self, info: Info[Context, None], category: str, event_type: Optional[str] = None) -> Optional[EventAnalogStatsType]:
+        """
+        P3.1: Historical Analog Engine.
+        Returns the expected value (EV) and historical stats for a given catalyst category/type.
+        """
+        from app.services.quant_service import QuantService
+        
+        db = info.context.db
+        quant = QuantService()
+        stats = quant.calculate_event_analog_stats(db, category, event_type)
+        
+        if not stats:
+            return None
+            
+        return EventAnalogStatsType(
+            total_events_analyzed=stats["total_events_analyzed"],
+            avg_gap_reaction=stats["avg_gap_reaction"],
+            avg_session_reaction=stats["avg_session_reaction"],
+            avg_1d_return=stats["avg_1d_return"],
+            avg_3d_return=stats["avg_3d_return"],
+            avg_5d_return=stats["avg_5d_return"],
+            win_rate_5d=stats["win_rate_5d"]
         )

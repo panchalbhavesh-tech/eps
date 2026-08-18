@@ -8,6 +8,121 @@ class QuantService:
     def __init__(self):
         pass
 
+    def get_recent_price_reaction(self, ticker: str, published_at: Optional[datetime] = None) -> dict:
+        """
+        P1.5: Multi-horizon price reaction and relative volume calculation.
+        
+        Returns a dict with:
+        - reaction_pct: cumulative return from baseline to latest close (backward compat)
+        - gap_reaction_pct: (Open on event day - Previous Close) / Previous Close
+        - session_reaction_pct: (Close on event day - Previous Close) / Previous Close
+        - reaction_1d, reaction_3d, reaction_5d: forward returns from event-day close
+        - relative_volume: current session volume / 20-day avg
+        - pre_event_price: close price strictly before the catalyst
+        """
+        result = {
+            "current_price": 0.0,
+            "pre_event_price": None,
+            "reaction_pct": 0.0,
+            "gap_reaction_pct": None,
+            "session_reaction_pct": None,
+            "reaction_1d": None,
+            "reaction_3d": None,
+            "reaction_5d": None,
+            "relative_volume": 1.0,
+        }
+        try:
+            yf_ticker = f"{ticker}.NS" if not ticker.endswith((".NS", ".BO")) and not ticker.startswith("^") else ticker
+            # Fetch daily data for multi-horizon metrics
+            df = yf.download(yf_ticker, period="1mo", progress=False)
+            
+            # Fetch 1-minute intraday data for true early-detection precision
+            try:
+                df_1m = yf.download(yf_ticker, period="5d", interval="1m", progress=False)
+                if isinstance(df_1m.columns, pd.MultiIndex):
+                    df_1m.columns = df_1m.columns.get_level_values(0)
+                df_1m.index = pd.to_datetime(df_1m.index).tz_convert('Asia/Kolkata').tz_localize(None)
+            except Exception:
+                df_1m = pd.DataFrame()
+            
+            if df.empty or len(df) < 2:
+                return result
+                
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+                
+            df.index = pd.to_datetime(df.index).tz_localize(None)
+            
+            if published_at is None:
+                published_at = datetime.utcnow()
+                
+            pub_date = published_at.date()
+            before_df = df[df.index.date < pub_date]
+            after_df = df[df.index.date >= pub_date]
+            
+            if before_df.empty:
+                before_df = df.iloc[:-1]
+                after_df = df.iloc[-1:]
+            
+            if before_df.empty:
+                return result
+            
+            # Daily baseline fallback
+            baseline_row = before_df.iloc[-1]
+            last_row = df.iloc[-1]
+            
+            baseline_close = float(baseline_row['Close'])
+            current_price = float(last_row['Close'])
+            
+            # Intraday Precision Override
+            if not df_1m.empty:
+                # Add 5.5 hours to published_at if it's UTC to convert to IST
+                # Assuming published_at is stored in UTC but yfinance 1m is local to NSE
+                pub_ist = published_at
+                # Find the 1-minute bar strictly before publication
+                before_1m = df_1m[df_1m.index < pub_ist]
+                if not before_1m.empty:
+                    baseline_close = float(before_1m.iloc[-1]['Close'])
+                    current_price = float(df_1m.iloc[-1]['Close'])
+            
+            result["pre_event_price"] = baseline_close
+            result["current_price"] = current_price
+            
+            if baseline_close == 0:
+                return result
+                
+            # Cumulative reaction (backward compatible)
+            result["reaction_pct"] = ((current_price - baseline_close) / baseline_close) * 100
+            
+            # Gap and session reactions (event day)
+            if not after_df.empty:
+                event_day = after_df.iloc[0]
+                result["gap_reaction_pct"] = ((float(event_day['Open']) - baseline_close) / baseline_close) * 100
+                result["session_reaction_pct"] = ((float(event_day['Close']) - baseline_close) / baseline_close) * 100
+                
+                event_close = float(event_day['Close'])
+                
+                # Multi-day forward returns from event-day close
+                for n_days, key in [(1, "reaction_1d"), (3, "reaction_3d"), (5, "reaction_5d")]:
+                    if len(after_df) > n_days:
+                        future_close = float(after_df.iloc[n_days]['Close'])
+                        result[key] = ((future_close - event_close) / event_close) * 100
+            
+            # Relative volume
+            avg_vol_before = before_df['Volume'].tail(20).mean()
+            if after_df.empty:
+                current_vol = float(last_row['Volume'])
+            else:
+                # Use first-day volume for most accurate RVOL
+                current_vol = float(after_df.iloc[0]['Volume'])
+            
+            result["relative_volume"] = current_vol / avg_vol_before if avg_vol_before > 0 else 1.0
+            
+            return result
+        except Exception as e:
+            print(f"Error fetching recent reaction for {ticker}: {e}")
+            return result
+
     def fetch_historical_ohlcv(self, ticker: str, years: int = 5) -> pd.DataFrame:
         import time
         symbols_to_try = []
@@ -370,3 +485,166 @@ class QuantService:
         except Exception as e:
             print(f"Error computing latest post-release return for {ticker}: {e}")
         return None
+
+    def scan_for_volume_anomalies(self, db: Any) -> dict:
+        """
+        P3.3: Pre-Catalyst Signals.
+        Scans for stocks with unusual volume (>2.5x average) but no recent news.
+        This signals potential smart money accumulation prior to a material catalyst.
+        """
+        import uuid
+        import time
+        from app.infrastructure.models import Company, CatalystEvent, CatalystSource
+        
+        metrics = {"scanned": 0, "anomalies_detected": 0, "signals_saved": 0}
+        
+        # 1. Get Top 200 companies by Market Cap
+        companies = db.query(Company).order_by(Company.market_cap.desc().nulls_last()).limit(200).all()
+        
+        if not companies:
+            return metrics
+            
+        tickers = [c.ticker for c in companies]
+        # Format tickers for yfinance bulk download
+        yf_tickers = " ".join([f"{t}.NS" if not t.endswith(".NS") and not t.endswith(".BO") else t for t in tickers])
+        
+        # 2. Download last 30 days of volume data for all 200 stocks
+        try:
+            data = yf.download(yf_tickers, period="1mo", group_by="ticker", progress=False)
+        except Exception as e:
+            print(f"Error bulk downloading volume data: {e}")
+            return metrics
+            
+        lookback_date = datetime.utcnow() - timedelta(days=7)
+        
+        # 3. Process each ticker
+        for company in companies:
+            metrics["scanned"] += 1
+            ticker = company.ticker
+            yf_ticker = f"{ticker}.NS" if not ticker.endswith((".NS", ".BO")) else ticker
+            
+            try:
+                # Handle single vs multi ticker yfinance output
+                if len(tickers) == 1:
+                    df = data
+                else:
+                    if yf_ticker not in data.columns.levels[0]:
+                        continue
+                    df = data[yf_ticker]
+                    
+                if df.empty or len(df) < 20:
+                    continue
+                    
+                # Drop NAs in volume
+                vol_series = df['Volume'].dropna()
+                if len(vol_series) < 20:
+                    continue
+                    
+                # Calculate 20-day average volume (baseline)
+                avg_vol_20d = vol_series.tail(20).mean()
+                if avg_vol_20d < 10000: # Ignore totally illiquid stocks
+                    continue
+                    
+                # Calculate 3-day recent average volume
+                recent_vol_3d = vol_series.tail(3).mean()
+                
+                # Check for anomaly (> 2.5x)
+                if recent_vol_3d > (avg_vol_20d * 2.5):
+                    metrics["anomalies_detected"] += 1
+                    
+                    # 4. Check if there's already a catalyst in the last 7 days
+                    recent_catalyst = db.query(CatalystEvent).filter(
+                        CatalystEvent.ticker == ticker,
+                        CatalystEvent.created_at >= lookback_date,
+                        CatalystEvent.category != "PRE_CATALYST_SIGNAL"
+                    ).first()
+                    
+                    if not recent_catalyst:
+                        # Ensure we haven't already saved this signal today
+                        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0)
+                        existing_signal = db.query(CatalystEvent).filter(
+                            CatalystEvent.ticker == ticker,
+                            CatalystEvent.category == "PRE_CATALYST_SIGNAL",
+                            CatalystEvent.created_at >= today_start
+                        ).first()
+                        
+                        if not existing_signal:
+                            rvol = float(round(recent_vol_3d / avg_vol_20d, 1))
+                            event = CatalystEvent(
+                                id=uuid.uuid4(),
+                                ticker=ticker,
+                                company_id=company.id,
+                                event_title=f"🚨 Unusual Vol: {rvol}x (No News)",
+                                event_type="VOLUME_BREAKOUT",
+                                category="PRE_CATALYST_SIGNAL",
+                                impact_score=65,  # Moderate predictive impact
+                                early_score=100,  # Highly early (pre-news)
+                                confidence="MEDIUM",
+                                status="EARLY",
+                                tier="B-TIER",
+                                match_status="MATCHED",
+                                why_it_matters=f"Stock is trading at {rvol}x its 20-day average volume over the last 3 days with no public announcements. This strongly suggests institutional accumulation ahead of an impending catalyst.",
+                                relative_volume=rvol,
+                                market_cap_at_event=company.market_cap,
+                                sector_at_event=company.sector,
+                                published_at=datetime.utcnow(),
+                                detected_at=datetime.utcnow()
+                            )
+                            
+                            source = CatalystSource(
+                                id=uuid.uuid4(),
+                                event_id=event.id,
+                                source_name="Quantitative Signal Engine",
+                                is_primary=True,
+                                published_at=datetime.utcnow()
+                            )
+                            
+                            db.add(event)
+                            db.add(source)
+                            db.commit()
+                            metrics["signals_saved"] += 1
+                            
+            except Exception as e:
+                print(f"Error processing anomaly for {ticker}: {e}")
+                
+        return metrics
+
+    def calculate_event_analog_stats(self, db: Any, category: str, event_type: str = None) -> dict:
+        """
+        P3.1: Historical Analog Engine.
+        Scans past events matching the category (and optionally event_type)
+        to compute the expected value (EV) of the market reaction.
+        """
+        from app.infrastructure.models import CatalystEvent
+        from sqlalchemy import and_
+        
+        filters = [CatalystEvent.category == category]
+        if event_type:
+            filters.append(CatalystEvent.event_type == event_type)
+            
+        events = db.query(CatalystEvent).filter(and_(*filters)).all()
+        
+        if not events:
+            return None
+            
+        valid_1d = [e.reaction_1d for e in events if e.reaction_1d is not None]
+        valid_3d = [e.reaction_3d for e in events if e.reaction_3d is not None]
+        valid_5d = [e.reaction_5d for e in events if e.reaction_5d is not None]
+        valid_gap = [e.gap_reaction_pct for e in events if e.gap_reaction_pct is not None]
+        valid_session = [e.session_reaction_pct for e in events if e.session_reaction_pct is not None]
+        
+        def safe_mean(lst):
+            return sum(lst) / len(lst) if lst else 0.0
+            
+        def win_rate(lst):
+            return (sum(1 for x in lst if x > 0) / len(lst) * 100) if lst else 0.0
+            
+        return {
+            "total_events_analyzed": len(events),
+            "avg_gap_reaction": round(safe_mean(valid_gap), 2),
+            "avg_session_reaction": round(safe_mean(valid_session), 2),
+            "avg_1d_return": round(safe_mean(valid_1d), 2),
+            "avg_3d_return": round(safe_mean(valid_3d), 2),
+            "avg_5d_return": round(safe_mean(valid_5d), 2),
+            "win_rate_5d": round(win_rate(valid_5d), 2)
+        }

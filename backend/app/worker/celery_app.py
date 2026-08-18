@@ -9,6 +9,8 @@ celery_app = Celery(
     backend=redis_url
 )
 
+from celery.schedules import crontab
+
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
@@ -52,6 +54,26 @@ celery_app.conf.update(
         'cleanup-old-activity-logs-daily': {
             'task': 'app.worker.tasks.cleanup_old_activity_logs_task',
             'schedule': 86400.0, # Daily cleanup of admin logs older than 15 days
+        },
+        'scan-nse-catalysts-live': {
+            'task': 'app.worker.tasks.scan_nse_catalysts_live_task',
+            # P2.1 Session-Aware Scheduling: Mon-Fri, 3:00 AM - 11:59 AM UTC (8:30 AM - 5:29 PM IST)
+            'schedule': crontab(minute='*/15', hour='3-11', day_of_week='mon-fri'),
+        },
+        'update-catalyst-outcomes-daily': {
+            'task': 'app.worker.tasks.update_catalyst_outcomes_task',
+            # P2.2 Outcome Tracking: Mon-Fri at 12:30 PM UTC (6:00 PM IST)
+            'schedule': crontab(minute=30, hour=12, day_of_week='mon-fri'),
+        },
+        'scan-pre-catalyst-anomalies-daily': {
+            'task': 'app.worker.tasks.scan_pre_catalyst_anomalies_task',
+            # P3.3 Pre-Catalyst Signals: Mon-Fri at 08:30 AM UTC (14:00 PM IST)
+            'schedule': crontab(minute=30, hour=8, day_of_week='mon-fri'),
+        },
+        'scan-insider-trades-daily': {
+            'task': 'app.worker.tasks.scan_insider_trades_task',
+            # P2.5 Insider Trading: Mon-Fri at 12:30 PM UTC (18:00 IST - post market)
+            'schedule': crontab(minute=30, hour=12, day_of_week='mon-fri'),
         },
     }
 )

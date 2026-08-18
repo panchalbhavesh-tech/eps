@@ -131,6 +131,7 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET=${JWT_SECRET}
       - FMP_API_KEY=${FMP_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     networks:
@@ -153,6 +154,7 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET=${JWT_SECRET}
       - FMP_API_KEY=${FMP_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     networks:

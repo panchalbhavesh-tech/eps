@@ -10,7 +10,7 @@ import MomentumTracker from './pages/MomentumTracker'
 import HypothesisLaboratory from './pages/HypothesisLaboratory'
 import Schedules from './pages/Schedules'
 import AdminLogs from './pages/AdminLogs'
-
+import CatalystRadar from './pages/CatalystRadar'
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
@@ -35,6 +35,7 @@ function App() {
           <Route path="schedules" element={<Schedules />} />
           <Route path="admin-logs" element={<AdminLogs />} />
           <Route path="research" element={<HypothesisLaboratory />} />
+          <Route path="catalyst" element={<CatalystRadar />} />
         </Route>
       </Routes>
     </BrowserRouter>

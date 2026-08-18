@@ -12,6 +12,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import BiotechIcon from '@mui/icons-material/Biotech';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import HistoryIcon from '@mui/icons-material/History';
+import RadarIcon from '@mui/icons-material/Radar';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { useThemeMode } from '../theme/ThemeContext';
@@ -76,6 +77,13 @@ const Layout: React.FC = () => {
       path: '/admin-logs',
       breadcrumb: 'Admin Logs / System Activity & Execution History',
       description: 'Centralized Admin Logs / Activity Logs page where you can see important system actions' 
+    },
+    { 
+      text: 'Catalyst Radar', 
+      icon: <RadarIcon sx={{ fontSize: 20 }} />, 
+      path: '/catalyst',
+      breadcrumb: 'Catalyst Radar / Early-Detection Catalyst Engine',
+      description: 'Advanced early-catalyst detection and market-repricing intelligence' 
     },
   ];
 
