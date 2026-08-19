@@ -251,18 +251,28 @@ def enrich_single_company(company, db):
             pass
     return company
 
-@shared_task
-def populate_companies_data_task():
+@shared_task(name="app.worker.tasks.sync_nse_universe_task")
+def sync_nse_universe_task():
+    task_id = current_task.request.id if current_task else "sync_nse_universe_local"
+    obs = TaskObserver(task_id)
+    obs.update(log_msg="Starting NSE calendar sync...")
+
     try:
         sync_nse_calendar_task()
+        obs.update(log_msg="NSE calendar sync completed.")
     except Exception as e:
+        obs.update(log_msg=f"Error syncing NSE calendar: {e}", log_level="ERROR")
         print(f"Error syncing NSE calendar: {e}")
 
     db = SessionLocal()
     try:
         company_ids = [c.id for c in db.query(Company.id).filter(Company.sector == "NSE").all()]
+        total = len(company_ids)
         updated = 0
-        for cid in company_ids:
+        failed = 0
+        obs.update(log_msg=f"Found {total} companies in NSE universe.", progress={"total": total, "processed": 0, "saved": 0, "failed": 0, "percentage": 0, "current_step": "Enriching company data"}, force=True)
+
+        for i, cid in enumerate(company_ids):
             try:
                 company = db.query(Company).filter(Company.id == cid).with_for_update(skip_locked=True).first()
                 if not company:
@@ -409,14 +419,23 @@ def generate_deep_research_report_task(company_id: str):
     finally:
         db.close()
 
-@shared_task
-def mass_calculate_financial_health_task():
+@shared_task(name="app.worker.tasks.calculate_universe_health_task")
+def calculate_universe_health_task():
+    task_id = current_task.request.id if current_task else "calculate_health_local"
+    obs = TaskObserver(task_id)
+    obs.update(log_msg="Starting universe health calculation...")
+
     db = SessionLocal()
     try:
         companies = db.query(Company).all()
+        total = len(companies)
         ai = AIAnalystService()
         updated = 0
-        for company in companies:
+        failed = 0
+        
+        obs.update(log_msg=f"Loaded {total} companies for health analysis.", progress={"total": total, "processed": 0, "saved": 0, "failed": 0, "percentage": 0, "current_step": "Calculating financial health"}, force=True)
+        
+        for i, company in enumerate(companies):
             try:
                 q_data = {
                     "ticker": company.ticker,
@@ -473,6 +492,40 @@ def run_nse_momentum_scan_task(limit: int = None):
     except Exception as e:
         db.rollback()
         print(f"Error during NSE momentum scan task: {e}")
+    finally:
+        db.close()
+
+
+@shared_task(bind=True, max_retries=2, time_limit=1800)
+def scan_nse_catalysts_live_task(self):
+    """
+    Background worker to poll the NSE Corporate Announcements API,
+    filter for potentially material catalysts (M&A, Orders, Resignations),
+    classify them with Gemini AI, and measure market reaction.
+    Also processes bulk/block deals as catalyst signals (P1.2).
+    """
+    db = SessionLocal()
+    try:
+        from app.services.catalyst_pipeline_service import CatalystPipelineService
+        svc = CatalystPipelineService(db)
+        
+        # Main NSE announcement pipeline
+        nse_result = svc.run_pipeline()
+        
+        # P1.2: Bulk/block deal catalyst pipeline
+        bulk_result = {}
+        try:
+            bulk_result = svc.run_bulk_deal_catalyst_pipeline()
+        except Exception as e:
+            print(f"Bulk deal catalyst pipeline error: {e}")
+        
+        return {
+            "nse_pipeline": nse_result,
+            "bulk_deal_pipeline": bulk_result
+        }
+    except Exception as e:
+        db.rollback()
+        raise e
     finally:
         db.close()
 
@@ -838,5 +891,90 @@ def cleanup_old_activity_logs_task():
     try:
         cleanup_old_activity_logs(db, days=15)
         return "Cleaned up old activity logs (15 days)."
+    finally:
+        db.close()
+
+
+@shared_task(name="app.worker.tasks.update_catalyst_outcomes_task")
+def update_catalyst_outcomes_task():
+    """
+    P2.2: Daily sweep to update realized forward returns (1d, 3d, 5d) 
+    for Catalyst events published in the last 7 days.
+    """
+    from app.infrastructure.database import SessionLocal
+    from app.infrastructure.models import CatalystEvent
+    from app.services.quant_service import QuantService
+    from datetime import datetime, timedelta
+    
+    db = SessionLocal()
+    try:
+        quant = QuantService()
+        cutoff_date = datetime.utcnow() - timedelta(days=7)
+        
+        # Get unresolved catalysts
+        catalysts = db.query(CatalystEvent).filter(
+            CatalystEvent.published_at >= cutoff_date
+        ).all()
+        
+        updated = 0
+        for cat in catalysts:
+            try:
+                res = quant.get_recent_price_reaction(cat.ticker, published_at=cat.published_at)
+                if isinstance(res, dict):
+                    # Only update fields that have realized
+                    if res.get("reaction_1d") is not None:
+                        cat.reaction_1d = res["reaction_1d"]
+                    if res.get("reaction_3d") is not None:
+                        cat.reaction_3d = res["reaction_3d"]
+                    if res.get("reaction_5d") is not None:
+                        cat.reaction_5d = res["reaction_5d"]
+                    if res.get("gap_reaction_pct") is not None:
+                        cat.gap_reaction_pct = res["gap_reaction_pct"]
+                    if res.get("session_reaction_pct") is not None:
+                        cat.session_reaction_pct = res["session_reaction_pct"]
+                        
+                    db.commit()
+                    updated += 1
+            except Exception as e:
+                db.rollback()
+                print(f"Failed to update outcomes for {cat.id}: {e}")
+                
+        return f"Updated outcomes for {updated} recent catalysts."
+    finally:
+        db.close()
+
+@shared_task
+def scan_pre_catalyst_anomalies_task():
+    """
+    P3.3: Scheduled task to scan for unusual volume breakouts without news.
+    """
+    db = SessionLocal()
+    try:
+        from app.services.quant_service import QuantService
+        svc = QuantService()
+        metrics = svc.scan_for_volume_anomalies(db)
+        return f"Pre-Catalyst Anomaly Scan complete: {metrics}"
+    except Exception as e:
+        db.rollback()
+        print(f"Error during pre-catalyst anomaly scan: {e}")
+        raise e
+    finally:
+        db.close()
+
+@shared_task
+def scan_insider_trades_task():
+    """
+    P2.5: Scheduled task to scrape NSE Insider Trading disclosures for massive promoter buying/selling.
+    """
+    db = SessionLocal()
+    try:
+        from app.services.sources.insider_trading_service import InsiderTradingService
+        svc = InsiderTradingService(db)
+        metrics = svc.fetch_latest_insider_trades()
+        return f"Insider Trading Scan complete: {metrics}"
+    except Exception as e:
+        db.rollback()
+        print(f"Error during insider trading scan: {e}")
+        raise e
     finally:
         db.close()

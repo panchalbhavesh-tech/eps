@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { useQuery, useMutation, gql } from '@apollo/client';
+import { useQuery, gql } from '@apollo/client';
 import { 
   Box, Typography, Card, Button, 
   CircularProgress, Chip, Dialog, 
@@ -7,7 +7,6 @@ import {
   LinearProgress, IconButton, InputBase, Tooltip
 } from '@mui/material';
 import { GridColDef, GridRenderCellParams, GridRowSelectionModel } from '@mui/x-data-grid';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ShieldIcon from '@mui/icons-material/Shield';
 import AssessmentIcon from '@mui/icons-material/Assessment';
@@ -15,10 +14,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useNavigate } from 'react-router-dom';
-import { 
-  FilterChipGroup, StatusBadge, FactorChart, MomentumGauge, 
-  BulkActionBar, ErrorBoundary, RowTintedDataGrid, MetricCard 
-} from '../components/common';
+import { FilterChipGroup, StatusBadge, FactorChart, MomentumGauge, BulkActionBar, ErrorBoundary, RowTintedDataGrid, MetricCard } from '../components/common';
+import { SmartCron } from '../components/common/SmartCron';
 import { useThemeMode } from '../theme/ThemeContext';
 
 const GET_MOMENTUM_DATA = gql`
@@ -52,23 +49,7 @@ const GET_MOMENTUM_DATA = gql`
   }
 `;
 
-const TRIGGER_MOMENTUM_SCAN = gql`
-  mutation TriggerMomentumScan {
-    triggerMomentumScan
-  }
-`;
 
-const GET_LATEST_ADMIN_ACTIVITY = gql`
-  query GetLatestAdminActivity($eventName: String!) {
-    latestAdminActivity(eventName: $eventName) {
-      id
-      userEmail
-      status
-      startedAt
-      completedAt
-    }
-  }
-`;
 
 const GET_INTENSIVE_BACKTEST = gql`
   query GetIntensiveBacktest($ticker: String!, $years: Int!) {
@@ -122,8 +103,7 @@ const MomentumTracker: React.FC = () => {
 
   const [selectedTab, setSelectedTab] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [scanNotice, setScanNotice] = useState<string | null>(null);
-  const [backtestTicker, setBacktestTicker] = useState<string | null>(null);
+    const [backtestTicker, setBacktestTicker] = useState<string | null>(null);
   const [backtestYears, setBacktestYears] = useState<number>(3);
   const [selectedRowIds, setSelectedRowIds] = useState<GridRowSelectionModel>([]);
 
@@ -136,36 +116,15 @@ const MomentumTracker: React.FC = () => {
   const signalFilter = selectedTab === 'ALL' || selectedTab === 'ATTENTION' ? null : selectedTab;
   const onlyAttention = selectedTab === 'ATTENTION';
 
-  const { loading, error, data, refetch } = useQuery(GET_MOMENTUM_DATA, {
+  const { loading, error, data } = useQuery(GET_MOMENTUM_DATA, {
     variables: { signalFilter, onlyAttention },
     pollInterval: 15000,
     fetchPolicy: 'cache-and-network',
   });
 
-  const { data: latestLogData } = useQuery(GET_LATEST_ADMIN_ACTIVITY, {
-    variables: { eventName: 'Momentum Scan' },
-    fetchPolicy: 'network-only'
-  });
-  const latestLog = latestLogData?.latestAdminActivity;
-
-  const [triggerScan, { loading: scanning }] = useMutation(TRIGGER_MOMENTUM_SCAN, {
-    onCompleted: (res) => {
-      setScanNotice(res.triggerMomentumScan);
-      setTimeout(() => refetch(), 3000);
-    }
-  });
-
-  const handleRunScan = useCallback(() => {
-    setScanNotice(null);
-    if (latestLog && latestLog.status === 'SUCCESS') {
-      const timeStr = new Date(Number(latestLog.completedAt) || latestLog.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-      if (!window.confirm(`Momentum Scan was already completed today by ${latestLog.userEmail} at ${timeStr}.\n\nDo you want to run it again?`)) {
-        return;
-      }
-    }
-    triggerScan();
-  }, [latestLog, triggerScan]);
-
+    
+  
+  
   const stocks = useMemo(() => data?.momentumScanner || [], [data?.momentumScanner]);
   const regime = useMemo(() => data?.marketRegimeStatus || { status: 'Neutral', score: 50, reason: '' }, [data?.marketRegimeStatus]);
 
@@ -472,40 +431,11 @@ const MomentumTracker: React.FC = () => {
             </Typography>
           </Box>
           <Box display="flex" flexDirection="column" alignItems="flex-end">
-            <Button
-              variant="contained"
-              disabled={scanning}
-              onClick={handleRunScan}
-              startIcon={scanning ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : <RefreshIcon />}
-              sx={{
-                backgroundColor: tokens.primary.main,
-                color: isDark ? '#0A0A0C' : '#FFFFFF',
-                fontWeight: 600, 
-                px: 2.5, 
-                py: 1, 
-                borderRadius: '8px',
-                fontSize: '13px',
-                textTransform: 'none',
-                boxShadow: 'none',
-                transition: 'opacity 0.15s ease-in-out',
-                '&:hover': { opacity: 0.9, backgroundColor: tokens.primary.main }
-              }}
-            >
-              {scanning ? 'Scanning Universe...' : 'Run Real-Time Scan'}
-            </Button>
-            {latestLog && latestLog.status === 'SUCCESS' && (
-              <Typography variant="caption" sx={{ color: tokens.status.success.main, mt: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontWeight: 500 }}>
-                ✓ Completed today at {new Date(Number(latestLog.completedAt) || latestLog.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} by {latestLog.userEmail}
-              </Typography>
-            )}
+            <SmartCron page="momentum" />
           </Box>
         </Box>
 
-        {scanNotice && (
-          <Box mt={2} p={1.5} px={3} sx={{ backgroundColor: tokens.status.success.pillBg, border: `1px solid ${tokens.status.success.border}`, borderRadius: '8px' }}>
-            <Typography sx={{ color: tokens.status.success.main, fontSize: '13px', fontWeight: 600 }}>{scanNotice}</Typography>
-          </Box>
-        )}
+        
       </Box>
 
       {/* Sleek Top Summary Card Bar (Replaced chaotic hybrid cards) */}

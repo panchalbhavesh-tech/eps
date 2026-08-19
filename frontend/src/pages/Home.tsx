@@ -1,10 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
-import { Typography, Box, CircularProgress, Chip, IconButton, InputBase, Tooltip, Button, Dialog, DialogTitle, DialogContent, Grid, DialogActions, Popover } from '@mui/material';
+import { Typography, Box, CircularProgress, Chip, InputBase, Tooltip, Button, Dialog, DialogTitle, DialogContent, Grid, DialogActions, Popover } from '@mui/material';
 import { GridColDef, GridRenderCellParams, GridRowSelectionModel } from '@mui/x-data-grid';
-import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import SearchIcon from '@mui/icons-material/Search';
-import AssessmentIcon from '@mui/icons-material/Assessment';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import NewspaperIcon from '@mui/icons-material/Newspaper';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -12,6 +10,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import { StatusBadge, ErrorBoundary, FilterChipGroup, BulkActionBar, RowTintedDataGrid } from '../components/common';
+import { SmartCron } from '../components/common/SmartCron';
 import { sentimentCache, SentimentData } from '../store/sentimentCache';
 import { useThemeMode } from '../theme/ThemeContext';
 
@@ -429,6 +428,7 @@ const NewsSentimentCell: React.FC<{ ticker: string; name: string }> = ({ ticker,
 };
 // ──────────────────────────────────────────────────────────────────────────────
 
+
 const GET_COMPANIES = gql`
   query GetCompanies {
     companies {
@@ -502,11 +502,6 @@ const formatRelativeDate = (dateStr?: string | null) => {
   return dateStr;
 };
 
-const POPULATE_DATA = gql`
-  mutation PopulateData {
-    populateCompaniesData
-  }
-`;
 
 const MASS_CALCULATE_HEALTH = gql`
   mutation MassCalculateHealth {
@@ -514,17 +509,6 @@ const MASS_CALCULATE_HEALTH = gql`
   }
 `;
 
-const GET_LATEST_ADMIN_ACTIVITY = gql`
-  query GetLatestAdminActivity($eventName: String!) {
-    latestAdminActivity(eventName: $eventName) {
-      id
-      userEmail
-      status
-      startedAt
-      completedAt
-    }
-  }
-`;
 
 const Home: React.FC = () => {
   const { mode, tokens } = useThemeMode();
@@ -537,33 +521,21 @@ const Home: React.FC = () => {
   const [filterMode, setFilterMode] = useState<'ALL' | 'RECENT_EVENTS' | 'HIGH_HEALTH'>('ALL');
 
   const { loading, error, data } = useQuery(GET_COMPANIES, { pollInterval: 15000, fetchPolicy: 'network-only' });
-  const [populateData] = useMutation(POPULATE_DATA);
-  const [massCalculate] = useMutation(MASS_CALCULATE_HEALTH, {
+    const [massCalculate] = useMutation(MASS_CALCULATE_HEALTH, {
     onCompleted: () => {
       alert("Mass financial health analysis queued for all stocks! Check Tasks page for progress and refresh to view scores.");
     }
   });
 
-  const { data: latestLogData } = useQuery(GET_LATEST_ADMIN_ACTIVITY, {
-    variables: { eventName: 'Calculate Health' },
-    fetchPolicy: 'network-only'
-  });
-  const latestLog = latestLogData?.latestAdminActivity;
-
+    
+      
+    
+    
   const handleCalculateHealth = useCallback(() => {
-    if (latestLog && latestLog.status === 'SUCCESS') {
-      const timeStr = new Date(Number(latestLog.completedAt) || latestLog.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-      if (!window.confirm(`Calculate Health was already completed today by ${latestLog.userEmail} at ${timeStr}.\n\nDo you want to run it again?`)) {
-        return;
-      }
-    }
     massCalculate();
-  }, [latestLog, massCalculate]);
+  }, [massCalculate]);
 
-  const handlePopulate = useCallback(() => {
-    populateData();
-  }, [populateData]);
-
+  
   const baseRows = useMemo(() => {
     if (!data?.companies) return [];
     const lowerSearch = (search || '').trim().toLowerCase();
@@ -1156,41 +1128,7 @@ const Home: React.FC = () => {
             />
           </Box>
 
-          {/* Action Button: Calculate Health */}
-          <Tooltip title="Mass Calculate Financial Health Across Universe" placement="top">
-            <Button
-              onClick={() => massCalculate()}
-              size="small"
-              startIcon={<AssessmentIcon sx={{ fontSize: '16px !important' }} />}
-              sx={{
-                backgroundColor: 'transparent',
-                border: `1px solid ${tokens.border.main}`,
-                color: tokens.text.primary,
-                borderRadius: '4px',
-                px: '14px',
-                height: '32px',
-                fontWeight: 600,
-                fontSize: '11px',
-                textTransform: 'none',
-                boxShadow: 'none',
-                transition: 'border-color 0.15s ease-in-out',
-                '&:hover': { borderColor: tokens.border.focus, backgroundColor: tokens.background.cardHover }
-              }}
-            >
-              Calculate Health
-            </Button>
-          </Tooltip>
-
-          {/* Sync / Reload DB Button */}
-          <Tooltip title="Sync & Populate Universe DB (~5 min)" placement="top">
-            <IconButton
-              onClick={handlePopulate}
-              size="small"
-              sx={{ backgroundColor: tokens.background.card, color: tokens.text.primary, border: `1px solid ${tokens.border.main}`, borderRadius: '8px', width: 32, height: 32, transition: 'border-color 0.15s ease-in-out', '&:hover': { borderColor: tokens.border.light, backgroundColor: tokens.background.cardHover } }}
-            >
-              <CloudDownloadIcon sx={{ fontSize: 17 }} />
-            </IconButton>
-          </Tooltip>
+          <SmartCron page="events" />
         </Box>
       </Box>
 

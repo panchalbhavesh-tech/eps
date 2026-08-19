@@ -206,3 +206,125 @@ class NseDataService:
         except Exception:
             pass
         return {"is_restricted": False, "list_type": None, "stage": None}
+
+    def fetch_latest_corporate_announcements(self) -> dict:
+        """
+        Fetches the latest corporate announcements from the NSE API.
+        Uses a 3-day rolling window to ensure we don't miss weekend or after-hours filings.
+        
+        Returns a structured dict:
+        {
+            "source_status": "SUCCESS" | "API_ERROR" | "TIMEOUT" | "RATE_LIMITED" | "EMPTY",
+            "http_status_code": int or None,
+            "announcements": list,
+            "error_message": str or None
+        }
+        """
+        import random
+        import time as _time
+        
+        USER_AGENTS = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+        ]
+        
+        today = datetime.utcnow() + timedelta(hours=5, minutes=30)  # IST
+        from_dt = (today - timedelta(days=2)).strftime("%d-%m-%Y")
+        to_dt = today.strftime("%d-%m-%Y")
+        api_url = f"https://www.nseindia.com/api/corporate-announcements?index=equities&from_date={from_dt}&to_date={to_dt}"
+        
+        max_retries = 3
+        last_status_code = None
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                session = requests.Session()
+                ua = random.choice(USER_AGENTS)
+                session.headers.update({
+                    "User-Agent": ua,
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Connection": "keep-alive",
+                    "Upgrade-Insecure-Requests": "1",
+                })
+                
+                # Step 1: Hit homepage to establish cookies (critical for NSE anti-bot)
+                home_resp = session.get("https://www.nseindia.com", timeout=12)
+                if home_resp.status_code != 200:
+                    logger.warning(f"NSE homepage returned {home_resp.status_code} on attempt {attempt + 1}")
+                    last_status_code = home_resp.status_code
+                    last_error = f"Homepage returned {home_resp.status_code}"
+                    _time.sleep(2 ** attempt + random.uniform(0.5, 1.5))
+                    continue
+                
+                # Step 2: Fetch the API with JSON accept header
+                session.headers.update({
+                    "Accept": "application/json, text/plain, */*",
+                    "Referer": "https://www.nseindia.com/companies-listing/corporate-filings-announcements",
+                })
+                
+                resp = session.get(api_url, timeout=15)
+                last_status_code = resp.status_code
+                
+                if resp.status_code == 200:
+                    data = resp.json()
+                    items = data if isinstance(data, list) else data.get("data", [])
+                    logger.info(f"NSE Announcements API: fetched {len(items)} announcements (attempt {attempt + 1})")
+                    
+                    if len(items) == 0:
+                        return {
+                            "source_status": "EMPTY",
+                            "http_status_code": 200,
+                            "announcements": [],
+                            "error_message": None
+                        }
+                    
+                    return {
+                        "source_status": "SUCCESS",
+                        "http_status_code": 200,
+                        "announcements": items,
+                        "error_message": None
+                    }
+                elif resp.status_code == 403 or resp.status_code == 429:
+                    logger.warning(f"NSE API rate-limited/blocked ({resp.status_code}) on attempt {attempt + 1}")
+                    last_error = f"HTTP {resp.status_code} - Rate limited or blocked"
+                    _time.sleep(2 ** attempt + random.uniform(1, 3))
+                    continue
+                else:
+                    logger.warning(f"NSE Announcements API returned {resp.status_code} on attempt {attempt + 1}")
+                    last_error = f"HTTP {resp.status_code}"
+                    _time.sleep(2 ** attempt + random.uniform(0.5, 1.5))
+                    continue
+                    
+            except requests.exceptions.Timeout:
+                logger.warning(f"NSE API timeout on attempt {attempt + 1}/{max_retries}")
+                last_error = "Connection timeout"
+                _time.sleep(2 ** attempt + random.uniform(0.5, 1.5))
+                continue
+            except requests.exceptions.ConnectionError as e:
+                logger.warning(f"NSE API connection error on attempt {attempt + 1}: {e}")
+                last_error = f"Connection error: {str(e)[:200]}"
+                _time.sleep(2 ** attempt + random.uniform(0.5, 1.5))
+                continue
+            except Exception as e:
+                logger.error(f"NSE API unexpected error on attempt {attempt + 1}: {e}")
+                last_error = f"Unexpected: {str(e)[:200]}"
+                _time.sleep(2 ** attempt + random.uniform(0.5, 1.5))
+                continue
+        
+        # All retries exhausted
+        source_status = "TIMEOUT" if "timeout" in (last_error or "").lower() else "RATE_LIMITED" if last_status_code in (403, 429) else "API_ERROR"
+        logger.error(f"NSE Announcements API failed after {max_retries} attempts. Status: {source_status}, Last error: {last_error}")
+        
+        return {
+            "source_status": source_status,
+            "http_status_code": last_status_code,
+            "announcements": [],
+            "error_message": last_error
+        }
+

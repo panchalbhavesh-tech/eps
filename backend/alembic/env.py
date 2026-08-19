@@ -6,7 +6,7 @@ from alembic import context
 
 from app.infrastructure.database import Base
 # Import all models here to ensure they are registered with Base.metadata
-from app.infrastructure.models import User, Company, EarningsReport, Prediction, EventStudyResult, StrategyBacktest, TechnicalSnapshot, AIAnalysisReport, BackgroundJob
+from app.infrastructure.models import User, Company, EarningsReport, Prediction, EventStudyResult, StrategyBacktest, TechnicalSnapshot, AIAnalysisReport, BackgroundJob, CatalystEvent, CatalystSource, CatalystPipelineRun
 
 config = context.config
 

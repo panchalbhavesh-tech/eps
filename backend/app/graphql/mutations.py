@@ -35,9 +35,18 @@ class Mutation:
         
     @strawberry.mutation
     def populate_companies_data(self, info: Info[Context, None]) -> str:
-        task = celery_app.send_task("app.worker.tasks.populate_companies_data_task")
-        _log_queued_task(info.context.db, task.id, "app.worker.tasks.populate_companies_data_task", info.context.user.email)
-        return f"Populate data task {task.id} started in the background."
+        from app.infrastructure.models import BackgroundJob
+        db = info.context.db
+        existing = db.query(BackgroundJob).filter(
+            BackgroundJob.task_name == "app.worker.tasks.sync_nse_universe_task",
+            BackgroundJob.status.in_(["QUEUED", "RUNNING"])
+        ).first()
+        if existing:
+            return "Universe sync is already queued or running."
+            
+        task = celery_app.send_task("app.worker.tasks.sync_nse_universe_task")
+        _log_queued_task(db, task.id, "app.worker.tasks.sync_nse_universe_task", info.context.user.email)
+        return f"Universe sync task {task.id} started in the background."
         
     @strawberry.mutation
     def sync_nse_calendar(self, info: Info[Context, None]) -> str:
@@ -53,9 +62,18 @@ class Mutation:
 
     @strawberry.mutation
     def mass_calculate_financial_health(self, info: Info[Context, None]) -> str:
-        task = celery_app.send_task("app.worker.tasks.mass_calculate_financial_health_task")
-        _log_queued_task(info.context.db, task.id, "app.worker.tasks.mass_calculate_financial_health_task", info.context.user.email)
-        return f"Mass financial health calculation task {task.id} queued in background."
+        from app.infrastructure.models import BackgroundJob
+        db = info.context.db
+        existing = db.query(BackgroundJob).filter(
+            BackgroundJob.task_name == "app.worker.tasks.calculate_universe_health_task",
+            BackgroundJob.status.in_(["QUEUED", "RUNNING"])
+        ).first()
+        if existing:
+            return "Universe health calculation is already queued or running."
+            
+        task = celery_app.send_task("app.worker.tasks.calculate_universe_health_task")
+        _log_queued_task(db, task.id, "app.worker.tasks.calculate_universe_health_task", info.context.user.email)
+        return f"Universe health calculation task {task.id} queued in background."
 
     @strawberry.mutation
     def analyze_custom_stock(self, info: Info[Context, None], ticker: str) -> str:
