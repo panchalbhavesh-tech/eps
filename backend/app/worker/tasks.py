@@ -978,3 +978,39 @@ def scan_insider_trades_task():
         raise e
     finally:
         db.close()
+
+@shared_task
+def enrich_external_market_cap_task(tickers: list):
+    """
+    P4: Fallback to external market cap provider (yfinance) for unresolved catalysts.
+    Caches successful results in Redis with a 24-hour TTL.
+    """
+    import logging
+    from app.services.data_vendor_service import DataVendorService
+    from app.worker.observability import get_redis_client
+    
+    logger = logging.getLogger(__name__)
+    redis_client = get_redis_client()
+    vendor = DataVendorService()
+    
+    for ticker in tickers:
+        try:
+            cache_key = f"mcap_enrich:{ticker}"
+            if redis_client.get(cache_key):
+                continue
+            
+            logger.info(f"[MARKET_CAP] External lookup required: {ticker}")
+            
+            info = vendor.fetch_financial_metrics(ticker)
+            market_cap = info.get("marketCap")
+            
+            if market_cap and market_cap > 0:
+                redis_client.setex(cache_key, 86400, str(market_cap))
+                logger.info(f"[MARKET_CAP] External match successful: {ticker}. Cached as {cache_key}")
+            else:
+                redis_client.setex(cache_key, 3600, "NOT_FOUND")
+                logger.info(f"[MARKET_CAP] External lookup failed: {ticker}")
+        
+        except Exception as e:
+            logger.error(f"[MARKET_CAP] External lookup exception for {ticker}: {e}")
+

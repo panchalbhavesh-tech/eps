@@ -892,6 +892,90 @@ class Query:
             
         events = query.order_by(CatalystEvent.detected_at.desc()).offset(offset).limit(limit).all()
         
+        # --- BATCH MARKET CAP RESOLUTION ---
+        missing_mcap_events = []
+        for e in events:
+            val = getattr(e, 'market_cap_at_event', None)
+            if not val or val == 0:
+                missing_mcap_events.append(e)
+
+        if missing_mcap_events:
+            from app.infrastructure.models import Company
+            from sqlalchemy import or_
+
+            # 1. Fallback to existing e.company relation
+            for e in missing_mcap_events:
+                if getattr(e, 'company', None) and getattr(e.company, 'market_cap', None):
+                    e.market_cap_at_event = e.company.market_cap
+
+            # 2. Batch lookup by Ticker / BSE Code
+            still_missing = [e for e in missing_mcap_events if not getattr(e, 'market_cap_at_event', None)]
+            if still_missing:
+                unmapped_tickers = list(set(e.ticker for e in still_missing if getattr(e, 'ticker', None)))
+                bse_codes = [t.split('.')[0] for t in unmapped_tickers if t.endswith('.BO')]
+                
+                filters = []
+                if unmapped_tickers:
+                    filters.append(Company.ticker.in_(unmapped_tickers))
+                if bse_codes:
+                    filters.append(Company.bse_scrip_code.in_(bse_codes))
+                
+                if filters:
+                    found = db.query(Company).filter(or_(*filters)).all()
+                    ticker_map = {c.ticker: c.market_cap for c in found if getattr(c, 'market_cap', None)}
+                    bse_map = {f"{c.bse_scrip_code}.BO": c.market_cap for c in found if getattr(c, 'bse_scrip_code', None) and getattr(c, 'market_cap', None)}
+                    
+                    for e in still_missing:
+                        mcap = ticker_map.get(e.ticker) or bse_map.get(e.ticker)
+                        if mcap:
+                            e.market_cap_at_event = mcap
+
+            # 3. Batch lookup by Company Name
+            final_missing = [e for e in still_missing if not getattr(e, 'market_cap_at_event', None)]
+            if final_missing:
+                unmapped_names = list(set(e.company_name for e in final_missing if getattr(e, 'company_name', None)))
+                if unmapped_names:
+                    found_by_name = db.query(Company).filter(Company.name.in_(unmapped_names)).all()
+                    name_map = {c.name: c.market_cap for c in found_by_name if getattr(c, 'name', None) and getattr(c, 'market_cap', None)}
+                    for e in final_missing:
+                        mcap = name_map.get(e.company_name)
+                        if mcap:
+                            e.market_cap_at_event = mcap
+
+            # 4. External Market Cap Provider (Async Fallback)
+            unresolved = [e for e in final_missing if not getattr(e, 'market_cap_at_event', None)]
+            if unresolved:
+                try:
+                    from app.worker.observability import get_redis_client
+                    redis_client = get_redis_client()
+                    
+                    external_needed_tickers = set()
+                    for e in unresolved:
+                        if not getattr(e, 'ticker', None):
+                            continue
+                            
+                        cache_key = f"mcap_enrich:{e.ticker}"
+                        cached_val = redis_client.get(cache_key)
+                        
+                        if cached_val:
+                            decoded = cached_val.decode('utf-8')
+                            if decoded != "NOT_FOUND":
+                                try:
+                                    e.market_cap_at_event = float(decoded)
+                                except ValueError:
+                                    pass
+                        else:
+                            external_needed_tickers.add(e.ticker)
+                            
+                    if external_needed_tickers:
+                        from app.worker.tasks import enrich_external_market_cap_task
+                        enrich_external_market_cap_task.delay(list(external_needed_tickers))
+                        
+                except Exception as ex:
+                    import logging
+                    logging.getLogger(__name__).warning(f"[MARKET_CAP] Redis/Celery fallback error: {ex}")
+        # -----------------------------------
+        
         result = []
         for e in events:
             sources = []
