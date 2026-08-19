@@ -12,6 +12,18 @@ import { CatalystEvent } from '../types/catalyst';
 import { CatalystDetailDrawer } from '../components/catalyst/CatalystDetailDrawer';
 import { SmartCron } from '../components/common/SmartCron';
 
+const formatMarketCap = (val: any) => {
+  if (val == null || val === '') return '—';
+  const n = Number(val);
+  if (isNaN(n) || n === 0) return '—';
+  const inCr = Math.abs(n) >= 100000 ? n / 10000000 : n;
+  if (Math.abs(inCr) < 1) {
+    const inL = inCr * 100;
+    return `${inL < 0 ? '-' : ''}₹${Math.abs(inL).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
+  }
+  return `${inCr < 0 ? '-' : ''}₹${Math.abs(inCr).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} Cr`;
+};
+
 export default function CatalystRadar() {
   const { tokens } = useThemeMode();
   
@@ -91,6 +103,32 @@ export default function CatalystRadar() {
           )}
         </Box>
       )
+    },
+    {
+      field: 'marketCapAtEvent',
+      headerName: 'MARKET CAP',
+      width: 110,
+      description: 'Market capitalization at the time of the catalyst.',
+      headerAlign: 'right',
+      align: 'right',
+      valueGetter: (_v: any, row: any) => {
+        const n = Number(row?.marketCapAtEvent);
+        return !isNaN(n) ? n : -Infinity;
+      },
+      renderCell: (params: GridRenderCellParams) => {
+        if (params.row.marketCapAtEvent == null) {
+          return (
+            <Typography sx={{ fontSize: '13px', color: tokens.text.secondary }}>
+              —
+            </Typography>
+          );
+        }
+        return (
+          <Typography className="mono-font tabular-nums" sx={{ fontSize: '12px', fontWeight: 500, color: tokens.text.secondary }}>
+            {formatMarketCap(params.row.marketCapAtEvent)}
+          </Typography>
+        );
+      }
     },
     {
       field: 'eventTitle',
@@ -309,7 +347,6 @@ export default function CatalystRadar() {
           density="compact"
           disableRowSelectionOnClick
           hideFooterSelectedRowCount
-          onRowClick={(params) => handleOpenDrawer(params.row as CatalystEvent)}
           sx={{
             border: 'none',
             '& .MuiDataGrid-columnHeaders': {
@@ -323,8 +360,7 @@ export default function CatalystRadar() {
             '& .MuiDataGrid-cell': {
               borderBottom: `1px solid ${tokens.border.main}`,
               alignItems: 'center',
-              display: 'flex',
-              cursor: 'pointer'
+              display: 'flex'
             },
             '& .MuiDataGrid-row:hover': {
               backgroundColor: tokens.background.cardHover,
