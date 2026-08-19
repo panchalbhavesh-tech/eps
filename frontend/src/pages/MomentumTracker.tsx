@@ -96,7 +96,7 @@ const formatRelativeTimestamp = (dateStr?: string | null) => {
   return `${Math.floor(diffHour / 24)}d ago`;
 };
 
-const MomentumTracker: React.FC = () => {
+const MomentumTrackerContent: React.FC = () => {
   const { mode, tokens } = useThemeMode();
   const isDark = mode === 'dark';
   const navigate = useNavigate();
@@ -125,7 +125,10 @@ const MomentumTracker: React.FC = () => {
     
   
   
-  const stocks = useMemo(() => data?.momentumScanner || [], [data?.momentumScanner]);
+  const stocks = useMemo(() => {
+    const raw = data?.momentumScanner;
+    return Array.isArray(raw) ? raw : [];
+  }, [data?.momentumScanner]);
   const regime = useMemo(() => data?.marketRegimeStatus || { status: 'Neutral', score: 50, reason: '' }, [data?.marketRegimeStatus]);
 
   const filteredStocks = useMemo(() => {
@@ -223,7 +226,7 @@ const MomentumTracker: React.FC = () => {
       headerAlign: 'left',
       align: 'left',
       sortable: false,
-      renderCell: (p: GridRenderCellParams) => {
+      renderCell: () => {
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
             <Typography className="mono-font tabular-nums" sx={{ fontSize: '12px', fontWeight: 600, color: tokens.text.tertiary }}>
@@ -431,7 +434,9 @@ const MomentumTracker: React.FC = () => {
             </Typography>
           </Box>
           <Box display="flex" flexDirection="column" alignItems="flex-end">
-            <SmartCron page="momentum" />
+            <ErrorBoundary fallbackTitle="Cron Error">
+              <SmartCron page="momentum" />
+            </ErrorBoundary>
           </Box>
         </Box>
 
@@ -440,48 +445,50 @@ const MomentumTracker: React.FC = () => {
 
       {/* Sleek Top Summary Card Bar (Replaced chaotic hybrid cards) */}
       <Box sx={{ px: '24px', mb: 3 }}>
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6} md={3}>
-            <MetricCard 
-              label="Total Universe Monitored" 
-              value={`${stocks.length} Stocks`} 
-              change="Active cross-sectional scan" 
-              trend="up" 
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <MetricCard 
-              label="Strong Momentum (>70%)" 
-              value={`${strongMomentumCount} Stocks`} 
-              change="Prime momentum targets" 
-              trend="up" 
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <MetricCard 
-              label="Requires Attention Flags" 
-              value={`${attentionStocks.length} Anomalies`} 
-              change="Unusual volatility / breakouts" 
-              trend="down" 
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Box sx={{ p: 2, backgroundColor: regimeStyle.bg, border: `1px solid ${regimeStyle.border}`, borderRadius: '12px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: '4px' }}>
-                <Typography sx={{ fontSize: '11px', fontWeight: 600, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Nifty Market Regime
+        <ErrorBoundary fallbackTitle="Metrics Unavailable">
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6} md={3}>
+              <MetricCard 
+                label="Total Universe Monitored" 
+                value={`${stocks.length} Stocks`} 
+                change="Active cross-sectional scan" 
+                trend="up" 
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <MetricCard 
+                label="Strong Momentum (>70%)" 
+                value={`${strongMomentumCount} Stocks`} 
+                change="Prime momentum targets" 
+                trend="up" 
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <MetricCard 
+                label="Requires Attention Flags" 
+                value={`${attentionStocks.length} Anomalies`} 
+                change="Unusual volatility / breakouts" 
+                trend="down" 
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Box sx={{ p: 2, backgroundColor: regimeStyle.bg, border: `1px solid ${regimeStyle.border}`, borderRadius: '12px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: '4px' }}>
+                  <Typography sx={{ fontSize: '11px', fontWeight: 600, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Nifty Market Regime
+                  </Typography>
+                  <Chip label={`${regime.score}/100`} size="small" sx={{ backgroundColor: tokens.background.paper, color: regimeStyle.color, fontSize: '10px', fontWeight: 700, height: 20 }} />
+                </Box>
+                <Typography sx={{ fontSize: '16px', fontWeight: 700, color: regimeStyle.color }}>
+                  {regime.status} Gate
                 </Typography>
-                <Chip label={`${regime.score}/100`} size="small" sx={{ backgroundColor: tokens.background.paper, color: regimeStyle.color, fontSize: '10px', fontWeight: 700, height: 20 }} />
+                <Typography noWrap sx={{ fontSize: '11px', color: tokens.text.secondary, mt: '2px' }}>
+                  {regime.score >= 70 ? '🟢 Aggressive Momentum' : regime.score >= 50 ? '🟡 Selective Entry' : '🔴 Tight Stops / Protect'}
+                </Typography>
               </Box>
-              <Typography sx={{ fontSize: '16px', fontWeight: 700, color: regimeStyle.color }}>
-                {regime.status} Gate
-              </Typography>
-              <Typography noWrap sx={{ fontSize: '11px', color: tokens.text.secondary, mt: '2px' }}>
-                {regime.score >= 70 ? '🟢 Aggressive Momentum' : regime.score >= 50 ? '🟡 Selective Entry' : '🔴 Tight Stops / Protect'}
-              </Typography>
-            </Box>
+            </Grid>
           </Grid>
-        </Grid>
+        </ErrorBoundary>
       </Box>
 
       {/* Sticky Filter & Controls Bar - 48px height */}
@@ -599,7 +606,8 @@ const MomentumTracker: React.FC = () => {
         </DialogTitle>
         <Divider sx={{ borderColor: tokens.border.main }} />
 
-        <DialogContent sx={{ minHeight: 400, pt: 3 }}>
+        <ErrorBoundary fallbackTitle="Analytics Report Error">
+          <DialogContent sx={{ minHeight: 400, pt: 3 }}>
           {backtestLoading ? (
             <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height={350} gap={3}>
               <CircularProgress size={44} sx={{ color: tokens.accent.main }} />
@@ -703,7 +711,7 @@ const MomentumTracker: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {!backtestData.getIntensiveBacktest.eventStrategies || backtestData.getIntensiveBacktest.eventStrategies.length === 0 ? (
+                      {!Array.isArray(backtestData.getIntensiveBacktest.eventStrategies) || backtestData.getIntensiveBacktest.eventStrategies.length === 0 ? (
                         <tr>
                           <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: tokens.text.secondary }}>
                             No corporate earnings event patterns triggered in this timeframe.
@@ -743,7 +751,8 @@ const MomentumTracker: React.FC = () => {
               </Typography>
             </Box>
           )}
-        </DialogContent>
+          </DialogContent>
+        </ErrorBoundary>
 
         <DialogActions sx={{ p: 2.5, backgroundColor: tokens.background.header, borderTop: `1px solid ${tokens.border.main}` }}>
           <Box display="flex" gap={1.5} flexGrow={1} pl={1}>
@@ -778,4 +787,10 @@ const MomentumTracker: React.FC = () => {
   );
 };
 
-export default MomentumTracker;
+export default function MomentumTracker() {
+  return (
+    <ErrorBoundary fallbackTitle="Momentum & Attention Unavailable">
+      <MomentumTrackerContent />
+    </ErrorBoundary>
+  );
+}

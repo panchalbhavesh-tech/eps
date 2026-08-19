@@ -373,7 +373,7 @@ const Layout: React.FC = () => {
           overflowX: 'hidden'
         }}
       >
-        <ErrorBoundary fallbackTitle="Page Rendering Error">
+        <ErrorBoundary key={location.pathname} fallbackTitle="Page Rendering Error">
           <Outlet />
         </ErrorBoundary>
       </Box>

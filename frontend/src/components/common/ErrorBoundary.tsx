@@ -44,20 +44,15 @@ export class ErrorBoundary extends Component<Props, State> {
             </Typography>
           </Box>
           <Typography sx={{ fontSize: '0.9rem', color: '#881337', fontWeight: 600 }}>
-            An unexpected error occurred while rendering this section: <code>{this.state.errorMessage}</code>
+            This section is temporarily unavailable. Something went wrong while loading this content.
           </Typography>
-          {this.state.stackTrace && (
-            <Box component="pre" sx={{ p: 2, bgcolor: '#ffffff', border: '1px solid #fecdd3', borderRadius: 2, fontSize: '0.75rem', color: '#4c0519', overflowX: 'auto', width: '100%', maxHeight: 200 }}>
-              {this.state.stackTrace}
-            </Box>
-          )}
           <Button
             variant="contained"
-            onClick={() => { this.setState({ hasError: false }); window.location.reload(); }}
+            onClick={() => this.setState({ hasError: false, errorMessage: '', stackTrace: '' })}
             startIcon={<AutorenewIcon />}
             sx={{ bgcolor: '#e11d48', '&:hover': { bgcolor: '#be123c' }, textTransform: 'none', fontWeight: 700 }}
           >
-            Reload Page
+            Retry Component
           </Button>
         </Box>
       );

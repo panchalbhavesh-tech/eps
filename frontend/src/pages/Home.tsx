@@ -510,7 +510,7 @@ const MASS_CALCULATE_HEALTH = gql`
 `;
 
 
-const Home: React.FC = () => {
+const HomeContent: React.FC = () => {
   const { mode, tokens } = useThemeMode();
   const isDark = mode === 'dark';
 
@@ -524,6 +524,10 @@ const Home: React.FC = () => {
     const [massCalculate] = useMutation(MASS_CALCULATE_HEALTH, {
     onCompleted: () => {
       alert("Mass financial health analysis queued for all stocks! Check Tasks page for progress and refresh to view scores.");
+    },
+    onError: (err) => {
+      console.error("Health calculation failed", err);
+      alert("Failed to queue health calculation.");
     }
   });
 
@@ -537,7 +541,7 @@ const Home: React.FC = () => {
 
   
   const baseRows = useMemo(() => {
-    if (!data?.companies) return [];
+    if (!Array.isArray(data?.companies)) return [];
     const lowerSearch = (search || '').trim().toLowerCase();
     return data.companies.filter((c: any) =>
       (c.ticker || '').toLowerCase().includes(lowerSearch) ||
@@ -549,7 +553,8 @@ const Home: React.FC = () => {
   }, [data?.companies, search]);
 
   const recentEventsCount = useMemo(() => {
-    return data?.companies?.filter((c: any) => {
+    if (!Array.isArray(data?.companies)) return 0;
+    return data.companies.filter((c: any) => {
       if (!c.upcomingDate) return false;
       const eventDate = new Date(c.upcomingDate);
       const today = new Date();
@@ -561,7 +566,8 @@ const Home: React.FC = () => {
   }, [data?.companies]);
 
   const highHealthCount = useMemo(() => {
-    return data?.companies?.filter((c: any) => (c.financialHealthScore || 0) >= 70).length || 0;
+    if (!Array.isArray(data?.companies)) return 0;
+    return data.companies.filter((c: any) => (c.financialHealthScore || 0) >= 70).length || 0;
   }, [data?.companies]);
 
   const rows = useMemo(() => {
@@ -583,7 +589,8 @@ const Home: React.FC = () => {
   }, [baseRows, filterMode]);
 
   const sampleRow = useMemo(() => {
-    return data?.companies?.find((c: any) => c.q4Date && c.q3Date) || {};
+    if (!Array.isArray(data?.companies)) return {};
+    return data.companies.find((c: any) => c.q4Date && c.q3Date) || {};
   }, [data?.companies]);
 
   const getDateLabel = useCallback((dbDate: string | undefined, fallbackMonth: string) => dbDate ? `${dbDate} ` : `${fallbackMonth} `, []);
@@ -1128,17 +1135,21 @@ const Home: React.FC = () => {
             />
           </Box>
 
-          <SmartCron page="events" />
+          <ErrorBoundary fallbackTitle="Cron Error">
+            <SmartCron page="events" />
+          </ErrorBoundary>
         </Box>
       </Box>
 
       {/* Bulk Selection Sticky Action Bar */}
       <Box sx={{ px: '24px', mt: selectedRowIds.length > 0 ? 1.5 : 0 }}>
-        <BulkActionBar
-          selectedCount={selectedRowIds.length}
-          onClearSelection={() => setSelectedRowIds([])}
-          actions={bulkActions}
-        />
+        <ErrorBoundary fallbackTitle="Bulk Actions Error">
+          <BulkActionBar
+            selectedCount={selectedRowIds.length}
+            onClearSelection={() => setSelectedRowIds([])}
+            actions={bulkActions}
+          />
+        </ErrorBoundary>
       </Box>
 
       {/* Dense Terminal DataGrid with Semantic Row Tinting & Dynamic Viewport Height */}
@@ -1191,7 +1202,8 @@ const Home: React.FC = () => {
           </Box>
           <StatusBadge status={detailModalRow?.financialHealthScore >= 70 ? "HIGH HEALTH" : "STANDARD HEALTH"} variant={detailModalRow?.financialHealthScore >= 70 ? "success" : "neutral"} />
         </DialogTitle>
-        <DialogContent sx={{ py: 3, pt: '24px !important' }}>
+        <ErrorBoundary fallbackTitle="Report Error">
+          <DialogContent sx={{ py: 3, pt: '24px !important' }}>
           {detailModalRow && (
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6} md={3}>
@@ -1228,7 +1240,8 @@ const Home: React.FC = () => {
               </Grid>
             </Grid>
           )}
-        </DialogContent>
+          </DialogContent>
+        </ErrorBoundary>
         <DialogActions sx={{ px: 3, py: 2, borderTop: `1px solid ${tokens.border.main}` }}>
           <Button onClick={() => setDetailModalRow(null)} sx={{ color: tokens.text.secondary, textTransform: 'none', fontWeight: 600, fontSize: '12px' }}>Close</Button>
           <Button onClick={() => window.open(`/companies/${detailModalRow?.id}`, '_blank')} variant="contained" sx={{ backgroundColor: tokens.primary.main, color: isDark ? '#0A0A0C' : '#FFFFFF', fontWeight: 700, fontSize: '12px', textTransform: 'none', borderRadius: '6px' }}>Open Deep-Dive Lab ↗</Button>
@@ -1238,4 +1251,10 @@ const Home: React.FC = () => {
   );
 };
 
-export default Home;
+export default function Home() {
+  return (
+    <ErrorBoundary fallbackTitle="NSE Events Unavailable">
+      <HomeContent />
+    </ErrorBoundary>
+  );
+}
