@@ -251,18 +251,28 @@ def enrich_single_company(company, db):
             pass
     return company
 
-@shared_task
-def populate_companies_data_task():
+@shared_task(name="app.worker.tasks.sync_nse_universe_task")
+def sync_nse_universe_task():
+    task_id = current_task.request.id if current_task else "sync_nse_universe_local"
+    obs = TaskObserver(task_id)
+    obs.update(log_msg="Starting NSE calendar sync...")
+
     try:
         sync_nse_calendar_task()
+        obs.update(log_msg="NSE calendar sync completed.")
     except Exception as e:
+        obs.update(log_msg=f"Error syncing NSE calendar: {e}", log_level="ERROR")
         print(f"Error syncing NSE calendar: {e}")
 
     db = SessionLocal()
     try:
         company_ids = [c.id for c in db.query(Company.id).filter(Company.sector == "NSE").all()]
+        total = len(company_ids)
         updated = 0
-        for cid in company_ids:
+        failed = 0
+        obs.update(log_msg=f"Found {total} companies in NSE universe.", progress={"total": total, "processed": 0, "saved": 0, "failed": 0, "percentage": 0, "current_step": "Enriching company data"}, force=True)
+
+        for i, cid in enumerate(company_ids):
             try:
                 company = db.query(Company).filter(Company.id == cid).with_for_update(skip_locked=True).first()
                 if not company:
@@ -409,14 +419,23 @@ def generate_deep_research_report_task(company_id: str):
     finally:
         db.close()
 
-@shared_task
-def mass_calculate_financial_health_task():
+@shared_task(name="app.worker.tasks.calculate_universe_health_task")
+def calculate_universe_health_task():
+    task_id = current_task.request.id if current_task else "calculate_health_local"
+    obs = TaskObserver(task_id)
+    obs.update(log_msg="Starting universe health calculation...")
+
     db = SessionLocal()
     try:
         companies = db.query(Company).all()
+        total = len(companies)
         ai = AIAnalystService()
         updated = 0
-        for company in companies:
+        failed = 0
+        
+        obs.update(log_msg=f"Loaded {total} companies for health analysis.", progress={"total": total, "processed": 0, "saved": 0, "failed": 0, "percentage": 0, "current_step": "Calculating financial health"}, force=True)
+        
+        for i, company in enumerate(companies):
             try:
                 q_data = {
                     "ticker": company.ticker,

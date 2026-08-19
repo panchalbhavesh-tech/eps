@@ -13,9 +13,9 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import ShieldIcon from '@mui/icons-material/Shield';
-import BoltIcon from '@mui/icons-material/Bolt';
 
 import { StatusBadge, SearchInput } from '../components/common';
+import { SmartCron } from '../components/common/SmartCron';
 import { useThemeMode } from '../theme/ThemeContext';
 
 const GET_RESEARCH_HYPOTHESES = gql`
@@ -84,11 +84,6 @@ const GET_LIVE_SIGNALS = gql`
   }
 `;
 
-const TRIGGER_AI_HYPOTHESIS_RESEARCH = gql`
-  mutation TriggerAutomatedHypothesisResearch {
-    triggerAutomatedHypothesisResearch
-  }
-`;
 
 interface HypothesisSignal {
   id: string;
@@ -150,14 +145,7 @@ const HypothesisLaboratory: React.FC = () => {
     }
   });
 
-  const [triggerAiResearch, { loading: triggeringAi }] = useMutation(TRIGGER_AI_HYPOTHESIS_RESEARCH, {
-    onCompleted: (res) => {
-      setSnackbarMsg(res.triggerAutomatedHypothesisResearch || "AI Quant Agent deployed in background.");
-      setSnackbarOpen(true);
-      setTimeout(() => refetch(), 4000);
-    }
-  });
-
+  
   const { data: signalsData } = useQuery(GET_LIVE_SIGNALS, { pollInterval: 15000, fetchPolicy: 'network-only' });
   const liveSignals: HypothesisSignal[] = signalsData?.latestLiveSignals || [];
   const [openSignalsModal, setOpenSignalsModal] = useState(false);
@@ -455,23 +443,8 @@ const HypothesisLaboratory: React.FC = () => {
           >
             Refresh Lab
           </Button>
-          <Button
-            variant="outlined"
-            onClick={() => triggerAiResearch()}
-            disabled={triggeringAi}
-            startIcon={<BoltIcon sx={{ color: '#eab308' }} />}
-            sx={{ 
-              textTransform: 'none', 
-              borderColor: isDark ? 'rgba(234, 179, 8, 0.4)' : '#ca8a04', 
-              color: isDark ? '#fde047' : '#854d0e',
-              bgcolor: isDark ? 'rgba(234, 179, 8, 0.05)' : '#fef9c3',
-              height: 40,
-              fontWeight: 700,
-              '&:hover': { bgcolor: isDark ? 'rgba(234, 179, 8, 0.15)' : '#fef08a' }
-            }}
-          >
-            {triggeringAi ? "Deploying Agent..." : "Deploy Gemini Quant Agent"}
-          </Button>
+          <SmartCron page="hypothesis" />
+          
           <Button
             variant="contained"
             onClick={() => setOpenSignalsModal(true)}

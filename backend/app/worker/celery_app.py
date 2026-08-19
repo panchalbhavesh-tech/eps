@@ -23,6 +23,14 @@ celery_app.conf.update(
             'task': 'app.worker.tasks.sync_nse_calendar_task',
             'schedule': 86400.0, # Every 24 hours
         },
+        'sync-nse-universe-daily': {
+            'task': 'app.worker.tasks.sync_nse_universe_task',
+            'schedule': 86400.0, # Synchronizes and populates the NSE stock universe
+        },
+        'calculate-universe-health-daily': {
+            'task': 'app.worker.tasks.calculate_universe_health_task',
+            'schedule': 86400.0, # Calculates and updates the existing health metrics
+        },
         'sync-nse-market-data-daily': {
             'task': 'app.worker.tasks.sync_nse_market_data_task',
             'schedule': 86400.0, # Overnight Bhavcopy & Surveillance sync

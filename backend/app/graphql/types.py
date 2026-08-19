@@ -114,6 +114,14 @@ class BackgroundJobType:
     error_message: Optional[str] = None
     duration: Optional[float] = None
 
+
+@strawberry.type
+class BackgroundJobLiveStatusType:
+    celery_task_id: str
+    status: Optional[str] = None
+    progress: Optional[str] = None
+    logs: Optional[List[str]] = None
+
 @strawberry.type
 class AIAnalysisReportType:
     id: str
@@ -292,6 +300,7 @@ class ResearchHypothesisType:
 class CeleryScheduleType:
     name: str
     task_name: str
+    cron_title: str
     interval_seconds: float
     human_readable_interval: str
     category: str
@@ -299,6 +308,21 @@ class CeleryScheduleType:
     last_run_at: Optional[str] = None
     last_run_status: Optional[str] = None
     last_run_duration: Optional[float] = None
+    next_run_at: Optional[str] = None
+    last_run_result: Optional[str] = None
+    last_run_error: Optional[str] = None
+
+@strawberry.type
+class WorkerExecutionHistoryType:
+    id: str
+    task_name: str
+    status: str
+    queued_at: Optional[str] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    duration_ms: Optional[float] = None
+    result: Optional[str] = None
+    error_message: Optional[str] = None
 
 @strawberry.type
 class HypothesisSignalType:

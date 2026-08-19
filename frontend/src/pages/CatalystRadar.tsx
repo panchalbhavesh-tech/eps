@@ -10,6 +10,7 @@ import { useThemeMode } from '../theme/ThemeContext';
 import { formatToIST } from '../utils/dateUtils';
 import { CatalystEvent } from '../types/catalyst';
 import { CatalystDetailDrawer } from '../components/catalyst/CatalystDetailDrawer';
+import { SmartCron } from '../components/common/SmartCron';
 
 export default function CatalystRadar() {
   const { tokens } = useThemeMode();
@@ -279,6 +280,7 @@ export default function CatalystRadar() {
           >
             Refresh
           </Button>
+          <SmartCron page="catalyst" />
         </Box>
       </Box>
 
