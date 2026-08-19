@@ -15,7 +15,7 @@ const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  
+
   const { login } = useAuth();
   const navigate = useNavigate();
   const { tokens, mode } = useThemeMode();
@@ -67,11 +67,11 @@ const Login: React.FC = () => {
   };
 
   return (
-    <Box 
-      sx={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
         justifyContent: 'center',
         background: `radial-gradient(circle at 50% 0%, ${tokens.background.cardHover}, ${tokens.background.default} 60%)`,
         position: 'relative',
@@ -79,14 +79,14 @@ const Login: React.FC = () => {
         px: 2,
       }}
     >
-      <Paper 
-        elevation={0} 
-        sx={{ 
-          p: { xs: 4, md: 5 }, 
-          width: '100%', 
-          maxWidth: 420, 
-          display: 'flex', 
-          flexDirection: 'column', 
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 4, md: 5 },
+          width: '100%',
+          maxWidth: 420,
+          display: 'flex',
+          flexDirection: 'column',
           gap: 3.5,
           bgcolor: tokens.background.card,
           border: `1px solid ${tokens.border.light}`,
@@ -97,37 +97,37 @@ const Login: React.FC = () => {
         }}
       >
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 1.5 }}>
-          <Box 
-            sx={{ 
-              width: 52, 
-              height: 52, 
-              borderRadius: 3, 
-              bgcolor: tokens.background.cardHover, 
+          <Box
+            sx={{
+              width: 52,
+              height: 52,
+              borderRadius: 3,
+              bgcolor: tokens.background.cardHover,
               border: `1px solid ${tokens.border.light}`,
-              display: 'flex', 
-              alignItems: 'center', 
+              display: 'flex',
+              alignItems: 'center',
               justifyContent: 'center',
               mb: 1
             }}
           >
             <ShowChartIcon sx={{ color: tokens.accent.main, fontSize: 26 }} />
           </Box>
-          
+
           <Typography variant="h5" component="h1" sx={{ fontWeight: 700, color: tokens.text.primary, letterSpacing: '-0.02em', fontSize: '1.4rem' }}>
-            QEPS Quant Lab
+            VD Quant Lab
           </Typography>
-          
+
           <Typography variant="body2" sx={{ color: tokens.text.secondary, fontSize: '0.85rem', maxWidth: '320px', lineHeight: 1.5, fontWeight: 400 }}>
             Enterprise Quantitative Earnings Prediction & Institutional AI Market Analytics
           </Typography>
         </Box>
 
         {error && (
-          <Alert 
-            severity="error" 
-            sx={{ 
-              bgcolor: tokens.status.error.wash, 
-              color: tokens.status.error.main, 
+          <Alert
+            severity="error"
+            sx={{
+              bgcolor: tokens.status.error.wash,
+              color: tokens.status.error.main,
               border: `1px solid ${tokens.status.error.border || tokens.status.error.main}`,
               borderRadius: 2,
               fontSize: '0.85rem',
@@ -199,14 +199,14 @@ const Login: React.FC = () => {
             />
           </Box>
 
-          <Button 
-            type="submit" 
-            variant="contained" 
+          <Button
+            type="submit"
+            variant="contained"
             disabled={loading}
             fullWidth
-            sx={{ 
-              height: 48, 
-              fontSize: '0.9rem', 
+            sx={{
+              height: 48,
+              fontSize: '0.9rem',
               fontWeight: 600,
               mt: 1,
               bgcolor: tokens.primary.main,
@@ -231,7 +231,7 @@ const Login: React.FC = () => {
 
         <Box sx={{ pt: 2.5, mt: 1, borderTop: `1px solid ${tokens.border.light}`, textAlign: 'center' }}>
           <Typography sx={{ fontSize: '0.72rem', color: tokens.text.muted || tokens.text.tertiary, fontWeight: 500 }}>
-            Protected by QEPS Zero-Trust Authentication.
+            Protected by VD EPS Zero-Trust Authentication.
             <br />
             Powered by Docker & Celery Workers.
           </Typography>

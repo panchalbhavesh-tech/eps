@@ -1,13 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { useQuery, useMutation, gql } from '@apollo/client';
-import { Box, Typography, CircularProgress, Button, Grid, Card, CardContent, Snackbar, Alert } from '@mui/material';
+import { useQuery, useMutation, useLazyQuery, gql } from '@apollo/client';
+import { Box, Typography, CircularProgress, Button, Snackbar, Alert, Drawer, IconButton, Divider, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ScheduleIcon from '@mui/icons-material/Schedule';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import StorageIcon from '@mui/icons-material/Storage';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import CloseIcon from '@mui/icons-material/Close';
+import InfoIcon from '@mui/icons-material/Info';
 
 import { StatusBadge, FilterChipGroup, SearchInput } from '../components/common';
 import { useThemeMode } from '../theme/ThemeContext';
@@ -17,6 +16,7 @@ const GET_CELERY_SCHEDULES = gql`
     celerySchedules {
       name
       taskName
+      cronTitle
       intervalSeconds
       humanReadableInterval
       category
@@ -24,6 +24,25 @@ const GET_CELERY_SCHEDULES = gql`
       lastRunAt
       lastRunStatus
       lastRunDuration
+      nextRunAt
+      lastRunResult
+      lastRunError
+    }
+  }
+`;
+
+const GET_WORKER_EXECUTION_HISTORY = gql`
+  query GetWorkerExecutionHistory($taskName: String!) {
+    workerExecutionHistory(taskName: $taskName) {
+      id
+      taskName
+      status
+      queuedAt
+      startedAt
+      finishedAt
+      durationMs
+      result
+      errorMessage
     }
   }
 `;
@@ -37,6 +56,7 @@ const TRIGGER_CELERY_TASK = gql`
 export interface CelerySchedule {
   name: string;
   taskName: string;
+  cronTitle: string;
   intervalSeconds: number;
   humanReadableInterval: string;
   category: string;
@@ -44,15 +64,30 @@ export interface CelerySchedule {
   lastRunAt?: string;
   lastRunStatus?: string;
   lastRunDuration?: number;
+  nextRunAt?: string;
+  lastRunResult?: string;
+  lastRunError?: string;
+}
+
+export interface WorkerExecutionHistory {
+  id: string;
+  taskName: string;
+  status: string;
+  queuedAt?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  durationMs?: number;
+  result?: string;
+  errorMessage?: string;
 }
 
 const Schedules: React.FC = () => {
   const { tokens } = useThemeMode();
 
 
-  const { loading, error, data, refetch } = useQuery(GET_CELERY_SCHEDULES, { 
-    pollInterval: 15000, 
-    fetchPolicy: 'network-only' 
+  const { loading, error, data, refetch } = useQuery(GET_CELERY_SCHEDULES, {
+    pollInterval: 15000,
+    fetchPolicy: 'network-only'
   });
 
   const [triggerTask, { loading: triggering }] = useMutation(TRIGGER_CELERY_TASK);
@@ -61,6 +96,19 @@ const Schedules: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [inspectDrawerOpen, setInspectDrawerOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<CelerySchedule | null>(null);
+
+  const [getHistory, { data: historyData, loading: historyLoading }] = useLazyQuery(GET_WORKER_EXECUTION_HISTORY, {
+    fetchPolicy: 'network-only'
+  });
+
+  const handleInspect = (task: CelerySchedule) => {
+    setSelectedTask(task);
+    setInspectDrawerOpen(true);
+    getHistory({ variables: { taskName: task.taskName } });
+  };
+
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -92,8 +140,8 @@ const Schedules: React.FC = () => {
 
     rows.forEach((sched) => {
       if (sched.category.includes('AI') || sched.category.includes('ML')) aiCount++;
-      else if (sched.category.includes('Market Data')) marketDataCount++;
-      else if (sched.category.includes('Quant')) quantCount++;
+      else if (sched.category.includes('MARKET')) marketDataCount++;
+      else if (sched.category.includes('QUANT')) quantCount++;
     });
 
     return { total, aiCount, marketDataCount, quantCount };
@@ -109,8 +157,8 @@ const Schedules: React.FC = () => {
   const filteredRows = useMemo(() => {
     return rows.filter((sched) => {
       if (categoryFilter === 'AI' && !sched.category.includes('AI') && !sched.category.includes('ML')) return false;
-      if (categoryFilter === 'MARKET' && !sched.category.includes('Market Data')) return false;
-      if (categoryFilter === 'QUANT' && !sched.category.includes('Quant')) return false;
+      if (categoryFilter === 'MARKET' && !sched.category.includes('MARKET')) return false;
+      if (categoryFilter === 'QUANT' && !sched.category.includes('QUANT')) return false;
 
       if (searchQuery.trim() !== '') {
         const q = searchQuery.toLowerCase();
@@ -124,11 +172,11 @@ const Schedules: React.FC = () => {
   }, [rows, categoryFilter, searchQuery]);
 
   const columns: GridColDef[] = [
-    { 
-      field: 'name', 
-      headerName: 'BEAT SCHEDULE & SYMBOL', 
-      width: 290, 
-      flex: 1.5,
+    {
+      field: 'name',
+      headerName: 'WORKER / TASK',
+      width: 250,
+      flex: 1.2,
       renderCell: (params: GridRenderCellParams) => (
         <Box sx={{ py: 1.2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -142,10 +190,38 @@ const Schedules: React.FC = () => {
         </Box>
       )
     },
-    { 
-      field: 'humanReadableInterval', 
-      headerName: 'SCHEDULE INTERVAL', 
-      width: 170,
+    {
+      field: 'cronTitle',
+      headerName: 'CRON TITLE',
+      width: 220,
+      flex: 1.2,
+      renderCell: (params: GridRenderCellParams) => {
+        const title = params.value || '';
+        const parts = title.split(': ');
+        return (
+          <Box>
+            {parts.length === 2 ? (
+              <>
+                <Typography sx={{ fontSize: '0.65rem', fontWeight: 800, color: tokens.primary.main, textTransform: 'uppercase' }}>
+                  {parts[0]}
+                </Typography>
+                <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, color: tokens.text.primary }}>
+                  {parts[1]}
+                </Typography>
+              </>
+            ) : (
+              <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, color: tokens.text.primary }}>
+                {title}
+              </Typography>
+            )}
+          </Box>
+        );
+      }
+    },
+    {
+      field: 'humanReadableInterval',
+      headerName: 'SCHEDULE',
+      width: 140,
       renderCell: (params: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <ScheduleIcon sx={{ fontSize: 16, color: tokens.primary.main }} />
@@ -153,60 +229,21 @@ const Schedules: React.FC = () => {
             <Typography sx={{ fontSize: '0.82rem', color: tokens.text.primary, fontWeight: 600 }}>
               {params.value}
             </Typography>
-            <Typography sx={{ fontSize: '0.7rem', color: tokens.text.secondary, fontVariantNumeric: 'tabular-nums' }}>
-              {params.row.intervalSeconds}s interval
-            </Typography>
           </Box>
         </Box>
       )
     },
-    { 
-      field: 'category', 
-      headerName: 'CATEGORY', 
-      width: 150,
-      renderCell: (params: GridRenderCellParams) => {
-        const cat = params.value as string;
-        let bg = tokens.background.card;
-        let color = tokens.text.secondary;
-        let border = tokens.border.main;
-
-        if (cat.includes('AI') || cat.includes('ML')) {
-          color = tokens.primary.main;
-        } else if (cat.includes('Market Data')) {
-          color = tokens.status.success.main;
-        } else {
-          color = tokens.secondary.main;
-        }
-
-        return (
-          <Box sx={{ 
-            px: 1.2, 
-            py: 0.4, 
-            borderRadius: 1, 
-            bgcolor: bg, 
-            border: `1px solid ${border}`,
-            color: color,
-            fontSize: '0.72rem',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.03em'
-          }}>
-            {cat}
-          </Box>
-        );
-      }
-    },
-    { 
-      field: 'description', 
-      headerName: 'INSTITUTIONAL PURPOSE & RATIONALE', 
-      width: 380, 
-      flex: 2,
+    {
+      field: 'description',
+      headerName: 'PURPOSE',
+      width: 250,
+      flex: 1.5,
       renderCell: (params: GridRenderCellParams) => (
-        <Typography 
-          sx={{ 
-            fontSize: '0.8rem', 
+        <Typography
+          sx={{
+            fontSize: '0.75rem',
             color: tokens.text.secondary,
-            lineHeight: 1.4,
+            lineHeight: 1.3,
             whiteSpace: 'normal',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -216,73 +253,171 @@ const Schedules: React.FC = () => {
             pr: 1
           }}
         >
-          {params.value || 'Automated scheduled quant workflow.'}
+          {params.value}
         </Typography>
       )
     },
-    { 
-      field: 'lastRunStatus', 
-      headerName: 'LATEST WORKER STATE', 
-      width: 170,
+    {
+      field: 'lastRunStatus',
+      headerName: 'STATUS',
+      width: 110,
       renderCell: (params: GridRenderCellParams) => {
-        const st = params.value || 'NEVER_RUN';
-        const at = params.row.lastRunAt;
+        const st = (params.value || 'NEVER RUN').toUpperCase().replace('_', ' ');
+        if (st === 'NEVER RUN') {
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: tokens.text.disabled }} />
+              <Typography sx={{ fontSize: '0.75rem', color: tokens.text.disabled, fontWeight: 600 }}>
+                NEVER RUN
+              </Typography>
+            </Box>
+          );
+        }
+        return <StatusBadge status={st} size="small" />;
+      }
+    },
+    {
+      field: 'lastRunAt',
+      headerName: 'LAST RUN',
+      width: 130,
+      renderCell: (params: GridRenderCellParams) => {
+        const at = params.value;
         const dur = params.row.lastRunDuration;
+        if (!at) return <Typography sx={{ fontSize: '0.75rem', color: tokens.text.disabled }}>-</Typography>;
+        
+        const dateObj = new Date(at + "Z");
+                const timeStr = dateObj.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' IST';
+        
         return (
           <Box>
-            {st === 'NEVER_RUN' ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
-                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: tokens.text.disabled }} />
-                <Typography sx={{ fontSize: '0.75rem', color: tokens.text.disabled, fontWeight: 600 }}>
-                  Standby / Unfired
-                </Typography>
-              </Box>
-            ) : (
-              <>
-                <StatusBadge status={st} size="small" />
-                {at && (
-                  <Typography sx={{ fontSize: '0.7rem', color: tokens.text.secondary, fontVariantNumeric: 'tabular-nums', mt: 0.5 }}>
-                    {dur ? `${dur.toFixed(1)}s exec time` : new Date(at + "Z").toLocaleTimeString()}
-                  </Typography>
-                )}
-              </>
-            )}
+            <Typography sx={{ fontSize: '0.75rem', color: tokens.text.primary, fontWeight: 500 }}>
+              {timeStr}
+            </Typography>
+            <Typography sx={{ fontSize: '0.7rem', color: tokens.text.secondary }}>
+              {dur ? `${dur.toFixed(1)}s` : ''}
+            </Typography>
           </Box>
         );
       }
     },
     {
-      field: 'action',
-      headerName: 'EXECUTION CONTROLS',
+      field: 'nextRunAt',
+      headerName: 'NEXT RUN',
+      width: 130,
+      renderCell: (params: GridRenderCellParams) => {
+        const at = params.value;
+        if (!at) return <Typography sx={{ fontSize: '0.75rem', color: tokens.text.disabled }}>—</Typography>;
+
+        const dateObj = new Date(at);
+        const timeStr = dateObj.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' IST';
+        const dateStr = dateObj.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short' });
+
+        const now = new Date();
+        const diffMs = dateObj.getTime() - now.getTime();
+
+        let relStr = '';
+        if (diffMs > 0) {
+            const diffMins = Math.floor(diffMs / 60000);
+            const hrs = Math.floor(diffMins / 60);
+            const mins = diffMins % 60;
+            if (hrs > 24) {
+                const days = Math.floor(hrs / 24);
+                relStr = `in ${days}d ${hrs % 24}h`;
+            } else if (hrs > 0) {
+                relStr = `in ${hrs}h ${mins}m`;
+            } else {
+                relStr = `in ${mins}m`;
+            }
+        } else {
+            relStr = 'overdue';
+        }
+
+        return (
+          <Box>
+            <Typography sx={{ fontSize: '0.75rem', color: tokens.text.primary, fontWeight: 500 }}>
+              {dateStr} {timeStr}
+            </Typography>
+            <Typography sx={{ fontSize: '0.65rem', color: diffMs > 0 ? tokens.text.secondary : tokens.status.error.main, mt: 0.2 }}>
+              {relStr}
+            </Typography>
+          </Box>
+        );
+      }
+    },
+    {
+      field: 'lastRunResult',
+      headerName: 'LAST RESULT',
       width: 140,
+      renderCell: (params: GridRenderCellParams) => {
+        const res = params.value;
+        const err = params.row.lastRunError;
+        
+        let text = '-';
+        let color = tokens.text.secondary;
+        if (err) {
+            text = err.substring(0, 30) + (err.length > 30 ? '...' : '');
+            color = tokens.status.error.main;
+        } else if (res) {
+            text = res.substring(0, 30) + (res.length > 30 ? '...' : '');
+        }
+
+        return (
+          <Typography sx={{ fontSize: '0.7rem', color: color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {text}
+          </Typography>
+        );
+      }
+    },
+    {
+      field: 'action',
+      headerName: 'ACTION',
+      width: 180,
       align: 'right',
       headerAlign: 'right',
       renderCell: (params: GridRenderCellParams) => {
         const isRunning = activeTrigger === params.row.taskName;
         return (
-          <Button
-            size="small"
-            variant="contained"
-            disabled={triggering && isRunning}
-            onClick={() => handleRunNow(params.row.taskName, params.row.name)}
-            startIcon={isRunning ? <CircularProgress size={12} color="inherit" /> : <PlayArrowIcon sx={{ fontSize: '15px !important' }} />}
-            sx={{
-              fontSize: '0.74rem',
-              py: 0.6,
-              px: 1.4,
-              bgcolor: tokens.primary.main,
-              color: '#ffffff',
-              textTransform: 'none',
-              fontWeight: 700,
-              boxShadow: 'none',
-              '&:hover': {
-                bgcolor: tokens.primary.dark || tokens.primary.main,
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-              }
-            }}
-          >
-            {isRunning ? 'Queueing...' : 'Deploy Now'}
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', justifyContent: 'flex-end', width: '100%' }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => handleInspect(params.row)}
+              sx={{
+                fontSize: '0.68rem',
+                py: 0.3,
+                px: 1,
+                borderColor: tokens.border.main,
+                color: tokens.text.primary,
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
+            >
+              Inspect
+            </Button>
+            <Button
+              size="small"
+              variant="contained"
+              disabled={triggering && isRunning}
+              onClick={() => handleRunNow(params.row.taskName, params.row.name)}
+              startIcon={isRunning ? <CircularProgress size={12} color="inherit" /> : <PlayArrowIcon sx={{ fontSize: '15px !important' }} />}
+              sx={{
+                fontSize: '0.68rem',
+                py: 0.3,
+                px: 1,
+                bgcolor: tokens.primary.main,
+                color: '#ffffff',
+                textTransform: 'none',
+                fontWeight: 700,
+                boxShadow: 'none',
+                '&:hover': {
+                  bgcolor: tokens.primary.dark || tokens.primary.main,
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+                }
+              }}
+            >
+              {isRunning ? 'Run...' : 'Run now'}
+            </Button>
+          </Box>
         );
       }
     }
@@ -310,86 +445,8 @@ const Schedules: React.FC = () => {
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: tokens.background.default, pb: 4, fontFamily: tokens.typography.fontFamily, width: '100%', overflowX: 'hidden' }}>
-      {/* KPI Scorecard Deck */}
-      <Box sx={{ px: { xs: 2, md: 3.5 }, pt: 3, pb: 2 }}>
-        <Grid container spacing={2.5}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ bgcolor: tokens.background.card, border: `1px solid ${tokens.border.main}`, boxShadow: 'none', borderRadius: 2 }}>
-              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 800, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Total Beat Schedules
-                  </Typography>
-                  <ScheduleIcon sx={{ fontSize: 20, color: tokens.text.secondary }} />
-                </Box>
-                <Typography sx={{ fontSize: '1.8rem', fontWeight: 800, color: tokens.text.primary, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
-                  {metrics.total}
-                </Typography>
-                <Typography sx={{ fontSize: '0.74rem', color: tokens.status.success.main, fontWeight: 600, mt: 0.5 }}>
-                  Active periodic worker timers
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
 
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ bgcolor: tokens.background.card, border: `1px solid ${tokens.border.main}`, boxShadow: 'none', borderRadius: 2 }}>
-              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 800, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    AI Quant & ML Pipelines
-                  </Typography>
-                  <AutoAwesomeIcon sx={{ fontSize: 20, color: tokens.primary.main }} />
-                </Box>
-                <Typography sx={{ fontSize: '1.8rem', fontWeight: 800, color: tokens.primary.main, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
-                  {metrics.aiCount}
-                </Typography>
-                <Typography sx={{ fontSize: '0.74rem', color: tokens.text.secondary, fontWeight: 500, mt: 0.5 }}>
-                  Autonomous factor & retraining loops
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
 
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ bgcolor: tokens.background.card, border: `1px solid ${tokens.border.main}`, boxShadow: 'none', borderRadius: 2 }}>
-              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 800, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Market Data Workflows
-                  </Typography>
-                  <StorageIcon sx={{ fontSize: 20, color: tokens.status.success.main }} />
-                </Box>
-                <Typography sx={{ fontSize: '1.8rem', fontWeight: 800, color: tokens.text.primary, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
-                  {metrics.marketDataCount}
-                </Typography>
-                <Typography sx={{ fontSize: '0.74rem', color: tokens.text.secondary, fontWeight: 500, mt: 0.5 }}>
-                  NSE Bhavcopy & corporate events sync
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ bgcolor: tokens.background.card, border: `1px solid ${tokens.border.main}`, boxShadow: 'none', borderRadius: 2 }}>
-              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 800, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Scheduler Status
-                  </Typography>
-                  <CheckCircleOutlineIcon sx={{ fontSize: 20, color: tokens.status.success.main }} />
-                </Box>
-                <Typography sx={{ fontSize: '1.8rem', fontWeight: 800, color: tokens.status.success.main, mt: 0.5 }}>
-                  100% Online
-                </Typography>
-                <Typography sx={{ fontSize: '0.74rem', color: tokens.text.secondary, fontWeight: 500, mt: 0.5 }}>
-                  Redis Celery broker connected
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Box>
 
       {/* Top Controls & Filter Bar */}
       <Box sx={{ px: { xs: 2, md: 3.5 }, pt: 1, pb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, borderBottom: `1px solid ${tokens.border.main}`, bgcolor: tokens.background.header }}>
@@ -413,17 +470,17 @@ const Schedules: React.FC = () => {
             variant="outlined"
             onClick={handleRefresh}
             startIcon={<AutorenewIcon sx={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none', fontSize: '17px !important' }} />}
-            sx={{ 
+            sx={{
               height: '36px',
-              borderColor: tokens.border.main, 
-              color: tokens.text.primary, 
-              bgcolor: tokens.background.card, 
+              borderColor: tokens.border.main,
+              color: tokens.text.primary,
+              bgcolor: tokens.background.card,
               fontWeight: 600,
               fontSize: '0.78rem',
               px: 2,
               borderRadius: 2,
               textTransform: 'none',
-              '&:hover': { bgcolor: tokens.background.cardHover } 
+              '&:hover': { bgcolor: tokens.background.cardHover }
             }}
           >
             Refresh Timers
@@ -432,10 +489,10 @@ const Schedules: React.FC = () => {
       </Box>
 
       {/* Main Schedule DataGrid Table */}
-      <Box sx={{ height: 'calc(100vh - 280px)', minHeight: 520, width: '100%', bgcolor: tokens.background.paper, borderBottom: `1px solid ${tokens.border.main}`, overflow: 'hidden' }}>
-        <DataGrid 
-          rows={filteredRows} 
-          columns={columns} 
+      <Box sx={{ height: 'calc(100vh - 120px)', minHeight: 520, width: '100%', bgcolor: tokens.background.paper, borderBottom: `1px solid ${tokens.border.main}`, overflow: 'hidden' }}>
+        <DataGrid
+          rows={filteredRows}
+          columns={columns}
           getRowId={(row) => row.name}
           disableRowSelectionOnClick
           rowHeight={64}
@@ -495,6 +552,78 @@ const Schedules: React.FC = () => {
           {snackbarMsg}
         </Alert>
       </Snackbar>
+
+      <Drawer
+        anchor="right"
+        open={inspectDrawerOpen}
+        onClose={() => setInspectDrawerOpen(false)}
+        PaperProps={{
+          sx: { width: { xs: '100%', sm: 550 }, bgcolor: tokens.background.paper, backgroundImage: 'none' }
+        }}
+      >
+        {selectedTask && (
+          <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: tokens.text.primary, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <InfoIcon sx={{ color: tokens.primary.main }} /> Worker Details
+              </Typography>
+              <IconButton onClick={() => setInspectDrawerOpen(false)} sx={{ color: tokens.text.secondary }}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
+            
+            <Divider sx={{ borderColor: tokens.border.main, mb: 3 }} />
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 4 }}>
+              <Box>
+                <Typography sx={{ fontSize: '0.7rem', color: tokens.text.secondary, textTransform: 'uppercase', fontWeight: 700 }}>Worker Name</Typography>
+                <Typography sx={{ fontSize: '0.9rem', color: tokens.text.primary, fontWeight: 600 }}>{selectedTask.name}</Typography>
+              </Box>
+            </Box>
+
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: tokens.text.primary, textTransform: 'uppercase', mb: 2 }}>
+              Execution History
+            </Typography>
+
+            {historyLoading ? (
+               <Box display="flex" justifyContent="center" p={4}><CircularProgress size={24} sx={{color: tokens.primary.main}} /></Box>
+            ) : (
+              <Box sx={{ border: `1px solid ${tokens.border.main}`, borderRadius: 1, overflowY: 'auto', flexGrow: 1, minHeight: 0 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead sx={{ bgcolor: tokens.background.card }}>
+                    <TableRow>
+                      <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700, color: tokens.text.secondary, borderBottom: `1px solid ${tokens.border.main}` }}>TIME (IST)</TableCell>
+                      <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700, color: tokens.text.secondary, borderBottom: `1px solid ${tokens.border.main}` }}>STATUS</TableCell>
+                      <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700, color: tokens.text.secondary, borderBottom: `1px solid ${tokens.border.main}` }}>DURATION</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {historyData?.workerExecutionHistory?.length ? historyData.workerExecutionHistory.map((h: any) => (
+                      <TableRow key={h.id}>
+                        <TableCell sx={{ fontSize: '0.75rem', color: tokens.text.primary, borderBottom: `1px solid ${tokens.border.light}` }}>
+                          {h.startedAt ? (new Date(h.startedAt + "Z")).toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'}
+                        </TableCell>
+                        <TableCell sx={{ borderBottom: `1px solid ${tokens.border.light}` }}>
+                          <StatusBadge status={h.status} size="small" />
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem', color: tokens.text.secondary, borderBottom: `1px solid ${tokens.border.light}` }}>
+                          {h.durationMs ? `${h.durationMs.toFixed(1)}s` : '-'}
+                        </TableCell>
+                      </TableRow>
+                    )) : (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center" sx={{ fontSize: '0.75rem', color: tokens.text.disabled, py: 3, border: 0 }}>
+                          No execution history
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </Box>
+            )}
+          </Box>
+        )}
+      </Drawer>
     </Box>
   );
 };

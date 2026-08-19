@@ -18,6 +18,8 @@ class Company(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     ticker = Column(String, unique=True, index=True, nullable=False)
+    bse_scrip_code = Column(String, index=True, nullable=True)
+    isin = Column(String, index=True, nullable=True)
     name = Column(String, nullable=False)
     sector = Column(String)
     purpose = Column(String, nullable=True)
@@ -411,3 +413,71 @@ class FundamentalSnapshot(Base):
     revenue = Column(Float, nullable=True)
     net_income = Column(Float, nullable=True)
     captured_at = Column(DateTime, default=datetime.utcnow)
+
+class CatalystEvent(Base):
+    __tablename__ = "catalyst_events"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ticker = Column(String, index=True, nullable=False)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=True)
+    event_title = Column(String, nullable=False)
+    event_type = Column(String, index=True, nullable=False)
+    category = Column(String, index=True, nullable=False)
+    impact_score = Column(Float, nullable=True)
+    early_score = Column(Float, nullable=True)
+    confidence = Column(String, nullable=False, default="MEDIUM") # HIGH, MEDIUM, LOW
+    status = Column(String, index=True, nullable=False, default="EARLY") # EARLY, DEVELOPING, EXTENDED, LATE, INFORMATIONAL
+    tier = Column(String, index=True, nullable=False, default="C-TIER") # S-TIER, A-TIER, B-TIER, C-TIER, NOISE
+    match_status = Column(String, nullable=False, default="MATCHED") # MATCHED, AMBIGUOUS, UNMATCHED
+    why_it_matters = Column(Text, nullable=True)
+    reaction_pct = Column(Float, nullable=True)
+    relative_volume = Column(Float, nullable=True)
+    # Multi-horizon reaction metrics (P1.5)
+    gap_reaction_pct = Column(Float, nullable=True)       # (Open on catalyst day - Prev Close) / Prev Close
+    session_reaction_pct = Column(Float, nullable=True)    # (Close on catalyst day - Prev Close) / Prev Close
+    reaction_1d = Column(Float, nullable=True)
+    reaction_3d = Column(Float, nullable=True)
+    reaction_5d = Column(Float, nullable=True)
+    pre_event_price = Column(Float, nullable=True)         # Close price strictly before publication
+    market_cap_at_event = Column(Float, nullable=True)     # Company market cap at time of catalyst
+    sector_at_event = Column(String, nullable=True)        # Sector at time of catalyst
+    published_at = Column(DateTime, nullable=True)
+    detected_at = Column(DateTime, nullable=True)
+    verified_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    company = relationship("Company")
+    sources = relationship("CatalystSource", back_populates="event", cascade="all, delete-orphan")
+
+class CatalystSource(Base):
+    __tablename__ = "catalyst_sources"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_id = Column(UUID(as_uuid=True), ForeignKey("catalyst_events.id", ondelete="CASCADE"), nullable=False)
+    source_name = Column(String, nullable=False)
+    url = Column(String, nullable=True)
+    is_primary = Column(Boolean, default=False)
+    published_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    event = relationship("CatalystEvent", back_populates="sources")
+
+
+class CatalystPipelineRun(Base):
+    """Pipeline observability: tracks every scan execution for health monitoring."""
+    __tablename__ = "catalyst_pipeline_runs"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_at = Column(DateTime, default=datetime.utcnow, index=True)
+    source_name = Column(String, nullable=False, default="NSE")            # NSE, BSE, BULK_BLOCK
+    source_status = Column(String, nullable=False, default="UNKNOWN")      # SUCCESS, API_ERROR, TIMEOUT, RATE_LIMITED, EMPTY
+    http_status_code = Column(Integer, nullable=True)
+    raw_fetched = Column(Integer, default=0)
+    keyword_filtered = Column(Integer, default=0)
+    symbol_unresolved = Column(Integer, default=0)
+    auto_created_companies = Column(Integer, default=0)
+    ai_classified = Column(Integer, default=0)
+    ai_rejected = Column(Integer, default=0)
+    duplicates = Column(Integer, default=0)
+    noise_filtered = Column(Integer, default=0)
+    saved = Column(Integer, default=0)
+    execution_time_ms = Column(Integer, nullable=True)
+    error_message = Column(Text, nullable=True)

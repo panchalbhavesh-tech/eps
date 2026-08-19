@@ -12,6 +12,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import BiotechIcon from '@mui/icons-material/Biotech';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import HistoryIcon from '@mui/icons-material/History';
+import RadarIcon from '@mui/icons-material/Radar';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { useThemeMode } from '../theme/ThemeContext';
@@ -35,70 +36,77 @@ const Layout: React.FC = () => {
   };
 
   const menuItems = [
-    { 
-      text: 'Events', 
-      icon: <DashboardIcon sx={{ fontSize: 20 }} />, 
+    {
+      text: 'Events',
+      icon: <DashboardIcon sx={{ fontSize: 20 }} />,
       path: '/',
       breadcrumb: 'Events / NSE Incoming Earnings Fixtures & Comprehensive Health Grades',
-      description: 'NSE Incoming Earnings Fixtures & Comprehensive Health Grades' 
+      description: 'NSE Incoming Earnings Fixtures & Comprehensive Health Grades'
     },
-    { 
-      text: 'Momentum & Attention', 
-      icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, 
+    {
+      text: 'Momentum & Attention',
+      icon: <TrendingUpIcon sx={{ fontSize: 20 }} />,
       path: '/momentum',
       breadcrumb: 'Momentum & Attention / Real-Time Cross-Sectional Scanner',
-      description: 'Real-time cross-sectional percentile rankings and anomaly attention tracker' 
+      description: 'Real-time cross-sectional percentile rankings and anomaly attention tracker'
     },
-    { 
-      text: 'Hypothesis Lab (QHLM)', 
-      icon: <BiotechIcon sx={{ fontSize: 20 }} />, 
+    {
+      text: 'Hypothesis Lab (QHLM)',
+      icon: <BiotechIcon sx={{ fontSize: 20 }} />,
       path: '/research',
       breadcrumb: 'Hypothesis Lab / Deflated Sharpe & Autonomous AI Factor Discovery',
-      description: 'Quantitative Hypothesis Lifecycle Management & Bailey-Lopez de Prado statistical audit' 
+      description: 'Quantitative Hypothesis Lifecycle Management & Bailey-Lopez de Prado statistical audit'
     },
-    { 
-      text: 'Processes & Tasks', 
-      icon: <ManageHistoryIcon sx={{ fontSize: 20 }} />, 
+    {
+      text: 'History',
+      icon: <ManageHistoryIcon sx={{ fontSize: 20 }} />,
       path: '/tasks',
-      breadcrumb: 'Processes & Tasks / Background Celery Workers',
-      description: 'Background Celery Workers & Automated AI Analysis Queue' 
+      breadcrumb: 'History / Ran Cron Workers',
+      description: 'History of executed Celery cron workers'
     },
-    { 
-      text: 'Celery Schedules', 
-      icon: <ScheduleIcon sx={{ fontSize: 20 }} />, 
+    {
+      text: 'Celery Schedules',
+      icon: <ScheduleIcon sx={{ fontSize: 20 }} />,
       path: '/schedules',
       breadcrumb: 'Celery Schedules / Beat Timers & Automated Research Workflows',
-      description: 'Inspect all scheduled Celery Beat tasks, intervals, and automated execution loops' 
+      description: 'Inspect all scheduled Celery Beat tasks, intervals, and automated execution loops'
     },
-    { 
-      text: 'Admin Logs', 
-      icon: <HistoryIcon sx={{ fontSize: 20 }} />, 
+    {
+      text: 'Admin Logs',
+      icon: <HistoryIcon sx={{ fontSize: 20 }} />,
       path: '/admin-logs',
       breadcrumb: 'Admin Logs / System Activity & Execution History',
-      description: 'Centralized Admin Logs / Activity Logs page where you can see important system actions' 
+      description: 'Centralized Admin Logs / Activity Logs page where you can see important system actions'
+    },
+    {
+      text: 'Catalyst Radar',
+      icon: <RadarIcon sx={{ fontSize: 20 }} />,
+      path: '/catalyst',
+      breadcrumb: 'Catalyst Radar / Early-Detection Catalyst Engine',
+      description: 'Advanced early-catalyst detection and market-repricing intelligence'
     },
   ];
 
   const currentItem = menuItems.find(m => m.path === location.pathname) || {
-    text: 'QEPS Enterprise Quant Lab',
-    breadcrumb: 'QEPS / Advanced Quant Analytics',
+    text: 'VD Enterprise Quant Lab',
+    breadcrumb: 'VD / Advanced Quant Analytics',
     description: 'Advanced Institutional Equity Analytics & Machine Learning Platform'
   };
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'transparent' }}>
       {/* Top Fixed Header Bar - exactly 56px height, 12px 24px padding */}
-      <AppBar 
-        position="fixed" 
-        sx={{ 
-          width: `calc(100% - ${drawerWidth}px)`, 
-          ml: `${drawerWidth}px`, 
-          bgcolor: tokens.background.default, 
-          backgroundImage: 'none', 
+      <AppBar
+        position="fixed"
+        sx={{
+          width: `calc(100% - ${drawerWidth}px)`,
+          ml: `${drawerWidth}px`,
+          bgcolor: tokens.background.default,
+          backgroundImage: 'none',
           borderBottom: `1px solid ${tokens.border.main}`,
           boxShadow: 'none',
-          transition: 'width 0.15s ease-in-out, margin-left 0.15s ease-in-out', 
-          zIndex: 1100 
+          transition: 'width 0.15s ease-in-out, margin-left 0.15s ease-in-out',
+          zIndex: 1100
         }}
       >
         <Toolbar sx={{ minHeight: '56px !important', height: 56, px: '24px !important', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -126,7 +134,7 @@ const Layout: React.FC = () => {
           {/* Right: System Live + Theme Toggle + User Chip */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
             <LiveClock />
-            
+
             <Tooltip title="Real-time data feeds active">
               <Box
                 onClick={() => window.location.reload()}
@@ -256,22 +264,22 @@ const Layout: React.FC = () => {
                   <ShowChartIcon sx={{ color: isDark ? '#0A0A0C' : '#FFFFFF', fontSize: 16, fontWeight: 'bold' }} />
                 </Box>
                 <Typography sx={{ fontWeight: 700, fontSize: '15px', color: tokens.text.primary }}>
-                  QEPS
+                  VD EPS
                 </Typography>
               </Box>
             )}
             <Tooltip title={collapsed ? "Expand Menu" : "Condense Menu"} placement="right">
-              <IconButton 
+              <IconButton
                 size="small"
-                onClick={() => setCollapsed(!collapsed)} 
-                sx={{ 
-                  color: tokens.text.secondary, 
+                onClick={() => setCollapsed(!collapsed)}
+                sx={{
+                  color: tokens.text.secondary,
                   backgroundColor: 'transparent',
                   border: `1px solid ${tokens.border.main}`,
                   width: 28,
                   height: 28,
                   borderRadius: '8px',
-                  '&:hover': { color: tokens.text.primary, borderColor: tokens.border.light, backgroundColor: tokens.background.cardHover } 
+                  '&:hover': { color: tokens.text.primary, borderColor: tokens.border.light, backgroundColor: tokens.background.cardHover }
                 }}
               >
                 {collapsed ? <MenuIcon sx={{ fontSize: 16 }} /> : <MenuOpenIcon sx={{ fontSize: 16 }} />}
@@ -286,7 +294,7 @@ const Layout: React.FC = () => {
               return (
                 <ListItem key={item.text} disablePadding sx={{ mb: '4px' }}>
                   <Tooltip title={collapsed ? item.text : ''} placement="right">
-                    <ListItemButton 
+                    <ListItemButton
                       selected={selected}
                       onClick={() => navigate(item.path)}
                       sx={{
@@ -311,11 +319,11 @@ const Layout: React.FC = () => {
                         }
                       }}
                     >
-                      <ListItemIcon 
-                        sx={{ 
-                          minWidth: 0, 
-                          mr: collapsed ? 0 : 1.5, 
-                          justifyContent: 'center', 
+                      <ListItemIcon
+                        sx={{
+                          minWidth: 0,
+                          mr: collapsed ? 0 : 1.5,
+                          justifyContent: 'center',
                           color: selected ? tokens.accent.main : tokens.text.secondary,
                           transition: 'color 0.15s ease-in-out',
                         }}
@@ -323,9 +331,9 @@ const Layout: React.FC = () => {
                         {item.icon}
                       </ListItemIcon>
                       {!collapsed && (
-                        <ListItemText 
-                          primary={item.text} 
-                          primaryTypographyProps={{ fontSize: '12px', fontWeight: selected ? 600 : 400 }} 
+                        <ListItemText
+                          primary={item.text}
+                          primaryTypographyProps={{ fontSize: '12px', fontWeight: selected ? 600 : 400 }}
                         />
                       )}
                     </ListItemButton>
@@ -352,20 +360,20 @@ const Layout: React.FC = () => {
       </Drawer>
 
       {/* Main Viewport */}
-      <Box 
-        component="main" 
-        sx={{ 
-          flexGrow: 1, 
-          bgcolor: tokens.background.default, 
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          bgcolor: tokens.background.default,
           p: 0,
-          pt: '56px', 
-          transition: '0.15s ease-in-out', 
-          width: `calc(100% - ${drawerWidth}px)`, 
+          pt: '56px',
+          transition: '0.15s ease-in-out',
+          width: `calc(100% - ${drawerWidth}px)`,
           minHeight: '100vh',
-          overflowX: 'hidden' 
+          overflowX: 'hidden'
         }}
       >
-        <ErrorBoundary fallbackTitle="Page Rendering Error">
+        <ErrorBoundary key={location.pathname} fallbackTitle="Page Rendering Error">
           <Outlet />
         </ErrorBoundary>
       </Box>

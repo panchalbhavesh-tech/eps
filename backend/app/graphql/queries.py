@@ -1,7 +1,7 @@
 import strawberry
 from typing import List, Optional
 from strawberry.types import Info
-from app.graphql.types import CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType, HypothesisSignalType, AdminActivityLogType
+from app.graphql.types import BackgroundJobLiveStatusType, CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType, HypothesisSignalType, AdminActivityLogType, CatalystEventType, CatalystSourceType, CatalystPipelineRunType, EventAnalogStatsType, WorkerExecutionHistoryType
 from app.services.company_service import CompanyService
 from app.graphql.context import Context
 import uuid
@@ -347,9 +347,28 @@ class Query:
         )
 
     @strawberry.field
+    def background_job_live_status(self, info: Info[Context, None], celery_task_id: str) -> BackgroundJobLiveStatusType:
+        import os, redis
+        from app.graphql.types import BackgroundJobLiveStatusType
+        redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+        r = redis.from_url(redis_url)
+        
+        logs_bytes = r.lrange(f"worker_logs:{celery_task_id}", 0, -1)
+        logs = [x.decode("utf-8") for x in logs_bytes] if logs_bytes else []
+        
+        progress_bytes = r.get(f"worker_progress:{celery_task_id}")
+        progress = progress_bytes.decode("utf-8") if progress_bytes else None
+        
+        return BackgroundJobLiveStatusType(
+            celery_task_id=celery_task_id,
+            progress=progress,
+            logs=logs
+        )
+
+    @strawberry.field
     def background_jobs(self, info: Info[Context, None], limit: int = 100) -> List[BackgroundJobType]:
         from app.infrastructure.models import BackgroundJob
-        from app.graphql.types import BackgroundJobType
+        from app.graphql.types import BackgroundJobType, BackgroundJobLiveStatusType
         db = info.context.db
         jobs = db.query(BackgroundJob).order_by(BackgroundJob.queued_at.desc()).limit(limit).all()
         
@@ -547,36 +566,79 @@ class Query:
         
         schedule_metadata = {
             'sync-nse-daily': {
-                'category': 'Market Data Sync',
-                'description': 'Daily synchronization of NSE corporate events, earnings calendar, and market action fixtures.'
+                'cron_title': 'EVENT: Sync NSE Daily',
+                'category': 'EVENT',
+                'description': 'Pulls new NSE corporate announcements and updates the Events dataset.'
+            },
+            'sync-nse-universe-daily': {
+                'cron_title': 'MARKET DATA: Sync NSE Universe',
+                'category': 'MARKET DATA',
+                'description': 'Synchronizes and populates the NSE stock universe used by the Events system.'
+            },
+            'calculate-universe-health-daily': {
+                'cron_title': 'QUANT / HEALTH: Calculate Universe Health',
+                'category': 'QUANT / HEALTH',
+                'description': 'Calculates and updates the existing health metrics for the NSE universe.'
             },
             'sync-nse-market-data-daily': {
-                'category': 'Market Data Sync',
-                'description': 'Overnight ingestion of NSE Bhavcopy daily price volume snapshots and exchange surveillance indicators.'
+                'cron_title': 'MARKET DATA: Sync NSE Market Data',
+                'category': 'MARKET DATA',
+                'description': 'Ingests overnight NSE Bhavcopy daily price volume snapshots and exchange surveillance indicators.'
             },
             'scan-nse-momentum-daily': {
-                'category': 'Quant Analytics',
-                'description': 'Post-market daily execution of cross-sectional momentum anomaly scanner across NIFTY universe.'
+                'cron_title': 'MOMENTUM: Daily NSE Momentum Scan',
+                'category': 'MOMENTUM',
+                'description': 'Scans the NSE universe for cross-sectional momentum anomalies after market close.'
             },
             'resolve-realized-forward-returns-daily': {
-                'category': 'Quant Analytics',
-                'description': 'Daily backfill and attribution calculation of realized forward returns and rolling Information Coefficient (IC).'
+                'cron_title': 'QUANT: Resolve Forward Returns',
+                'category': 'QUANT',
+                'description': 'Calculates realized forward returns and rolling Information Coefficient for signals.'
             },
             'retrain-momentum-ml-model-weekly': {
-                'category': 'ML & AI Engine',
-                'description': 'Weekly walk-forward supervised retraining of machine learning momentum classification weights.'
+                'cron_title': 'ML: Retrain Momentum Model',
+                'category': 'ML',
+                'description': 'Performs weekly walk-forward supervised retraining of the momentum ML model.'
             },
             'audit-shadow-model-probation-weekly': {
-                'category': 'ML & AI Engine',
-                'description': 'Weekly automated review and evaluation of 14-day shadow probation performance for candidate models.'
+                'cron_title': 'ML: Audit Shadow Model',
+                'category': 'ML',
+                'description': 'Reviews 14-day shadow probation performance of candidate models to evaluate promotion.'
             },
             'sync-ohlcv-cache-daily': {
-                'category': 'Market Data Sync',
-                'description': 'Nightly high-performance incremental synchronization of historical OHLCV candlestick cache.'
+                'cron_title': 'MARKET DATA: Sync OHLCV Cache',
+                'category': 'MARKET DATA',
+                'description': 'Incrementally updates the historical OHLCV candlestick cache for fast access.'
             },
             'run-automated-hypothesis-research-daily': {
-                'category': 'AI Factor Discovery',
-                'description': 'Autonomous nightly QHLM FSM statistical evaluation, deflated Sharpe audit, and AI factor discovery loop.'
+                'cron_title': 'RESEARCH: Automated Hypothesis Research',
+                'category': 'RESEARCH',
+                'description': 'Executes the nightly AI factor discovery loop and evaluates strategies via deflated Sharpe.'
+            },
+            'cleanup-old-activity-logs-daily': {
+                'cron_title': 'SYSTEM: Cleanup Activity Logs',
+                'category': 'SYSTEM',
+                'description': 'Removes old admin activity logs to keep the database size manageable.'
+            },
+            'scan-nse-catalysts-live': {
+                'cron_title': 'CATALYST: Scan NSE Catalysts',
+                'category': 'CATALYST',
+                'description': 'Detects potentially market-moving NSE announcements and generates trading catalysts.'
+            },
+            'update-catalyst-outcomes-daily': {
+                'cron_title': 'CATALYST: Update Catalyst Outcomes',
+                'category': 'CATALYST',
+                'description': 'Tracks and updates the historical post-event outcomes of generated catalysts.'
+            },
+            'scan-pre-catalyst-anomalies-daily': {
+                'cron_title': 'CATALYST: Scan Pre-Catalyst Anomalies',
+                'category': 'CATALYST',
+                'description': 'Identifies unusual volume or price action preceding a potential catalyst event.'
+            },
+            'scan-insider-trades-daily': {
+                'cron_title': 'CATALYST: Scan Insider Trades',
+                'category': 'CATALYST',
+                'description': 'Monitors the NSE for major promoter buying and insider transactions.'
             },
         }
         
@@ -588,49 +650,150 @@ class Query:
             if j.task_name and j.task_name not in job_map:
                 job_map[j.task_name] = j
 
+        from celery.schedules import crontab
+        import pytz
+        from datetime import datetime, timedelta
+        try:
+            from croniter import croniter
+        except ImportError:
+            croniter = None
+
         result = []
         for sched_name, config in beat_schedule.items():
             task_name = config.get("task", "")
-            interval = float(config.get("schedule", 0.0))
-            
-            if interval == 86400.0:
-                human_interval = "Daily (24 hours)"
-            elif interval == 604800.0:
-                human_interval = "Weekly (7 days)"
-            elif interval > 3600.0:
-                human_interval = f"Every {round(interval / 3600.0, 1)} hours"
-            elif interval >= 60.0:
-                human_interval = f"Every {round(interval / 60.0, 1)} minutes"
+            sched_obj = config.get("schedule", 0.0)
+
+            if isinstance(sched_obj, crontab):
+                interval = 0.0
+                
+                try:
+                    minutes = sorted(list(sched_obj.minute))
+                    hours = sorted(list(sched_obj.hour))
+                    is_every_minute = len(minutes) == 60
+                    
+                    if len(minutes) == 1 and len(hours) == 1:
+                        human_interval = f"Daily at {hours[0]:02d}:{minutes[0]:02d}"
+                    elif len(hours) < 24 and not is_every_minute and len(minutes) > 1:
+                        diffs = set(minutes[i] - minutes[i-1] for i in range(1, len(minutes)))
+                        if len(diffs) == 1:
+                            human_interval = f"Every {diffs.pop()} minutes"
+                        else:
+                            human_interval = f"Custom Cron"
+                    else:
+                        human_interval = f"Custom Cron"
+                except Exception:
+                    human_interval = f"Cron Schedule"
             else:
-                human_interval = f"Every {int(interval)} seconds"
+                interval = float(sched_obj)
+                if interval == 86400.0:
+                    human_interval = "Daily (24 hours)"
+                elif interval == 604800.0:
+                    human_interval = "Weekly (7 days)"
+                elif interval > 3600.0:
+                    human_interval = f"Every {round(interval / 3600.0, 1)} hours"
+                elif interval >= 60.0:
+                    human_interval = f"Every {round(interval / 60.0, 1)} minutes"
+                else:
+                    human_interval = f"Every {int(interval)} seconds"
 
             meta = schedule_metadata.get(sched_name, {
-                "category": "Scheduled Worker",
+                "cron_title": f"SYSTEM: {task_name}",
+                "category": "SYSTEM",
                 "description": f"Automated recurring execution of {task_name}."
             })
 
             last_run_at = None
             last_run_status = "NEVER_RUN"
             last_run_duration = None
-            
+            last_run_result = None
+            last_run_error = None
+
             if task_name in job_map:
                 latest_job = job_map[task_name]
                 last_run_at = str(latest_job.started_at or latest_job.queued_at or "")
-                last_run_status = str(latest_job.status or "QUEUED")
+                last_run_status = str(latest_job.status or "QUEUED").upper()
+                last_run_result = latest_job.result
+                last_run_error = latest_job.error_message
                 if latest_job.started_at and latest_job.finished_at:
                     last_run_duration = (latest_job.finished_at - latest_job.started_at).total_seconds()
+
+            # Calculate next_run_at
+            next_run_at = None
+            ist_tz = pytz.timezone("Asia/Kolkata")
+            ist_now = datetime.now(ist_tz)
+            
+            reference_time = ist_now
+            if last_run_at and last_run_status != "NEVER_RUN":
+                try:
+                    parsed_last_run = datetime.fromisoformat(last_run_at)
+                    if parsed_last_run.tzinfo is None:
+                        parsed_last_run = pytz.utc.localize(parsed_last_run)
+                    reference_time = parsed_last_run.astimezone(ist_tz)
+                except Exception:
+                    reference_time = ist_now
+
+            if isinstance(sched_obj, crontab):
+                # croniter needs a standard cron string: min hr dom mon dow
+                if croniter:
+                    try:
+                        cron_expr = f"{getattr(sched_obj, '_orig_minute', '*')} {getattr(sched_obj, '_orig_hour', '*')} {getattr(sched_obj, '_orig_day_of_month', '*')} {getattr(sched_obj, '_orig_month_of_year', '*')} {getattr(sched_obj, '_orig_day_of_week', '*')}"
+                        cron = croniter(cron_expr, reference_time)
+                        next_dt = cron.get_next(datetime)
+                        if next_dt < ist_now:
+                            cron = croniter(cron_expr, ist_now)
+                            next_dt = cron.get_next(datetime)
+                        next_run_at = str(next_dt)
+                    except Exception:
+                        pass
+            else:
+                if interval > 0:
+                    next_dt = reference_time + timedelta(seconds=interval)
+                    while next_dt < ist_now:
+                        next_dt += timedelta(seconds=interval)
+                    next_run_at = str(next_dt)
 
             result.append(
                 CeleryScheduleType(
                     name=sched_name,
                     task_name=task_name,
+                    cron_title=meta.get("cron_title", f"SYSTEM: {task_name}"),
                     interval_seconds=interval,
                     human_readable_interval=human_interval,
-                    category=meta.get("category", "Scheduled Worker"),
+                    category=meta.get("category", "SYSTEM"),
                     description=meta.get("description", ""),
                     last_run_at=last_run_at,
                     last_run_status=last_run_status,
-                    last_run_duration=last_run_duration
+                    last_run_duration=last_run_duration,
+                    next_run_at=next_run_at,
+                    last_run_result=last_run_result,
+                    last_run_error=last_run_error
+                )
+            )
+        return result
+
+
+    @strawberry.field
+    def worker_execution_history(self, info: Info[Context, None], task_name: str, limit: int = 20) -> List[WorkerExecutionHistoryType]:
+        from app.infrastructure.models import BackgroundJob
+        db = info.context.db
+        jobs = db.query(BackgroundJob).filter(BackgroundJob.task_name == task_name).order_by(BackgroundJob.queued_at.desc()).limit(limit).all()
+        
+        result = []
+        for j in jobs:
+            dur = None
+            if j.started_at and j.finished_at:
+                dur = (j.finished_at - j.started_at).total_seconds()
+            result.append(
+                WorkerExecutionHistoryType(
+                    id=str(j.id),
+                    task_name=j.task_name,
+                    status=str(j.status or "QUEUED").upper(),
+                    queued_at=str(j.queued_at) if j.queued_at else None,
+                    started_at=str(j.started_at) if j.started_at else None,
+                    finished_at=str(j.finished_at) if j.finished_at else None,
+                    duration_ms=dur,
+                    result=j.result,
+                    error_message=j.error_message
                 )
             )
         return result
@@ -697,4 +860,214 @@ class Query:
             created_at=str(log.created_at),
             metadata_json=log.metadata_json,
             celery_task_id=log.celery_task_id
+        )
+
+    @strawberry.field
+    def catalyst_events(
+        self, 
+        info: Info[Context, None], 
+        limit: int = 100, 
+        offset: int = 0,
+        tier: Optional[str] = None,
+        status: Optional[str] = None,
+        category: Optional[str] = None,
+        search_query: Optional[str] = None
+    ) -> List[CatalystEventType]:
+        from app.infrastructure.models import CatalystEvent
+        db = info.context.db
+        query = db.query(CatalystEvent)
+        
+        if tier and tier != "ALL":
+            query = query.filter(CatalystEvent.tier == tier)
+        if status and status != "ALL":
+            query = query.filter(CatalystEvent.status == status)
+        if category and category != "ALL":
+            query = query.filter(CatalystEvent.category == category)
+        if search_query:
+            search = f"%{search_query}%"
+            query = query.filter(
+                (CatalystEvent.ticker.ilike(search)) |
+                (CatalystEvent.event_title.ilike(search))
+            )
+            
+        events = query.order_by(CatalystEvent.detected_at.desc()).offset(offset).limit(limit).all()
+        
+        result = []
+        for e in events:
+            sources = []
+            if getattr(e, "sources", None):
+                for s in e.sources:
+                    sources.append(CatalystSourceType(
+                        id=str(s.id),
+                        event_id=str(s.event_id),
+                        source_name=s.source_name,
+                        url=s.url,
+                        is_primary=bool(s.is_primary),
+                        published_at=str(s.published_at) if s.published_at else None,
+                        created_at=str(s.created_at) if s.created_at else ""
+                    ))
+                    
+            result.append(CatalystEventType(
+                id=str(e.id),
+                ticker=e.ticker,
+                company_id=str(e.company_id) if e.company_id else None,
+                company_name=e.company.name if e.company else None,
+                event_title=e.event_title,
+                event_type=e.event_type,
+                category=e.category,
+                impact_score=e.impact_score,
+                early_score=e.early_score,
+                confidence=e.confidence,
+                status=e.status,
+                tier=e.tier,
+                match_status=e.match_status,
+                why_it_matters=e.why_it_matters,
+                reaction_pct=e.reaction_pct,
+                relative_volume=e.relative_volume,
+                gap_reaction_pct=getattr(e, 'gap_reaction_pct', None),
+                session_reaction_pct=getattr(e, 'session_reaction_pct', None),
+                reaction_1d=getattr(e, 'reaction_1d', None),
+                reaction_3d=getattr(e, 'reaction_3d', None),
+                reaction_5d=getattr(e, 'reaction_5d', None),
+                pre_event_price=getattr(e, 'pre_event_price', None),
+                market_cap_at_event=getattr(e, 'market_cap_at_event', None),
+                sector_at_event=getattr(e, 'sector_at_event', None),
+                published_at=str(e.published_at) if e.published_at else None,
+                detected_at=str(e.detected_at) if e.detected_at else None,
+                verified_at=str(e.verified_at) if e.verified_at else None,
+                created_at=str(e.created_at) if e.created_at else "",
+                updated_at=str(e.updated_at) if e.updated_at else "",
+                sources=sources
+            ))
+            
+        return result
+
+    @strawberry.field
+    def catalyst_pipeline_health_logs(self, info: Info[Context, None], limit: int = 50) -> List[CatalystPipelineRunType]:
+        from app.infrastructure.models import CatalystPipelineRun
+        db = info.context.db
+        runs = db.query(CatalystPipelineRun).order_by(CatalystPipelineRun.run_at.desc()).limit(limit).all()
+        
+        return [
+            CatalystPipelineRunType(
+                id=str(r.id),
+                source_name=r.source_name,
+                source_status=r.source_status,
+                http_status_code=r.http_status_code,
+                raw_fetched=r.raw_fetched,
+                keyword_filtered=r.keyword_filtered,
+                symbol_unresolved=r.symbol_unresolved,
+                auto_created_companies=r.auto_created_companies,
+                ai_classified=r.ai_classified,
+                ai_rejected=r.ai_rejected,
+                duplicates=r.duplicates,
+                noise_filtered=r.noise_filtered,
+                saved=r.saved,
+                execution_time_ms=r.execution_time_ms,
+                error_message=r.error_message,
+                run_at=str(r.run_at)
+            ) for r in runs
+        ]
+
+    @strawberry.field
+    def pre_market_catalysts(self, info: Info[Context, None], limit: int = 10) -> List[CatalystEventType]:
+        """
+        P2.3: Pre-Market Briefing. Returns overnight catalysts ranked by priority.
+        Gets catalysts from the last 18 hours (e.g. yesterday post-market + this morning).
+        """
+        from app.infrastructure.models import CatalystEvent, CatalystSource
+        from datetime import datetime, timedelta
+        
+        db = info.context.db
+        lookback_time = datetime.utcnow() - timedelta(hours=18)
+        
+        # We need to compute the rank in python since early_score and impact_score are columns
+        # but weighting is a business rule. We will fetch recent ones and sort.
+        events = db.query(CatalystEvent).filter(
+            CatalystEvent.published_at >= lookback_time,
+            CatalystEvent.tier.in_(["S-TIER", "A-TIER", "B-TIER"])
+        ).all()
+        
+        # Sort manually by priority: (Impact * 0.6) + (Early * 0.4)
+        def get_priority(e):
+            impact = e.impact_score or 0
+            early = e.early_score or 0
+            return (impact * 0.6) + (early * 0.4)
+            
+        events.sort(key=get_priority, reverse=True)
+        events = events[:limit]
+        
+        result = []
+        for e in events:
+            # Reconstruct sources
+            db_sources = db.query(CatalystSource).filter(CatalystSource.event_id == e.id).all()
+            sources = [
+                CatalystSourceType(
+                    id=str(s.id),
+                    event_id=str(s.event_id),
+                    source_name=s.source_name,
+                    url=s.url,
+                    is_primary=s.is_primary,
+                    published_at=str(s.published_at) if s.published_at else "",
+                    created_at=str(s.created_at) if getattr(s, 'created_at', None) else ""
+                ) for s in db_sources
+            ]
+            
+            result.append(CatalystEventType(
+                id=str(e.id),
+                ticker=e.ticker,
+                company_id=str(e.company_id),
+                event_title=e.event_title,
+                event_type=e.event_type,
+                category=e.category,
+                impact_score=e.impact_score,
+                early_score=e.early_score,
+                confidence=e.confidence,
+                status=e.status,
+                tier=e.tier,
+                match_status=e.match_status,
+                why_it_matters=e.why_it_matters,
+                reaction_pct=e.reaction_pct,
+                relative_volume=e.relative_volume,
+                gap_reaction_pct=getattr(e, 'gap_reaction_pct', None),
+                session_reaction_pct=getattr(e, 'session_reaction_pct', None),
+                reaction_1d=getattr(e, 'reaction_1d', None),
+                reaction_3d=getattr(e, 'reaction_3d', None),
+                reaction_5d=getattr(e, 'reaction_5d', None),
+                pre_event_price=getattr(e, 'pre_event_price', None),
+                market_cap_at_event=getattr(e, 'market_cap_at_event', None),
+                sector_at_event=getattr(e, 'sector_at_event', None),
+                published_at=str(e.published_at) if e.published_at else None,
+                detected_at=str(e.detected_at) if e.detected_at else None,
+                verified_at=str(e.verified_at) if e.verified_at else None,
+                created_at=str(e.created_at) if e.created_at else "",
+                updated_at=str(e.updated_at) if e.updated_at else "",
+                sources=sources
+            ))
+            
+        return result
+
+    @strawberry.field
+    def historical_event_analog(self, info: Info[Context, None], category: str, event_type: Optional[str] = None) -> Optional[EventAnalogStatsType]:
+        """
+        P3.1: Historical Analog Engine.
+        Returns the expected value (EV) and historical stats for a given catalyst category/type.
+        """
+        from app.services.quant_service import QuantService
+        
+        db = info.context.db
+        quant = QuantService()
+        stats = quant.calculate_event_analog_stats(db, category, event_type)
+        
+        if not stats:
+            return None
+            
+        return EventAnalogStatsType(
+            total_events_analyzed=stats["total_events_analyzed"],
+            avg_gap_reaction=stats["avg_gap_reaction"],
+            avg_session_reaction=stats["avg_session_reaction"],
+            avg_1d_return=stats["avg_1d_return"],
+            avg_3d_return=stats["avg_3d_return"],
+            avg_5d_return=stats["avg_5d_return"],
+            win_rate_5d=stats["win_rate_5d"]
         )

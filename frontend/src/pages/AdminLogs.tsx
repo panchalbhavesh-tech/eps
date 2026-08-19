@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, gql } from '@apollo/client';
-import { Box, Typography, Paper, IconButton, Tooltip } from '@mui/material';
+import { Box, Typography, IconButton, Tooltip } from '@mui/material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
@@ -147,17 +147,12 @@ const AdminLogs: React.FC = () => {
   ];
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1600, margin: '0 auto' }}>
+    <Box sx={{ minHeight: '100vh', width: '100%', bgcolor: tokens.background.default, overflowX: 'hidden' }}>
       
 
 
       {/* Filters & Grid */}
-      <Paper sx={{ 
-        bgcolor: tokens.background.paper, 
-        borderRadius: 2,
-        border: `1px solid ${tokens.border.main}`,
-        overflow: 'hidden'
-      }}>
+      <Box sx={{ bgcolor: tokens.background.paper, overflow: 'hidden', width: '100%', borderBottom: `1px solid ${tokens.border.main}` }}>
         <Box sx={{ p: 2, borderBottom: `1px solid ${tokens.border.light}`, display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
           <SearchInput 
             placeholder="Search activity..." 
@@ -172,7 +167,7 @@ const AdminLogs: React.FC = () => {
           />
         </Box>
 
-        <Box sx={{ height: 600, width: '100%' }}>
+        <Box sx={{ height: 'calc(100vh - 130px)', width: '100%' }}>
           <DataGrid
             rows={filteredRows}
             columns={columns}
@@ -203,7 +198,7 @@ const AdminLogs: React.FC = () => {
             }}
           />
         </Box>
-      </Paper>
+      </Box>
 
       {selectedLog && (
         <AdminLogDetailDrawer 

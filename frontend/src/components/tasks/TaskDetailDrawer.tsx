@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useQuery, gql } from '@apollo/client';
 import { Box, Drawer, Typography, IconButton, Button, Tooltip, Paper, Chip, Tab, Tabs } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -9,6 +10,17 @@ import TerminalIcon from '@mui/icons-material/Terminal';
 import CheckIcon from '@mui/icons-material/Check';
 import { StatusBadge } from '../common/StatusBadge';
 import { saasTokens } from '../../theme/theme';
+
+
+const GET_BACKGROUND_JOB_LIVE_STATUS = gql`
+  query GetBackgroundJobLiveStatus($celeryTaskId: String!) {
+    backgroundJobLiveStatus(celeryTaskId: $celeryTaskId) {
+      celeryTaskId
+      progress
+      logs
+    }
+  }
+`;
 
 export interface BackgroundJob {
   id: string;
@@ -38,6 +50,43 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
   const [copiedId, setCopiedId] = useState(false);
   const [copiedLogs, setCopiedLogs] = useState(false);
 
+  const isActive = task?.status === 'QUEUED' || task?.status === 'RUNNING';
+
+  const { data: liveData } = useQuery(GET_BACKGROUND_JOB_LIVE_STATUS, {
+    variables: { celeryTaskId: task?.celeryTaskId || '' },
+    skip: !task?.celeryTaskId || !open,
+    pollInterval: isActive ? 2000 : 0,
+    fetchPolicy: 'network-only'
+  });
+
+  const liveStatus = liveData?.backgroundJobLiveStatus;
+
+  let progressObj: any = null;
+  if (liveStatus?.progress) {
+    try { progressObj = JSON.parse(liveStatus.progress); } catch (e) { }
+  }
+
+  const liveLogs = liveStatus?.logs || [];
+
+  const logsEndRef = useRef<HTMLDivElement>(null);
+  const logsContainerRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+
+  const handleScroll = () => {
+    if (logsContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = logsContainerRef.current;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+      setAutoScroll(isAtBottom);
+    }
+  };
+
+  useEffect(() => {
+    if (autoScroll && logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [liveLogs, autoScroll, activeTab]);
+
+
   if (!task) return null;
 
   const isFailure = task.status === 'FAILURE';
@@ -55,7 +104,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
     const file = new Blob(
       [
         `================================================================================\n` +
-        `QEPS QUANTITATIVE EARNINGS PREDICTION SYSTEM - WORKER DIAGNOSTIC LOG\n` +
+        `VD EPS QUANTITATIVE EARNINGS PREDICTION SYSTEM - WORKER DIAGNOSTIC LOG\n` +
         `================================================================================\n` +
         `TASK MODULE:    ${task.taskName}\n` +
         `CELERY UUID:    ${task.celeryTaskId}\n` +
@@ -120,21 +169,21 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
           </Typography>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.2 }}>
-            <Chip 
-              label={`UUID: ${task.celeryTaskId || task.id}`} 
-              size="small" 
-              sx={{ 
-                bgcolor: '#f1f5f9', 
-                color: saasTokens.text.secondary, 
+            <Chip
+              label={`UUID: ${task.celeryTaskId || task.id}`}
+              size="small"
+              sx={{
+                bgcolor: '#f1f5f9',
+                color: saasTokens.text.secondary,
                 border: `1px solid ${saasTokens.border.main}`,
                 fontSize: '0.7rem',
                 fontFamily: 'monospace',
                 maxWidth: '320px',
-              }} 
+              }}
             />
             <Tooltip title={copiedId ? "UUID Copied!" : "Copy Task UUID"}>
-              <IconButton 
-                size="small" 
+              <IconButton
+                size="small"
                 onClick={() => handleCopy(task.celeryTaskId || task.id, setCopiedId)}
                 sx={{ color: copiedId ? '#10b981' : saasTokens.text.secondary, '&:hover': { color: saasTokens.text.primary } }}
               >
@@ -144,8 +193,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
           </Box>
         </Box>
 
-        <IconButton 
-          onClick={onClose} 
+        <IconButton
+          onClick={onClose}
           sx={{ color: saasTokens.text.secondary, border: `1px solid ${saasTokens.border.main}`, bgcolor: '#ffffff', '&:hover': { color: saasTokens.text.primary, bgcolor: saasTokens.background.cardHover } }}
         >
           <CloseIcon />
@@ -154,8 +203,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
       {/* Section Navigation Tabs */}
       <Box sx={{ px: 3, borderBottom: `1px solid ${saasTokens.border.main}`, bgcolor: '#f8fafc' }}>
-        <Tabs 
-          value={activeTab} 
+        <Tabs
+          value={activeTab}
           onChange={(_, val) => setActiveTab(val)}
           sx={{
             minHeight: 46,
@@ -182,23 +231,68 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
         {/* TAB 0: LOGS & DIAGNOSTICS */}
         {activeTab === 0 && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%' }}>
+
+            {progressObj && (
+              <Box sx={{ mb: 2, p: 2, bgcolor: saasTokens.background.paper, border: `1px solid ${saasTokens.border.main}`, borderRadius: 2 }}>
+                <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: saasTokens.text.secondary, mb: 1.5, letterSpacing: '0.05em' }}>
+                  WORKER PROGRESS
+                </Typography>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: saasTokens.text.primary }}>
+                    {progressObj.percentage !== undefined ? `${progressObj.percentage}%` : 'Working...'}
+                  </Typography>
+                  <Typography sx={{ fontSize: '0.8rem', color: saasTokens.text.secondary }}>
+                    {progressObj.current_step || 'Processing'}
+                  </Typography>
+                </Box>
+
+                {progressObj.percentage !== undefined && (
+                  <Box sx={{ width: '100%', height: 6, bgcolor: saasTokens.border.light, borderRadius: 3, mb: 2, overflow: 'hidden' }}>
+                    <Box sx={{ width: `${progressObj.percentage}%`, height: '100%', bgcolor: saasTokens.primary.main, transition: 'width 0.3s ease' }} />
+                  </Box>
+                )}
+
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                  {progressObj.total !== undefined && (
+                    <Box>
+                      <Typography sx={{ fontSize: '0.7rem', color: saasTokens.text.disabled, textTransform: 'uppercase' }}>Processed</Typography>
+                      <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: saasTokens.text.primary }}>{progressObj.processed} / {progressObj.total}</Typography>
+                    </Box>
+                  )}
+                  {progressObj.saved !== undefined && (
+                    <Box>
+                      <Typography sx={{ fontSize: '0.7rem', color: saasTokens.text.disabled, textTransform: 'uppercase' }}>Saved</Typography>
+                      <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: saasTokens.status.success.main }}>{progressObj.saved}</Typography>
+                    </Box>
+                  )}
+                  {progressObj.failed !== undefined && (
+                    <Box>
+                      <Typography sx={{ fontSize: '0.7rem', color: saasTokens.text.disabled, textTransform: 'uppercase' }}>Failed</Typography>
+                      <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: saasTokens.status.error.main }}>{progressObj.failed}</Typography>
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+            )}
+
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: saasTokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Worker Output Log Stream
+                {isActive ? 'LIVE WORKER LOG' : 'Worker Output Log Stream'}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button 
-                  size="small" 
-                  variant="outlined" 
+                <Button
+                  size="small"
+                  variant="outlined"
                   onClick={() => handleCopy(logContent, setCopiedLogs)}
                   startIcon={copiedLogs ? <CheckIcon sx={{ fontSize: 14 }} /> : <ContentCopyIcon sx={{ fontSize: 14 }} />}
                   sx={{ fontSize: '0.72rem', py: 0.4, borderColor: saasTokens.border.main, color: copiedLogs ? '#10b981' : saasTokens.text.secondary }}
                 >
                   {copiedLogs ? 'Copied' : 'Copy'}
                 </Button>
-                <Button 
-                  size="small" 
-                  variant="outlined" 
+                <Button
+                  size="small"
+                  variant="outlined"
                   onClick={handleDownloadLog}
                   startIcon={<DownloadIcon sx={{ fontSize: 14 }} />}
                   sx={{ fontSize: '0.72rem', py: 0.4, borderColor: saasTokens.border.main, color: saasTokens.primary.light }}
@@ -208,26 +302,65 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
               </Box>
             </Box>
 
-            <Paper
-              sx={{
-                p: 2.5,
-                bgcolor: '#f8fafc',
-                border: `1px solid ${isFailure ? '#fda4af' : saasTokens.border.main}`,
-                borderRadius: 2,
-                flex: 1,
-                minHeight: 320,
-                overflowX: 'auto',
-                fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-                fontSize: '0.8rem',
-                lineHeight: 1.6,
-                color: isFailure ? '#e11d48' : '#0f172a',
-                boxShadow: 'none',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-all',
-              }}
-            >
-              {logContent}
-            </Paper>
+            <Box sx={{ position: 'relative', flex: 1, minHeight: 320, display: 'flex', flexDirection: 'column' }}>
+              <Paper
+                ref={logsContainerRef}
+                onScroll={handleScroll}
+                sx={{
+                  p: 2.5,
+                  bgcolor: '#1e1e1e', // Dark terminal aesthetic for logs
+                  border: `1px solid ${isFailure ? '#fda4af' : saasTokens.border.main}`,
+                  borderRadius: 2,
+                  flex: 1,
+                  overflowY: 'auto',
+                  overflowX: 'auto',
+                  fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+                  fontSize: '0.8rem',
+                  lineHeight: 1.6,
+                  color: '#d4d4d4',
+                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  maxHeight: '50vh', // Prevent growing indefinitely
+                }}
+              >
+                {/* Historical Output (Postgres result) */}
+                {(!isActive || (logContent && logContent !== 'No diagnostic output or result returned by Celery worker.')) && (
+                  <Box sx={{ color: isFailure ? '#ff8080' : '#4ec9b0', mb: liveLogs.length > 0 ? 3 : 0 }}>
+                    {logContent}
+                  </Box>
+                )}
+
+                {/* Live Redis Logs */}
+                {liveLogs.map((log: string, idx: number) => {
+                  let color = '#d4d4d4';
+                  if (log.includes(' ERROR ')) color = '#f14c4c';
+                  else if (log.includes(' SUCCESS ')) color = '#4ec9b0';
+                  else if (log.includes(' WARNING ')) color = '#cca700';
+                  return <Box key={idx} sx={{ color }}>{log}</Box>;
+                })}
+
+                {!isActive && liveLogs.length === 0 && logContent === 'No diagnostic output or result returned by Celery worker.' && (
+                  <Box sx={{ color: '#808080' }}>No diagnostic output or result returned by Celery worker.</Box>
+                )}
+
+                <div ref={logsEndRef} />
+              </Paper>
+
+              {isActive && !autoScroll && (
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => { setAutoScroll(true); logsEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }}
+                  sx={{
+                    position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+                    borderRadius: 4, bgcolor: 'rgba(0,0,0,0.7)', color: '#fff', '&:hover': { bgcolor: '#000' }
+                  }}
+                >
+                  ↓ New logs
+                </Button>
+              )}
+            </Box>
           </Box>
         )}
 
@@ -269,18 +402,18 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
               {/* Step 3: Conclusion */}
               <Box sx={{ position: 'relative' }}>
-                <Box 
-                  sx={{ 
-                    position: 'absolute', 
-                    left: -36, 
-                    top: 0, 
-                    width: 16, 
-                    height: 16, 
-                    borderRadius: '50%', 
-                    bgcolor: isFailure ? saasTokens.status.error.main : saasTokens.status.success.main, 
-                    border: '3px solid #ffffff', 
-                    boxShadow: '0 1px 3px rgba(15, 23, 42, 0.15)' 
-                  }} 
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    left: -36,
+                    top: 0,
+                    width: 16,
+                    height: 16,
+                    borderRadius: '50%',
+                    bgcolor: isFailure ? saasTokens.status.error.main : saasTokens.status.success.main,
+                    border: '3px solid #ffffff',
+                    boxShadow: '0 1px 3px rgba(15, 23, 42, 0.15)'
+                  }}
                 />
                 <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', color: isFailure ? '#e11d48' : '#059669' }}>
                   {isFailure ? 'Worker Execution Terminated with Failure' : 'Execution Completed Successfully'}
@@ -305,9 +438,9 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
               <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: saasTokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 GraphQL Task Serialization
               </Typography>
-              <Button 
-                size="small" 
-                variant="outlined" 
+              <Button
+                size="small"
+                variant="outlined"
                 onClick={handleDownloadJson}
                 startIcon={<DownloadIcon sx={{ fontSize: 14 }} />}
                 sx={{ fontSize: '0.72rem', py: 0.4, borderColor: saasTokens.border.main, color: saasTokens.primary.main }}

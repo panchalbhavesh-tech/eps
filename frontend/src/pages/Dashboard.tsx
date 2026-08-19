@@ -8,7 +8,7 @@ const Dashboard: React.FC = () => {
   return (
     <Box sx={{ p: { xs: 2, md: 3.5 } }}>
       <Typography variant="h4" sx={{ color: saasTokens.text.primary, fontWeight: 800, mb: 1, letterSpacing: '-0.02em' }}>
-        Welcome to QEPS Quant Lab
+        Welcome to VD Quant Lab
       </Typography>
       <Typography variant="body1" sx={{ color: saasTokens.text.secondary, maxWidth: 700, mb: 3, lineHeight: 1.6 }}>
         AI-Powered Quarterly Earnings Prediction System. Navigate to the Companies screen to view and generate predictions for our supported tickers across NSE & BSE.
