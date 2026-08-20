@@ -242,6 +242,7 @@ class AuthPayload:
 
 @strawberry.type
 class MomentumPerformanceType:
+    strategy_name: Optional[str] = "Multi-Factor ML Momentum"
     total_trades: int
     win_rate_pct: float
     net_total_return_pct: float
@@ -257,7 +258,9 @@ class MomentumPerformanceType:
 @strawberry.type
 class IntensiveBacktestReportType:
     ticker: str
+    company_name: Optional[str] = None
     status: str
+    evaluation_horizon_years: int
     years_tested: int
     total_trading_bars: int
     benchmark_nifty_return_pct: float

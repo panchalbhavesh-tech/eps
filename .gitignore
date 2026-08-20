@@ -113,3 +113,10 @@ Desktop.ini
 # Temporary / Debug files in root
 response.json
 utputFormat
+
+# Data Lake and Backups
+data_lake/
+data_harvester/data_lake/
+backend/data_lake/
+*.parquet
+*.dump
