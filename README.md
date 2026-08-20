@@ -113,6 +113,14 @@ Once Docker finishes building and displays `Container Started / Healthy`, open y
 
 ---
 
+## 📡 Upstox Data Harvester & Parquet Data Lake
+Market data ingestion (live quotes & historical OHLCV) has been fully decoupled from the main FastAPI server to ensure zero API blocking and absolute lookahead-bias safety. 
+
+Data is harvested autonomously via Upstox API v2 and stored natively in a high-speed **Parquet Data Lake**.
+* **Documentation & Setup:** See [data_harvester/README.md](data_harvester/README.md) for instructions on using the 1-Year Analytics Token and deploying the cron jobs.
+
+---
+
 ## 🛠️ Essential Commands & Operation Guide
 
 ### Checking Container Health Status

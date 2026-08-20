@@ -30,8 +30,9 @@ services:
     restart: unless-stopped
     volumes:
       - ./backend:/app
+      - ./data_harvester/data_lake:/app/data_lake
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
       - JWT_SECRET=${JWT_SECRET}
       - FMP_API_KEY=${FMP_API_KEY}
@@ -61,6 +62,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
     networks:
       - qeps_network
     healthcheck:
@@ -129,7 +132,7 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
       - JWT_SECRET=${JWT_SECRET}
       - FMP_API_KEY=${FMP_API_KEY}

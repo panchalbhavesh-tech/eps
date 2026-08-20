@@ -42,42 +42,64 @@ class UniverseService:
         logger = logging.getLogger(__name__)
         logger.info("Fetching current NSE equity universe...")
         
+        # Fallback dictionary if we can't parse date
+        default_added_date = datetime.strptime("2010-01-01", "%Y-%m-%d")
+        
+        # 1. Get currently tracked constituents
+        current_constituents = self.db.query(HistoricalConstituent).filter(
+            HistoricalConstituent.index_name == "NSE_ALL",
+            HistoricalConstituent.removed_date == None
+        ).all()
+        current_map = {c.ticker: c for c in current_constituents}
+        
         try:
             # Official NSE URL for all listed equities
             url = "https://archives.nseindia.com/content/equities/EQUITY_L.csv"
             df = pd.read_csv(url)
             
-            # The CSV has a 'SYMBOL' column
             if 'SYMBOL' not in df.columns:
                 raise ValueError("SYMBOL column not found in NSE CSV.")
-                
-            symbols = df['SYMBOL'].dropna().unique().tolist()
-            logger.info(f"Successfully fetched {len(symbols)} symbols from NSE.")
+            
+            # Map symbol to listing date if available
+            symbol_to_date = {}
+            if 'DATE OF LISTING' in df.columns:
+                for _, row in df.iterrows():
+                    sym = str(row['SYMBOL']).strip()
+                    date_str = str(row['DATE OF LISTING']).strip()
+                    try:
+                        # Typical format: 17-MAY-1995 or 17-May-1995
+                        d = datetime.strptime(date_str, "%d-%b-%Y")
+                        symbol_to_date[sym] = d
+                    except Exception:
+                        symbol_to_date[sym] = default_added_date
+            else:
+                for sym in df['SYMBOL'].dropna().unique().tolist():
+                    symbol_to_date[sym] = default_added_date
+            
+            new_symbols = set(symbol_to_date.keys())
+            logger.info(f"Successfully fetched {len(new_symbols)} symbols from NSE.")
             
         except Exception as e:
-            logger.error(f"Failed to fetch NSE universe: {e}. Falling back to top 50.")
-            # Fallback to NIFTY 50 if the NSE site blocks the request (common with automated requests)
-            try:
-                wiki_url = 'https://en.wikipedia.org/wiki/NIFTY_50'
-                tables = pd.read_html(wiki_url)
-                symbols = tables[1]['Symbol'].tolist()
-            except Exception as e_wiki:
-                logger.error(f"Wiki fallback failed: {e_wiki}")
-                symbols = ["RELIANCE", "HDFCBANK", "TCS", "INFY", "ICICIBANK", "HINDUNILVR", "ITC", "SBIN", "BHARTIARTL", "KOTAKBANK"]
-        
-        # Seed the database
-        # We use a default 'added_date' far in the past so they are always available in backtests
-        default_added_date = datetime.strptime("2010-01-01", "%Y-%m-%d")
-        
-        for ticker in symbols:
-            c = HistoricalConstituent(
-                id=uuid.uuid4(),
-                index_name="NSE_ALL",
-                ticker=ticker,
-                added_date=default_added_date,
-                removed_date=None # Never removed, accepting survivorship bias
-            )
-            self.db.add(c)
-            
+            logger.error(f"Failed to fetch NSE universe: {e}. Aborting sync to prevent false delistings.")
+            return
+
+        # 2. Add newly listed stocks
+        for ticker, added_date in symbol_to_date.items():
+            if ticker not in current_map:
+                c = HistoricalConstituent(
+                    id=uuid.uuid4(),
+                    index_name="NSE_ALL",
+                    ticker=ticker,
+                    added_date=added_date,
+                    removed_date=None
+                )
+                self.db.add(c)
+                
+        # 3. Mark delisted stocks (active yesterday, missing today)
+        for ticker, const in current_map.items():
+            if ticker not in new_symbols:
+                logger.info(f"Marking {ticker} as delisted.")
+                const.removed_date = datetime.utcnow()
+                
         self.db.commit()
         logger.info("Universe synchronization complete.")
