@@ -197,12 +197,12 @@ const UnifiedNumberLineTimeline: React.FC<{ items: any[], tokens: any }> = ({ it
   return (
     <Box sx={{
       display: 'flex',
-      overflowX: isCompact ? 'visible' : 'auto',
+      overflowX: 'auto',
       py: 2,
-      px: 0.5,
+      px: 1,
       position: 'relative',
-      justifyContent: isCompact ? 'space-between' : 'flex-start',
-      gap: isCompact ? 0 : 2.5,
+      justifyContent: isCompact ? 'center' : 'flex-start',
+      gap: 0,
       '&::-webkit-scrollbar': { height: '4px' },
       '&::-webkit-scrollbar-track': { bgcolor: 'transparent' },
       '&::-webkit-scrollbar-thumb': { bgcolor: tokens.border.dark, borderRadius: '2px' }
@@ -215,8 +215,8 @@ const UnifiedNumberLineTimeline: React.FC<{ items: any[], tokens: any }> = ({ it
           <Box 
             key={idx} 
             sx={{
-              flex: isCompact ? (isPivot ? '1.2 1 0px' : '1 1 0px') : '0 0 auto',
-              minWidth: isCompact ? (isPivot ? '85px' : '52px') : (isPivot ? '110px' : '68px'),
+              flex: '0 0 auto',
+              minWidth: isPivot ? '86px' : '72px',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -227,16 +227,16 @@ const UnifiedNumberLineTimeline: React.FC<{ items: any[], tokens: any }> = ({ it
             }}
           >
             {/* Top Zone: Price & Chg or Pivot Event Badge */}
-            <Box sx={{ mb: 1.5, minHeight: '44px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', width: '100%' }}>
+            <Box sx={{ mb: 1.5, minHeight: '42px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', width: '100%' }}>
               {isPivot ? (
-                <Box sx={{ bgcolor: tokens.background.card, border: `1px solid ${tokens.border.main}`, py: 0.4, px: 0.6, borderRadius: 1.5 }}>
-                  <Typography sx={{ color: tokens.text.secondary, fontSize: '0.68rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-                    EARNINGS PIVOT
+                <>
+                  <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.primary, fontSize: '0.9rem', fontWeight: 800, lineHeight: 1.2 }}>
+                    ₹{safeToFixed(item.price, 2)}
                   </Typography>
-                  <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.primary, fontSize: '0.78rem', fontWeight: 800, mt: 0.2 }}>
-                    Base: ₹{safeToFixed(item.price, 2)}
+                  <Typography sx={{ color: tokens.primary.main, fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', mt: 0.3 }}>
+                    BASE PRICE
                   </Typography>
-                </Box>
+                </>
               ) : (
                 <>
                   <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.primary, fontSize: '0.82rem', fontWeight: 800, lineHeight: 1.2 }}>
@@ -246,8 +246,8 @@ const UnifiedNumberLineTimeline: React.FC<{ items: any[], tokens: any }> = ({ it
                     <Typography className="mono-font tabular-nums" sx={{
                       color: safeNum(item.chgPct) >= 0 ? tokens.status.success.main : tokens.status.error.main,
                       fontWeight: 700,
-                      fontSize: '0.72rem',
-                      mt: 0.2
+                      fontSize: '0.68rem',
+                      mt: 0.3
                     }}>
                       {safeNum(item.chgPct) >= 0 ? '+' : ''}{safeToFixed(item.chgPct, 1)}%
                     </Typography>
@@ -281,16 +281,16 @@ const UnifiedNumberLineTimeline: React.FC<{ items: any[], tokens: any }> = ({ it
               <Box sx={{
                 position: 'relative',
                 zIndex: 1,
-                bgcolor: isPivot ? tokens.text.primary : (item.isSurge ? tokens.text.primary : tokens.background.paper),
+                bgcolor: isPivot ? tokens.text.primary : (item.isSurge ? tokens.primary.main : tokens.background.paper),
                 border: '1.5px solid',
-                borderColor: isPivot ? tokens.text.primary : (item.isSurge ? tokens.text.primary : tokens.border.main),
-                color: (isPivot || item.isSurge) ? tokens.background.paper : tokens.text.primary,
-                fontSize: isPivot ? '0.72rem' : '0.7rem',
-                fontWeight: 700,
-                px: isPivot ? 1.4 : 1.1,
-                py: isPivot ? 0.3 : 0.2,
-                borderRadius: '14px',
-                boxShadow: 'none',
+                borderColor: isPivot ? tokens.text.primary : (item.isSurge ? tokens.primary.main : tokens.border.main),
+                color: (isPivot || item.isSurge) ? tokens.background.default : tokens.text.primary,
+                fontSize: isPivot ? '0.68rem' : '0.65rem',
+                fontWeight: 800,
+                px: isPivot ? 1.2 : 1.0,
+                py: 0.25,
+                borderRadius: '12px',
+                boxShadow: isPivot ? tokens.shadows.card : 'none',
                 whiteSpace: 'nowrap'
               }}>
                 {item.dayLabel}
@@ -405,23 +405,29 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, borderBottom: `1px solid ${tokens.border.main}`, p: 3, gap: 2 }}>
           <Box>
             {/* Minimalist Tab Selectors */}
-            <Box sx={{ display: 'inline-flex', bgcolor: tokens.background.card, p: 0.4, borderRadius: 1, border: `1px solid ${tokens.border.main}`, mb: 1.5 }}>
+            <Box sx={{ 
+              display: 'inline-flex', 
+              bgcolor: 'rgba(0,0,0,0.2)', 
+              p: 0.5, 
+              borderRadius: '6px', 
+              border: `1px solid ${tokens.border.main}`, 
+              mb: 1.5 
+            }}>
               <Button 
                 onClick={() => setTimeWindow('7D')}
                 size="small"
+                disableRipple
                 sx={{
                   bgcolor: timeWindow === '7D' ? tokens.background.paper : 'transparent',
                   color: timeWindow === '7D' ? tokens.text.primary : tokens.text.secondary,
                   fontWeight: timeWindow === '7D' ? 700 : 600,
-                  px: 2.5,
-                  py: 0.6,
-                  borderRadius: 0.5,
+                  px: 3,
+                  py: 0.4,
+                  borderRadius: '4px',
                   textTransform: 'none',
-                  fontSize: '0.78rem',
-                  minWidth: '110px',
-                  boxShadow: timeWindow === '7D' ? tokens.shadows.card : 'none',
-                  border: timeWindow === '7D' ? `1px solid ${tokens.border.light}` : '1px solid transparent',
-                  '&:hover': { bgcolor: timeWindow === '7D' ? tokens.background.paper : tokens.background.cardHover, color: tokens.text.primary }
+                  fontSize: '0.75rem',
+                  boxShadow: timeWindow === '7D' ? '0 1px 3px rgba(0,0,0,0.3)' : 'none',
+                  '&:hover': { color: tokens.text.primary }
                 }}
               >
                 7 Days Window
@@ -429,19 +435,18 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
               <Button 
                 onClick={() => setTimeWindow('1M')}
                 size="small"
+                disableRipple
                 sx={{
                   bgcolor: timeWindow === '1M' ? tokens.background.paper : 'transparent',
                   color: timeWindow === '1M' ? tokens.text.primary : tokens.text.secondary,
                   fontWeight: timeWindow === '1M' ? 700 : 600,
-                  px: 2.5,
-                  py: 0.6,
-                  borderRadius: 0.5,
+                  px: 3,
+                  py: 0.4,
+                  borderRadius: '4px',
                   textTransform: 'none',
-                  fontSize: '0.78rem',
-                  minWidth: '110px',
-                  boxShadow: timeWindow === '1M' ? tokens.shadows.card : 'none',
-                  border: timeWindow === '1M' ? `1px solid ${tokens.border.light}` : '1px solid transparent',
-                  '&:hover': { bgcolor: timeWindow === '1M' ? tokens.background.paper : tokens.background.cardHover, color: tokens.text.primary }
+                  fontSize: '0.75rem',
+                  boxShadow: timeWindow === '1M' ? '0 1px 3px rgba(0,0,0,0.3)' : 'none',
+                  '&:hover': { color: tokens.text.primary }
                 }}
               >
                 1 Month Window
@@ -489,58 +494,64 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
                 </Box>
 
                 {/* Minimalist Financial Statements Summary */}
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, borderTop: `1px solid ${tokens.border.main}`, borderLeft: `1px solid ${tokens.border.main}`, mb: 3 }}>
-                  <Box sx={{ p: 2, bgcolor: tokens.background.card, borderBottom: `1px solid ${tokens.border.main}`, borderRight: `1px solid ${tokens.border.main}` }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography sx={{ color: tokens.text.secondary, fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.04em' }}>TOTAL REVENUE</Typography>
+                <Box sx={{ display: 'grid', gap: '1px', bgcolor: tokens.border.main, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, border: `1px solid ${tokens.border.main}`, mb: 3 }}>
+                  <Box sx={{ p: 2, bgcolor: tokens.background.card, display: 'flex', flexDirection: 'column' }}>
+                    <Typography sx={{ color: tokens.text.secondary, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.04em', mb: 0.5 }}>
+                      TOTAL REVENUE
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.5 }}>
+                      <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.primary, fontSize: '1.25rem', fontWeight: 800 }}>{formatValCr(q.rev)}</Typography>
+                      <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.secondary, fontSize: '0.75rem', fontWeight: 500 }}>vs {formatValCr(q.prevRev)} prior</Typography>
+                    </Box>
+                    <Box>
                       {renderGrowthText(tokens, q.rev, q.prevRev)}
                     </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
-                      <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.primary, fontSize: '1.1rem', fontWeight: 800 }}>{formatValCr(q.rev)}</Typography>
-                      <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.secondary, fontSize: '0.72rem', fontWeight: 500 }}>vs {formatValCr(q.prevRev)} prior</Typography>
-                    </Box>
                   </Box>
 
-                  <Box sx={{ p: 2, bgcolor: tokens.background.card, borderBottom: `1px solid ${tokens.border.main}`, borderRight: `1px solid ${tokens.border.main}` }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography sx={{ color: tokens.text.secondary, fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.04em' }}>NET PROFIT</Typography>
+                  <Box sx={{ p: 2, bgcolor: tokens.background.card, display: 'flex', flexDirection: 'column' }}>
+                    <Typography sx={{ color: tokens.text.secondary, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.04em', mb: 0.5 }}>
+                      NET PROFIT
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.5 }}>
+                      <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.primary, fontSize: '1.25rem', fontWeight: 800 }}>{formatValCr(q.prof)}</Typography>
+                      <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.secondary, fontSize: '0.75rem', fontWeight: 500 }}>vs {formatValCr(q.prevProf)} prior</Typography>
+                    </Box>
+                    <Box>
                       {renderGrowthText(tokens, q.prof, q.prevProf)}
                     </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
-                      <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.primary, fontSize: '1.1rem', fontWeight: 800 }}>{formatValCr(q.prof)}</Typography>
-                      <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.secondary, fontSize: '0.72rem', fontWeight: 500 }}>vs {formatValCr(q.prevProf)} prior</Typography>
-                    </Box>
                   </Box>
 
-                  <Box sx={{ p: 2, bgcolor: tokens.background.card, borderBottom: `1px solid ${tokens.border.main}`, borderRight: `1px solid ${tokens.border.main}` }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography sx={{ color: tokens.text.secondary, fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.04em' }}>DILUTED EPS</Typography>
-                      {renderGrowthText(tokens, q.eps, q.prevEps)}
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
-                      <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.primary, fontSize: '1.1rem', fontWeight: 800 }}>
+                  <Box sx={{ p: 2, bgcolor: tokens.background.card, display: 'flex', flexDirection: 'column' }}>
+                    <Typography sx={{ color: tokens.text.secondary, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.04em', mb: 0.5 }}>
+                      DILUTED EPS
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.5 }}>
+                      <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.primary, fontSize: '1.25rem', fontWeight: 800 }}>
                         {q.eps != null && !isNaN(Number(q.eps)) ? `₹${safeToFixed(q.eps, 2)}` : '-'}
                       </Typography>
-                      <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.secondary, fontSize: '0.72rem', fontWeight: 500 }}>
+                      <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.secondary, fontSize: '0.75rem', fontWeight: 500 }}>
                         vs {q.prevEps != null && !isNaN(Number(q.prevEps)) ? `₹${safeToFixed(q.prevEps, 2)}` : '-'} prior
                       </Typography>
+                    </Box>
+                    <Box>
+                      {renderGrowthText(tokens, q.eps, q.prevEps)}
                     </Box>
                   </Box>
                 </Box>
 
                 {/* Unified Single-Line Trading Timeline with Center Earning Release Pivot */}
                 <Box sx={{ bgcolor: tokens.background.card, border: `1px solid ${tokens.border.main}`, p: 2.5 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, pb: 1.5, borderBottom: `1px solid ${tokens.border.main}`, flexWrap: 'wrap', gap: 2 }}>
+                  <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, mb: 2, pb: 1.5, borderBottom: `1px solid ${tokens.border.main}`, gap: 2 }}>
                     <Typography sx={{ color: tokens.text.primary, fontWeight: 800, fontSize: '0.75rem', letterSpacing: '0.04em' }}>
                       UNIFIED TRADING TIMELINE ({timeWindow === '7D' ? '7 DAYS BEFORE & AFTER PIVOT' : '30-DAY WINDOW BEFORE & AFTER PIVOT'})
                     </Typography>
                     {!loadingPrices && (
-                      <Box sx={{ display: 'flex', gap: 3 }}>
-                        <Typography sx={{ color: preChg >= 0 ? tokens.status.success.main : tokens.status.error.main, fontWeight: 800, fontSize: '0.78rem' }}>
-                          ◄ Pre-Event Drift: {preChg >= 0 ? '+' : ''}{safeToFixed(preChg, 2)}%
+                      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                        <Typography sx={{ color: tokens.text.secondary, fontWeight: 600, fontSize: '0.75rem' }}>
+                          ◄ PRE-EVENT: <span style={{ color: preChg >= 0 ? tokens.status.success.main : tokens.status.error.main, fontWeight: 800 }}>{preChg >= 0 ? '+' : ''}{safeToFixed(preChg, 2)}%</span>
                         </Typography>
-                        <Typography sx={{ color: postChg >= 0 ? tokens.status.success.main : tokens.status.error.main, fontWeight: 800, fontSize: '0.78rem' }}>
-                          Post-Earnings Reaction: {postChg >= 0 ? '+' : ''}{safeToFixed(postChg, 2)}% ►
+                        <Typography sx={{ color: tokens.text.secondary, fontWeight: 600, fontSize: '0.75rem' }}>
+                          POST-EVENT: <span style={{ color: postChg >= 0 ? tokens.status.success.main : tokens.status.error.main, fontWeight: 800 }}>{postChg >= 0 ? '+' : ''}{safeToFixed(postChg, 2)}%</span> ►
                         </Typography>
                       </Box>
                     )}

@@ -1,117 +1,37 @@
-# Quantitative Earnings Prediction System (QEPS)
+# Quantitative Earnings Prediction System (VD EPS)
 
-**QEPS** is an enterprise-grade quantitative analytics, algorithmic surveillance, and institutional research platform engineered for stocks listed on the National Stock Exchange of India (NSE). It combines historical financial statement extraction, quantitative event study modeling around earnings announcement dates, continuous number line timeline tracking with central release pivots, interactive normalized scorecard evaluations, and automated LLM analyst research report generation via Google Gemini.
+EPS is an institutional-grade quantitative analytics and surveillance platform for NSE-listed equities. It provides automated financial modeling, technical indicator calculation, algorithmic strategy backtesting, and AI-driven sentiment analysis.
 
-The platform is designed around a high-performance **Institutional Trading Terminal Interface** featuring dual **Trading Floor Dark** and **Institutional Light** aesthetic themes, optimized for ultra-dense screening across up to **885+ NSE equities natively monitored**.
+## Features
 
----
-### ✨ Institutional Features & Frontend Trading Terminal Infrastructure
+- **Company & Event Analytics**: Financial statement aggregation and event study modeling around earnings.
+- **Technical Analysis**: Real-time technical indicators (SMA, RSI, MACD, Trend/Cross detection).
+- **Verified News & Sentiment**: Live RSS news aggregation with Gemini-driven sentiment scoring.
+- **Quantitative Backtesting**: Algorithmic strategy evaluation and performance metrics.
+- **Financial Scoring**: Automated health grading and statistical probability analysis.
+- **Background Processing**: Celery-based workers for OHLCV caching and NSE universe synchronization.
 
-#### 🖥️ Next-Gen Visual Architecture & Theme Engine
-- **Dynamic Institutional Theme Engine (Light / Dark Mode)**: Built upon a high-speed React `ThemeContext` providing instant toggling between two expertly color-calibrated design systems:
-  - ☀️ **Institutional Light (Morningstar / Bloomberg Professional)**: Clean neutral paper slate (`#ffffff`), executive typography, and high-contrast numerical tracking for daytime equity analysis.
-  - 🌙 **Trading Floor Dark (Dark Quant Terminal)**: Deep cyber-slate backdrop (`#0b0f19`), neon emerald positive drift accents (`#3dffa2`), crimson drawdown highlights, and smooth glassmorphic container shading designed for extended quant surveillance sessions.
-- **Ultra-Dense Terminal DataGrids**: Specialized DOM-virtualized tables (`@mui/x-data-grid`) engineered for zero-latency presentation of our full **885+ NSE equities universe**. Features borderless interior cell structures, uppercase tracking headers, tabular monospaced numbers, and subtle semantic row tints for automated anomaly recognition without visual fatigue.
+## Tech Stack
 
-#### ⚡ Events Dashboard & Financial Screening (`/`)
-- **Ergonomic 2-Line Company & Ticker Layout**: Designed via a safe incremental architecture featuring **48px row heights** to eliminate text clipping and present a high-contrast sticky leftmost column:
-  - **Line 1**: Full corporate entity name (e.g., *Websol Energy System Limited*).
-  - **Line 2**: Muted ticker symbol + exchange identifier (e.g., *WEBSOLAR NSE*).
-- **Streamlined Metric Visibility**: Immediate execution metrics (Current Price, Market Cap, Upcoming Earnings Calendar, 7-Day Target Drift %, and Normalized Health Scorecards) remain instantly scannable without horizontal scrolling or losing sidebar statistics.
-- **Dedicated Quarterly Financial Suite**: Positioned at the trailing right of the screener, presenting interactive multi-quarter performance sub-cards (Q1 to Q4 Revenue, Net Profit, and Diluted EPS) complete with real-time QoQ directional percentage change indicators (`▲ +X%` / `▼ -Y%`).
+- **Frontend**: React (Vite), TypeScript, Material UI, Apollo Client (GraphQL)
+- **Backend**: Python, FastAPI, Strawberry (GraphQL), SQLAlchemy, pandas, scikit-learn
+- **Database**: PostgreSQL
+- **Cache/Queue**: Redis, Celery
+- **AI**: Google Gemini API
+- **Infrastructure**: Docker Compose, Nginx
 
-#### 📡 Multi-Factor Momentum & Attention Scanner (`/momentum`)
-- **Full NSE Equities Universal Tracking**: Monitors the entire Nifty 500 and broader NSE stock universe natively within an upgraded **64px row-height DataGrid**, removing the need for ad-hoc custom lookup banners in favor of continuous near-real-time market surveillance.
-- **Market Regime Alignment & Structural Header**: Displays near-real-time macro health of the **Nifty 50 (`^NSEI`) benchmark**, categorizing market structure into distinct regime states (Bullish Expansion, Neutral Consolidation, or High-Volatility Contraction) to contextualize individual equity signals.
-- **5-Pillar Orthogonal Factor Visualization**: Renders real-time micro-visualizations (`FactorBarChart`) dissecting each equity's Composite Momentum Score into five decoupled dimensions:
-  1. **Technical Strength**: Breakout velocity, EMA ribbon alignment, and RSI momentum.
-  2. **Fundamental Quality**: ROE consistency and debt-to-equity resilience.
-  3. **Smart Money Accumulation**: Institutional block order flows and volume delta persistence.
-  4. **Derivatives Structure**: Options implied volatility (IV) skews and Open Interest dynamics.
-  5. **Regime Alignment**: Relative structural beta vs. benchmark indexes.
-- **Action Signals & Confidence Ratings**: Emits explicit quantitative execution directives (`BUY MOMENTUM`, `WATCHLIST`, `EXIT / WEAK`, or `NEUTRAL`) backed by automated machine learning probability confidence scores (`confidence %`) and volatility-adjusted stop-loss risk sizing.
-- **Anomaly Attention Alerts**: Automatically isolates equities requiring urgent analyst intervention due to unnatural trading activity (e.g., daily volume $>2\times$ 20DMA, implied volatility spikes, or impending earnings releases within $\le 7$ days).
+## Project Structure
 
-#### 🧮 Quantitative AI, Behavioral Matrix & Risk Defense
-- **Interactive Behavioral Matrix & Deep Analytics Deck (`SocialSentimentCard`)**:
-  - **Clickable Quant Cards**: 3-column deck evaluating **News Sentiment Score**, **Reddit Forum Velocity (FOMO Index)**, and **Smart Money Divergence** with interactive hover elevation and `"Analyze →"` prompts.
-  - **Edge-to-Edge Terminal Grid Row Drawers**: Clicking any card slides open a zero-padding right-hand analytical panel where explainer banners, calculation code boxes, and intelligence feeds extend wall-to-wall without rounded borders or side margins.
-  - **Mathematical Methodology & Time Decay**: Details source authority weightings, exponential 24-hour time decay ($\lambda$), emoji hype vs. financial rhetoric density, and verified custodial delivery (>65%) absorption ratios.
-  - **Actionable Intelligence Feed with Clickable Navigation**: Synthesizes 10 live institutional press reports, 6 retail forum threads (`r/IndianStreetBets`, `r/IndiaInvestments`), and 5 Smart Money block deal signatures. Features live item counter badges, sentiment flag tags positioned in the top-right corner opposite headlines, and source/timestamp lines placed directly underneath headlines equipped with an external link affordance (`OpenInNewIcon`) that opens live search queries in a new browser tab upon clicking.
-- **Quantitative Hypothesis Laboratory (QHLM) & AI Quant Agent (`/research`)**:
-  - **Live Capital Guardrail & Per-Stock Signals**: Secured via `QHLM_LIVE_TRADING_ENABLED` flag. Approved models emit daily cross-sectional directional (`LONG`/`SHORT`) per-stock signals exposed directly via the **Live Signals** Dashboard.
-  - **Authentic Factor Lifecycle Tracking**: Governs candidate factors through a 5-stage FSM. Mandates a strict **150-trading-day Observation Period** (distinct from the 252-day ML shadow probation) before promoting to Live, utilizing a Student's t-test to mathematically prove forward superiority.
-  - **Statistical False Discovery Defenses**: Implements **Benjamini-Hochberg False Discovery Rate (FDR)** control across hypotheses and **White's Reality Check (SPA)** to eliminate data dredging and P-Hacking. Integrates a global `TotalHypothesisTrials` counter to ruthlessly penalize multiple testing variance over time.
-  - **Autonomous Gemini Batch Generation**: The AI agent autonomously formulates mathematically orthogonal vector expressions using a secure Pandas `SafeASTEvaluator`. It batch-generates deduplicated equations (via `normalized_expression` checks) until the active FSM pipeline hits a deterministic depth target (15).
-- **High-Performance GraphQL & Database Caching Engine**: Eradicates dashboard loading bottlenecks across Events and Momentum pages by leveraging SQLAlchemy batch relationship eager-loading (`selectinload`), memoized in-memory sector statistical caching (`momentum_cache_service.py`) with thread-safe atomic swaps, and optimized GraphQL payload projections for sub-second page rendering.
-- **Native NSE Bhavcopy & Surveillance Watchlists**: Daily automated background ingestion of official NSE EOD Delivery Percentages (T+1), institutional Bulk/Block Deal directions, and automatic filtering of equities placed on SEBI Additional & Graded Surveillance Measure (ASM/GSM) rosters.
-- **Institutional Portfolio Risk Engine & Emergency Kill Switch**: Features **Hierarchical Risk Parity (HRP)** position sizing to dynamically distribute capital based on clustered correlations. Automated continuous drawdown monitoring trips an **Emergency Algorithmic Kill Switch (Dynamic CVaR)** if trailing losses breach regime-adjusted bounds, terminating new directional BUYs. Enforces a 15-position cap, 25% max sector concentration, dynamic gross leverage caps, and Spearman correlation gating (rejecting entries $>0.78$ vs. existing portfolio).
-- **Validation Suite & Zero-Leakage Machine Learning**: Executes machine learning models strictly via zero-leakage **scikit-learn Pipelines** (`SimpleImputer` -> `StandardScaler` -> `CalibratedClassifierCV`) utilizing **Purged Walk-Forward Cross-Validation (Combinatorial Embargoing)** and **Triple-Barrier Labeling** to guarantee robust, untainted edge discovery.
-- **Intensive Strategy & Momentum Backtesting Engine**: Executes precision multi-year historical walk-forward backtests applying static friction rules for **Transaction Cost Estimation** (0.20% round-trip to proxy STT/slippage). Features an **Emerging Markets Proxy Factor** (USD-denominated, multi-country) and CAPM attribution to estimate market beta.
-- **Async Worker Task Surveillance Suite (`/tasks`)**: Live Celery pipeline monitoring dashboard showing execution timings, success rate KPIs, automated 5000ms GraphQL synchronization, and inspectable exception traceback drawers.
-- **Scientific Audit Integrity Remediations**: Resolves institutional grade data leakages by stripping all synthetic data fallbacks, scraping ASM/GSM lists at execution time, enforcing strictly segregated multi-horizon ML models (3d/5d/10d) via **PurgedKFoldCV**, and evaluating using true probabilistic metrics (`roc_auc_score`). Eliminates survivorship bias via `HistoricalConstituent` index tracking and ensures zero lookahead bias by dynamically merging `FundamentalSnapshot` data strictly Point-In-Time (`pd.merge_asof(direction='backward')`). LightGBM pipelines now natively learn from *raw* fundamental and technical signals (e.g. ROE, Debt/Equity) instead of pre-aggregated composite scores to prevent piecewise linear distortions. Also integrates robust **Block Bootstrap** methods for Sharpe CIs and White's Reality Check.
-
----
-
-## 🚀 Universal Setup Guide (Windows, macOS, Linux, WSL)
-
-Because the entire application stack is fully containerized using **Docker Compose**, running QEPS on any operating system requires zero local Python, Node.js, or PostgreSQL installations.
-
-### 1. Prerequisites
-- **Docker Desktop** installed and running on Windows or macOS (Apple Silicon M1/M2/M3 & Intel natively supported), or **Docker Engine + Docker Compose Plugin** on Linux/WSL2.
-- **Git** (to manage or clone the repository).
-
----
-
-### 2. Quick-Start Instructions
-
-#### Step 1: Navigate to the Project Root
-Open your terminal (PowerShell, Command Prompt, macOS Terminal, or Linux bash) and enter the repository folder:
-```bash
-cd "/path/to/Eps"  # Adjust path to your workspace directory
+```text
+Eps/
+├── frontend/             # React SPA (Vite)
+├── backend/              # FastAPI & Celery services
+│   ├── app/              # Main application code (API, models, services)
+│   ├── docker/           # Service-specific Dockerfiles
+├── docker-compose.yml    # Full local environment orchestration
 ```
 
-#### Step 2: Configure Environment Variables
-Copy the starter template `.env.example` to create your working `.env` configuration file:
 
-- **macOS / Linux / Windows WSL / Git Bash:**
-  ```bash
-  cp .env.example .env
-  ```
-- **Windows (Command Prompt / PowerShell):**
-  ```powershell
-  copy .env.example .env
-  ```
-
-> [!NOTE]
-> **Optional API Keys:** Open `.env` in any text editor if you wish to configure real AI Research synthesis:
-> - `GEMINI_API_KEY`: Add your Google Gemini API key to enable automated quantitative LLM reports.
-> - `DATABASE_URL` & PostgreSQL credentials default to pre-configured values that instantly work within the Docker network.
-
-#### Step 3: Launch the Container Ecosystem
-Build and start all 8 microservices (Frontend, Backend API, Postgres Database, Redis Broker, Celery Worker, Celery Scheduler, Nginx Proxy, and pgAdmin) in detached mode:
-```bash
-docker compose up --build -d
-```
-*Note: On the very first launch, Docker will download base alpine images, construct Python packages (SQLAlchemy, Pandas, Celery, LightGBM), and bundle React/Vite dependencies. This takes ~2–5 minutes depending on internet speed.*
-
-#### Step 4: Access the Platform
-Once Docker finishes building and displays `Container Started / Healthy`, open your web browser and navigate to:
-👉 **[http://localhost](http://localhost)**
-
----
-
-## 🌐 Active Services & Port Map
-
-| Service Name | Local Endpoint / URL | Authentication & Notes |
-| :--- | :--- | :--- |
-| **QEPS Web Dashboard** | `http://localhost` | Served via Alpine Nginx Reverse Proxy (Port 80). Features dynamic Light & Dark mode switching. |
-| **GraphQL API / Console** | `http://localhost/graphql` or `http://localhost:8000/graphql` | Interactive GraphiQL console for querying stocks & event metrics. |
-| **pgAdmin Database GUI** | `http://localhost:5050` | Login Email: `admin@example.com`<br>Password: `admin` |
-| **PostgreSQL Database** | `localhost:5432` | User: `qeps_user` \| DB: `qeps_db` \| Pass: `qeps_password` |
-| **Redis Cache Broker** | `localhost:6379` | In-memory message store for Celery task queues and real-time worker logs. |
-
----
 
 ## 📡 Upstox Data Harvester & Parquet Data Lake
 Market data ingestion (live quotes & historical OHLCV) has been fully decoupled from the main FastAPI server to ensure zero API blocking and absolute lookahead-bias safety. 
@@ -119,62 +39,100 @@ Market data ingestion (live quotes & historical OHLCV) has been fully decoupled 
 Data is harvested autonomously via Upstox API v2 and stored natively in a high-speed **Parquet Data Lake**.
 * **Documentation & Setup:** See [data_harvester/README.md](data_harvester/README.md) for instructions on using the 1-Year Analytics Token and deploying the cron jobs.
 
----
 
 ## 🛠️ Essential Commands & Operation Guide
 
-### Checking Container Health Status
-To confirm that all microservices and health checks are running properly:
 ```bash
-docker compose ps
-```
-
-### Viewing Live Terminal Logs
-To inspect system execution, API routing, or data extraction progress:
-```bash
-# View logs across all services
-docker compose logs -f
-
-# View logs specifically for the async Celery background worker
-docker compose logs -f worker
-```
-
-### Critical Note on Background Workers (`worker`)
-> [!IMPORTANT]
-> The asynchronous Celery background worker (`qeps_worker`) does **NOT** auto-reload on code modifications. Whenever you add or edit Python source code in `backend/app/worker/tasks.py` (such as mass calculation tasks or scraper functions), **you must manually restart the worker service**:
-```bash
-docker compose restart worker
-```
-
-### Rebuilding After Dependency Modifications
-If you install new packages in `requirements.txt` (Python) or `package.json` (Node/React), run:
-```bash
+git clone <repository-url>
+cd Eps
+cp .env.example .env
+# Edit .env with your specific API keys
 docker compose up --build -d
 ```
 
-### Running the Intensive Historical Backtest Suite in Docker
-To run batch quantitative strategy simulations and measure Sharpe ratios, win rates, and Nifty 50 alphas net of real-world Indian trading costs across your stock list:
-```bash
-# Execute a 3-year evaluation across up to 50 equities
-docker compose exec -T backend python run_backtest_suite.py --limit 50 --years 3
+- **Frontend Application**: [http://localhost:8080](http://localhost:8080)
+- **Backend API (GraphQL)**: [http://localhost:8000/graphql](http://localhost:8000/graphql)
+- **pgAdmin**: [http://localhost:5050](http://localhost:5050)
 
-# Export detailed simulation results to a JSON research report
-docker compose exec -T backend python run_backtest_suite.py --limit 100 --years 5 --export-json /app/reports/nifty_backtest_summary.json
+## Environment Variables
+
+Configure these in `.env`:
+
+```env
+DATABASE_URL=postgresql://qeps_user:qeps_password@postgres:5432/qeps_db
+REDIS_URL=redis://redis:6379/0
+JWT_SECRET=super_secret_jwt_key
+FMP_API_KEY=your_fmp_api_key_here          # Financial Modeling Prep API Key
+GEMINI_API_KEY=your_gemini_api_key_here    # Google Gemini API Key
+POSTGRES_DB=qeps_db
+POSTGRES_USER=qeps_user
+POSTGRES_PASSWORD=qeps_password
+PGADMIN_EMAIL=admin@example.com
+PGADMIN_PASSWORD=admin
 ```
 
-### Shutting Down the Project
-To stop all running services without deleting your database records:
+## Useful Commands
+
+**Docker Operations**
 ```bash
+# Start all services in the background
+docker compose up --build -d
+
+# Check service status
+docker compose ps
+
+# View logs for all services
+docker compose logs -f
+
+# View logs for a specific service
+docker compose logs -f backend
+docker compose logs -f worker
+
+# Restart background workers (required after updating Python task logic)
+docker compose restart worker scheduler
+
+# Stop and remove all containers
 docker compose down
 ```
-To stop the stack and **cleanly erase all data volumes** (resetting the database and pgAdmin config to a pristine state):
+
+**Frontend Development (Outside Docker)**
 ```bash
-docker compose down -v
+cd frontend
+npm install
+npm run dev
 ```
 
----
+**Backend Database (Alembic Migrations)**
+*(Run from inside the backend container or locally with the virtual environment)*
+```bash
+alembic upgrade head
+alembic revision --autogenerate -m "description"
+```
 
-## 📚 Further Architecture Documentation
+## Development Notes
 
-For deep dives into internal data structures, dual-theme visual design system specs, multi-factor momentum scoring models, ML gain calibration, financial scorecard normalization algorithms, interactive click-only formulas, edge-to-edge terminal sentiment drawers, in-memory GraphQL query optimization, unified earnings pivot timelines, and Strawberry GraphQL schema designs, refer to our primary system specification:
-📖 **[project.md](project.md)**
+- **Worker Reloading**: The Celery `worker` and `scheduler` containers do NOT auto-reload on Python file changes. You must run `docker compose restart worker scheduler` to apply updates to background tasks.
+- **Data Ingestion**: Initial NSE universe sync and OHLCV data ingestion occur via background Celery tasks. If data is missing, check the `worker` logs for API limits or connection errors.
+- **Gemini Fallback**: If `GEMINI_API_KEY` is missing or invalid, the sentiment engine will safely fall back to a deterministic keyword-density heuristic rather than crashing.
+
+## Troubleshooting
+
+### Containers not starting / Port conflicts
+Check for existing services running on ports 8080, 8000, 5050, or 5432.
+```bash
+docker compose ps
+docker compose logs
+```
+
+### Missing Data on UI
+If the UI shows "Company not found" or missing data:
+1. Ensure the PostgreSQL database was initialized correctly.
+2. Check if the `scheduler` triggered the daily data fetch tasks.
+3. Check `worker` logs for `yfinance` rate limits or network blocks.
+```bash
+docker compose logs -f worker
+```
+
+## Authors
+- Vipul G.
+- Dhruv T.

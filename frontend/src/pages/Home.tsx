@@ -520,7 +520,7 @@ const HomeContent: React.FC = () => {
   const [search, setSearch] = useState('');
   const [filterMode, setFilterMode] = useState<'ALL' | 'RECENT_EVENTS' | 'HIGH_HEALTH'>('ALL');
 
-  const { loading, error, data } = useQuery(GET_COMPANIES, { pollInterval: 15000, fetchPolicy: 'network-only' });
+  const { loading, error, data } = useQuery(GET_COMPANIES, { fetchPolicy: 'network-only' });
     const [massCalculate] = useMutation(MASS_CALCULATE_HEALTH, {
     onCompleted: () => {
       alert("Mass financial health analysis queued for all stocks! Check Tasks page for progress and refresh to view scores.");

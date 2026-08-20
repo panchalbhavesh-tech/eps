@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Drawer, AppBar, Toolbar, List, Typography, ListItem, ListItemButton, ListItemIcon, ListItemText, IconButton, Tooltip, Avatar, Menu, MenuItem } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
-import ManageHistoryIcon from '@mui/icons-material/ManageHistory';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
@@ -11,7 +10,7 @@ import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import BiotechIcon from '@mui/icons-material/Biotech';
 import ScheduleIcon from '@mui/icons-material/Schedule';
-import HistoryIcon from '@mui/icons-material/History';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import RadarIcon from '@mui/icons-material/Radar';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
@@ -58,13 +57,6 @@ const Layout: React.FC = () => {
       description: 'Quantitative Hypothesis Lifecycle Management & Bailey-Lopez de Prado statistical audit'
     },
     {
-      text: 'History',
-      icon: <ManageHistoryIcon sx={{ fontSize: 20 }} />,
-      path: '/tasks',
-      breadcrumb: 'History / Ran Cron Workers',
-      description: 'History of executed Celery cron workers'
-    },
-    {
       text: 'Celery Schedules',
       icon: <ScheduleIcon sx={{ fontSize: 20 }} />,
       path: '/schedules',
@@ -73,7 +65,7 @@ const Layout: React.FC = () => {
     },
     {
       text: 'Admin Logs',
-      icon: <HistoryIcon sx={{ fontSize: 20 }} />,
+      icon: <ReceiptLongIcon sx={{ fontSize: 20 }} />,
       path: '/admin-logs',
       breadcrumb: 'Admin Logs / System Activity & Execution History',
       description: 'Centralized Admin Logs / Activity Logs page where you can see important system actions'
