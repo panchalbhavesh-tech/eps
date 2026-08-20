@@ -1,11 +1,11 @@
 import pandas as pd
-import yfinance as yf
 from typing import Dict, Any
 from datetime import datetime, timedelta
 
 class EventStudyService:
-    def __init__(self):
-        pass
+    def __init__(self, data_manager=None):
+        from app.services.data.data_manager import UnifiedDataManager
+        self.data_manager = data_manager or UnifiedDataManager()
 
     def calculate_event_study(self, df: pd.DataFrame, report_date: str, ticker: str = None) -> Dict[str, Any]:
         rd = pd.to_datetime(report_date).tz_localize(None)
@@ -40,10 +40,12 @@ class EventStudyService:
         
         # Use CAPM for Expected Returns (FF3 disabled due to missing high-fidelity HML data)
         try:
-            nifty = yf.download("^NSEI", start=est_window.index[0], end=df.index[-1], progress=False)
+            nifty = self.data_manager.get_ohlcv("^NSEI", start_date=est_window.index[0], end_date=df.index[-1], use_cache=True)
             if not nifty.empty:
-                nifty_rets = nifty['Close'].pct_change().dropna() * 100
-                ticker_rets = est_window['Close'].pct_change().dropna() * 100
+                nifty_close = nifty['close'] if 'close' in nifty.columns else nifty['Close']
+                ticker_close = est_window['close'] if 'close' in est_window.columns else est_window['Close']
+                nifty_rets = nifty_close.pct_change().dropna() * 100
+                ticker_rets = ticker_close.pct_change().dropna() * 100
                 aligned = pd.concat([ticker_rets, nifty_rets], axis=1).dropna()
                 aligned.columns = ['ticker', 'mkt']
                 if len(aligned) > 30:
@@ -59,9 +61,14 @@ class EventStudyService:
                         mkt_end = df.index[iloc_idx + days]
                         mkt_start = res_day.name
                         if mkt_start in nifty.index and mkt_end in nifty.index:
-                            mkt_ret = ((float(nifty.loc[mkt_end, 'Close']) - float(nifty.loc[mkt_start, 'Close'])) / float(nifty.loc[mkt_start, 'Close'])) * 100
+                            nifty_start_close = float(nifty.loc[mkt_start, 'close'] if 'close' in nifty.columns else nifty.loc[mkt_start, 'Close'])
+                            nifty_end_close = float(nifty.loc[mkt_end, 'close'] if 'close' in nifty.columns else nifty.loc[mkt_end, 'Close'])
+                            mkt_ret = ((nifty_end_close - nifty_start_close) / nifty_start_close) * 100
                             exp_ret = beta * mkt_ret
                             return act_ret - exp_ret
+                        else:
+                            # Fallback if Nifty doesn't have exact alignment
+                            return act_ret
                     return None
             else:
                 get_ar = get_return

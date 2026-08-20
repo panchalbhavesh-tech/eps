@@ -155,34 +155,27 @@ def enrich_single_company(company, db):
     except Exception as e:
         print(f"Prediction fallback for {company.ticker}: {e}")
         
-    import yfinance as yf
     import pandas as pd
-    yf_ticker = f"{company.ticker}.NS" if not company.ticker.endswith((".NS", ".BO", ".US", ".L")) else company.ticker
-    stock_data = yf.Ticker(yf_ticker)
+    from app.services.data.data_manager import UnifiedDataManager
+    dm = UnifiedDataManager()
 
     # 1. Fetch Market Cap
     try:
-        fast_info = getattr(stock_data, "fast_info", {})
-        mcap = getattr(fast_info, "market_cap", None)
-        if mcap is None and hasattr(fast_info, "get"):
-            mcap = fast_info.get("market_cap")
-        if mcap is None and hasattr(stock_data, "info"):
-            mcap = stock_data.info.get("marketCap")
+        info = dm.get_company_info(company.ticker)
+        mcap = info.get("market_cap")
         if mcap is not None and mcap > 0:
             company.market_cap = float(mcap)
     except Exception as ex:
         print(f"Error fetching market cap for {company.ticker}: {ex}")
 
     # 2. Fetch Quarterly Financials & True Release Dates
-    inc = stock_data.quarterly_income_stmt
+    inc = dm.get_financials(company.ticker)
     if inc is None or inc.empty:
-        inc = getattr(stock_data, "quarterly_financials", pd.DataFrame())
+        inc = pd.DataFrame()
     
     release_dates = []
     try:
-        ed = stock_data.earnings_dates
-        if ed is not None and not ed.empty:
-            release_dates = pd.to_datetime(ed.index).tz_localize(None).sort_values()
+        release_dates = dm.get_earnings_calendar(company.ticker)
     except Exception as ex:
         print(f"Error fetching earnings_dates for {company.ticker}: {ex}")
 
@@ -807,13 +800,12 @@ def capture_fundamental_snapshots_task():
         captured = 0
         trade_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         
+        from app.services.data.data_manager import UnifiedDataManager
+        dm = UnifiedDataManager()
         for comp in companies:
             try:
-                yf_ticker = f"{comp.ticker}.NS" if not comp.ticker.endswith((".NS", ".BO")) else comp.ticker
-                tk = yf.Ticker(yf_ticker)
-                
-                financials = tk.financials
-                bs = tk.balance_sheet
+                financials = dm.get_annual_financials(comp.ticker)
+                bs = dm.get_balance_sheet(comp.ticker)
                 
                 roe, de_ratio, pe_ratio, rev, net_inc = 0.0, 1.0, 30.0, 0.0, 0.0
                 
@@ -829,8 +821,8 @@ def capture_fundamental_snapshots_task():
                     roe = float(net_inc / total_equity) if total_equity > 0 else 0.0
                     de_ratio = float(total_debt / total_equity) if total_equity > 0 else 1.0
                     
-                    info = tk.info
-                    pe_ratio = float(info.get('trailingPE', comp.pe_ratio or 30.0))
+                    info = dm.get_company_info(comp.ticker)
+                    pe_ratio = float(info.get('pe_ratio', info.get('trailingPE', comp.pe_ratio or 30.0)))
                 else:
                     continue
                     

@@ -96,8 +96,10 @@ class Mutation:
                 print(f"Notice: Background queue trigger bypassed for {existing.ticker}: {e}")
             return str(existing.id)
 
-        # 2. Try fetching from Yahoo Finance / NSE
-        import yfinance as yf
+        # 2. Try fetching from UnifiedDataManager
+        from app.services.data.data_manager import UnifiedDataManager
+        dm = UnifiedDataManager()
+        
         symbols_to_try = []
         if clean_ticker.endswith((".NS", ".BO", ".US", ".L")):
             symbols_to_try.append(clean_ticker)
@@ -110,12 +112,11 @@ class Mutation:
         
         for sym in symbols_to_try:
             try:
-                stk = yf.Ticker(sym)
-                info_data = stk.info or {}
-                hist = stk.history(period="5d")
-                if (info_data and (info_data.get("regularMarketPrice") or info_data.get("currentPrice") or info_data.get("longName") or info_data.get("shortName"))) or (not hist.empty and len(hist) > 0):
+                info_data = dm.get_company_info(sym)
+                hist = dm.get_ohlcv(sym, days=5)
+                if info_data or (not hist.empty and len(hist) > 0):
                     valid_symbol = sym
-                    company_name = info_data.get("longName", info_data.get("shortName", sym))
+                    company_name = info_data.get("name", sym)
                     sector = info_data.get("sector", info_data.get("industry", "NSE"))
                     break
             except Exception:

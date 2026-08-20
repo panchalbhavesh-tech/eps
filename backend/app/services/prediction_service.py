@@ -1,13 +1,15 @@
 import requests
 from app.core.config import settings
 
+from app.services.data.data_manager import UnifiedDataManager
+
 class PredictionService:
     def __init__(self):
         self.fmp_api_key = settings.FMP_API_KEY
         self.fmp_base_url = "https://financialmodelingprep.com/api/v3"
+        self.data_manager = UnifiedDataManager()
 
     def generate_prediction(self, ticker: str) -> dict:
-        yf_ticker = f"{ticker}.NS" if not ticker.endswith(".NS") else ticker
         
         # Default fallback
         result = {
@@ -18,16 +20,13 @@ class PredictionService:
         }
         
         try:
-            import yfinance as yf
-            ticker_obj = yf.Ticker(yf_ticker)
-            
-            # Fetch current price
-            info = ticker_obj.fast_info
-            current_price = info.get("last_price", 0.0)
+            # Fetch company info for current price
+            info = self.data_manager.get_company_info(ticker)
+            current_price = info.get("current_price", 0.0)
             result["current_price"] = round(current_price, 2)
             
-            # Fetch historical EPS
-            df = ticker_obj.quarterly_income_stmt
+            # Fetch historical EPS from financials
+            df = self.data_manager.get_financials(ticker)
             if df.empty or 'Basic EPS' not in df.index:
                 return result
                 

@@ -10,6 +10,8 @@ def upgrade_db():
     cursor = conn.cursor()
 
     columns_to_add = [
+        ("companies", "bse_scrip_code", "VARCHAR"),
+        ("companies", "isin", "VARCHAR"),
         ("companies", "purpose", "VARCHAR"),
         ("companies", "upcoming_date", "VARCHAR"),
         ("companies", "current_price", "FLOAT"),
@@ -63,10 +65,16 @@ def upgrade_db():
         ("earnings_reports", "period_end", "TIMESTAMP"),
         ("momentum_signals", "known_at", "TIMESTAMP"),
         ("momentum_signals", "period_end", "TIMESTAMP"),
+        ("momentum_signals", "raw_dma200_dist", "FLOAT"),
+        ("momentum_signals", "raw_rel_vol", "FLOAT"),
         ("daily_bhavcopy", "known_at", "TIMESTAMP"),
         ("bulk_block_deals", "known_at", "TIMESTAMP"),
         ("surveillance_watchlist", "known_at", "TIMESTAMP"),
         ("score_prediction_logs", "known_at", "TIMESTAMP"),
+        ("strategy_backtests", "sharpe_ratio", "FLOAT"),
+        ("strategy_backtests", "sharpe_ci_lower", "FLOAT"),
+        ("strategy_backtests", "sharpe_ci_upper", "FLOAT"),
+        ("strategy_backtests", "sharpe_pvalue", "FLOAT"),
         ("event_studies", "ar_1d", "FLOAT"),
         ("event_studies", "ar_5d", "FLOAT"),
         ("event_studies", "ar_10d", "FLOAT"),

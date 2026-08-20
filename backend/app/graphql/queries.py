@@ -247,13 +247,13 @@ class Query:
         needs_upgrade = any(d and len(d) <= 8 for d in dates_to_check) or any(d and d[:2].isalpha() for d in dates_to_check)
         if needs_upgrade:
             try:
-                import yfinance as yf
                 import pandas as pd
-                yf_ticker = f"{c.ticker}.NS" if not c.ticker.endswith((".NS", ".BO")) else c.ticker
-                stock = yf.Ticker(yf_ticker)
-                ed = stock.earnings_dates
-                if ed is not None and not ed.empty:
-                    release_dates = pd.to_datetime(ed.index).tz_localize(None).sort_values()
+                from app.services.data.data_manager import UnifiedDataManager
+                dm = UnifiedDataManager()
+                
+                release_dates_raw = dm.get_earnings_calendar(c.ticker)
+                if release_dates_raw:
+                    release_dates = pd.Series(release_dates_raw)
                     
                     def resolve_date(old_dt):
                         if not old_dt: return old_dt

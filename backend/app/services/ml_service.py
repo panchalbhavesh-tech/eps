@@ -313,18 +313,20 @@ class MomentumMLService:
                         x_vec = np.array([[features.get(f, 0.0) for f in feat_cols]])
                         pipeline = model_dict['pipeline']
                         probs = pipeline.predict_proba(x_vec)
-                        clf = pipeline.named_steps.get('classifier') or pipeline.steps[-1][1]
-                        
-                        if hasattr(clf, 'classes_') and 1 in clf.classes_:
-                            pos_idx = np.where(clf.classes_ == 1)[0][0]
+                        # CalibratedClassifierCV propagates classes_ directly
+                        if hasattr(pipeline, 'classes_') and 1 in pipeline.classes_:
+                            pos_idx = np.where(pipeline.classes_ == 1)[0][0]
                             val = float(probs[0][pos_idx])
                         else:
                             val = float(probs[0][-1])
+                            
                         if horizon == '3d': prob_3d = val
                         elif horizon == '5d': prob_5d = val
                         elif horizon == '10d': prob_10d = val
-            except Exception:
-                pass
+            except Exception as e:
+                import traceback
+                print(f"ML Prediction Error: {e}")
+                traceback.print_exc()
 
         prob_5d = round(prob_5d, 3)
         prob_3d = round(prob_3d, 3)

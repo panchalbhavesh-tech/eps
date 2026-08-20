@@ -82,11 +82,13 @@ class ValidationService:
                     continue
                     
                 # Look up actual closing price from OHLCV cache (DailyBhavcopy)
-                bhav = self.db.query(DailyBhavcopy).filter(
+                # Ensure exact 5th active trading session (skip holidays)
+                bhavs = self.db.query(DailyBhavcopy).filter(
                     DailyBhavcopy.ticker == rec.ticker,
-                    DailyBhavcopy.trade_date >= rec.date_evaluated + timedelta(days=4),
-                    DailyBhavcopy.trade_date <= rec.date_evaluated + timedelta(days=9),
-                ).order_by(DailyBhavcopy.trade_date.asc()).first()
+                    DailyBhavcopy.trade_date > rec.date_evaluated
+                ).order_by(DailyBhavcopy.trade_date.asc()).limit(5).all()
+                
+                bhav = bhavs[-1] if len(bhavs) == 5 else None
 
                 if bhav and bhav.close_price:
                     ret_5d = ((float(bhav.close_price) - base_p) / base_p) * 100.0
@@ -218,10 +220,11 @@ class ValidationService:
             }
 
         def get_hit_rate(logs):
+            # Target is +/- 2.0%
             correct = sum(
                 1 for l in logs
-                if (l.prob_gain_5d and l.prob_gain_5d > 0.5 and l.realized_5d_return > 0) or
-                   (l.prob_gain_5d and l.prob_gain_5d <= 0.5 and l.realized_5d_return <= 0)
+                if (l.prob_gain_5d and l.prob_gain_5d > 0.5 and l.realized_5d_return > 2.0) or
+                   (l.prob_gain_5d and l.prob_gain_5d <= 0.5 and l.realized_5d_return <= 2.0)
             )
             return (correct / len(logs)) if logs else 0.0
 
@@ -237,7 +240,7 @@ class ValidationService:
             # Reconstruct binary outcomes to run t-test on proportions
             shadow_outcomes = []
             for l in shadow_logs:
-                if (l.prob_gain_5d and l.prob_gain_5d > 0.5 and l.realized_5d_return > 0) or (l.prob_gain_5d and l.prob_gain_5d <= 0.5 and l.realized_5d_return <= 0):
+                if (l.prob_gain_5d and l.prob_gain_5d > 0.5 and l.realized_5d_return > 2.0) or (l.prob_gain_5d and l.prob_gain_5d <= 0.5 and l.realized_5d_return <= 2.0):
                     shadow_outcomes.append(1)
                 else:
                     shadow_outcomes.append(0)

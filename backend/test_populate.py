@@ -2,7 +2,8 @@ from app.infrastructure.database import SessionLocal
 from app.infrastructure.models import Company
 from app.services.prediction_service import PredictionService
 from app.worker.tasks import sync_nse_calendar_task
-import yfinance as yf
+from app.services.data.data_manager import UnifiedDataManager
+import pandas as pd
 
 def populate_top_5():
     print("Syncing calendar...")
@@ -20,9 +21,8 @@ def populate_top_5():
             company.current_price = data.get("current_price")
             company.historical_trend = data.get("historical_trend")
             
-            yf_ticker = f"{company.ticker}.NS"
-            stock_data = yf.Ticker(yf_ticker)
-            inc = stock_data.quarterly_income_stmt
+            dm = UnifiedDataManager()
+            inc = dm.get_financials(company.ticker)
             if not inc.empty and 'Basic EPS' in inc.index:
                 eps_series = inc.loc['Basic EPS'].dropna()
                 if len(eps_series) >= 4:
@@ -32,9 +32,9 @@ def populate_top_5():
                     company.q4_eps = float(eps_series.iloc[0])
             
             if company.current_price in (0, 0.0, None):
-                hist = stock_data.history(period="1d")
-                if not hist.empty:
-                    company.current_price = round(float(hist['Close'].iloc[-1]), 2)
+                info = dm.get_company_info(company.ticker)
+                if 'current_price' in info:
+                    company.current_price = round(float(info['current_price']), 2)
             
             db.commit()
             print(f"Success for {company.ticker}")

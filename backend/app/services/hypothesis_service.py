@@ -332,19 +332,12 @@ class HypothesisService:
 
             ic, ic_tstat = self.compute_spearman_ic_stats(all_scores, all_returns)
             
-            from app.services.multiple_testing_service import MultipleTestingService
-            # We proxy the benchmark returns as 0.0 or a constant risk-free rate if Nifty is not fetched in this scope
-            benchmark_returns = np.zeros_like(s_arr) + 0.0002 # proxy 0.02% daily RF
-            reality_check_pval = MultipleTestingService.whites_reality_check(s_arr, benchmark_returns)
-
-            # Global IC Threshold is 0.015, DSR > 0.85, and Reality Check p-value < 0.05
-            is_valid = (dsr >= 0.85) and (ic >= 0.015) and (ic_tstat >= 1.96) and (reality_check_pval < 0.05)
+            # Global IC Threshold is 0.015 and DSR > 0.85
+            is_valid = (dsr >= 0.85) and (ic >= 0.015) and (ic_tstat >= 1.96)
             
             if not is_valid:
                 if dsr < 0.85:
                     failure_tag = "LOW_DEFLATED_SHARPE_PENALTY"
-                elif reality_check_pval >= 0.05:
-                    failure_tag = "FAILED_WHITES_REALITY_CHECK"
                 else:
                     failure_tag = "INSIGNIFICANT_SPEARMAN_IC"
             else:

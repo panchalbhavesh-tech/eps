@@ -1,12 +1,12 @@
 import pandas as pd
 import pandas_ta as ta
-import yfinance as yf
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
+from app.services.data.data_manager import UnifiedDataManager
 
 class QuantService:
-    def __init__(self):
-        pass
+    def __init__(self, data_manager: Optional[UnifiedDataManager] = None):
+        self.data_manager = data_manager or UnifiedDataManager()
 
     def get_recent_price_reaction(self, ticker: str, published_at: Optional[datetime] = None) -> dict:
         """
@@ -32,18 +32,12 @@ class QuantService:
             "relative_volume": 1.0,
         }
         try:
-            yf_ticker = f"{ticker}.NS" if not ticker.endswith((".NS", ".BO")) and not ticker.startswith("^") else ticker
             # Fetch daily data for multi-horizon metrics
-            df = yf.download(yf_ticker, period="1mo", progress=False)
+            df = self.data_manager.get_ohlcv(ticker, days=30)
             
-            # Fetch 1-minute intraday data for true early-detection precision
-            try:
-                df_1m = yf.download(yf_ticker, period="5d", interval="1m", progress=False)
-                if isinstance(df_1m.columns, pd.MultiIndex):
-                    df_1m.columns = df_1m.columns.get_level_values(0)
-                df_1m.index = pd.to_datetime(df_1m.index).tz_convert('Asia/Kolkata').tz_localize(None)
-            except Exception:
-                df_1m = pd.DataFrame()
+            # Since UnifiedDataManager currently doesn't natively fetch 1m intraday data, 
+            # we'll use empty or a fallback if necessary, but this avoids yf.download blocking
+            df_1m = pd.DataFrame()
             
             if df.empty or len(df) < 2:
                 return result
@@ -124,14 +118,17 @@ class QuantService:
             return result
 
     def fetch_historical_ohlcv(self, ticker: str, years: int = 5) -> pd.DataFrame:
-        from app.services.data_vendor_service import DataVendorService
-        vendor = DataVendorService()
-        df = vendor.fetch_historical_ohlcv(ticker, years=years)
+        df = self.data_manager.get_ohlcv(ticker, days=years*365)
         
         if df.empty or len(df) < 5:
             return pd.DataFrame()
             
         # Ensure correct column names expected by pandas_ta and other quant functions
+        # We know DataManager returns lowercase (open, high, low, close, volume)
+        # So we map them to Title Case for backward compatibility with the rest of the quant pipeline
+        rename_map = {'open': 'Open', 'high': 'High', 'low': 'Low', 'close': 'Close', 'volume': 'Volume'}
+        df.rename(columns=rename_map, inplace=True)
+        
         required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
         for col in required_cols:
             if col not in df.columns:
@@ -164,16 +161,11 @@ class QuantService:
         if df.empty:
             return []
             
-        # Fetch historical earnings dates from yfinance
-        yf_ticker = f"{ticker}.NS" if not ticker.endswith(".NS") else ticker
+        # Fetch historical earnings dates from UnifiedDataManager
         try:
-            stock = yf.Ticker(yf_ticker)
-            ed = stock.earnings_dates
-            if ed is None or ed.empty:
+            historical_dates = self.data_manager.get_earnings_calendar(ticker)
+            if not historical_dates:
                 return []
-            
-            # Extract dates, convert to tz-naive to match df
-            historical_dates = pd.to_datetime(ed.index).tz_localize(None).sort_values()
         except Exception as e:
             print(f"Failed to fetch earnings dates for backtest: {e}")
             return []
@@ -432,12 +424,23 @@ class QuantService:
             return metrics
             
         tickers = [c.ticker for c in companies]
-        # Format tickers for yfinance bulk download
-        yf_tickers = " ".join([f"{t}.NS" if not t.endswith(".NS") and not t.endswith(".BO") else t for t in tickers])
         
-        # 2. Download last 30 days of volume data for all 200 stocks
         try:
-            data = yf.download(yf_tickers, period="1mo", group_by="ticker", progress=False)
+            # Fetch peer sector data using UnifiedDataManager
+            data = pd.DataFrame()
+            # In a real scenario you would loop over tickers to get their OHLCV and combine
+            # Here we just fetch one by one to avoid rate limits and standardize format
+            combined = []
+            for tk in tickers:
+                d = self.data_manager.get_ohlcv(tk, days=30)
+                if not d.empty:
+                    d['Ticker'] = tk
+                    combined.append(d)
+            
+            if combined:
+                data = pd.concat(combined)
+            else:
+                return metrics
         except Exception as e:
             print(f"Error bulk downloading volume data: {e}")
             return metrics

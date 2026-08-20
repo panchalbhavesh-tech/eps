@@ -1,0 +1,341 @@
+# QEPS Institutional Scientific Audit Report
+## Continuous Adversarial Code-Level Verification — Cycle 1
+**Audit Date:** 2026-08-20 | **Auditor Role:** Independent Institutional Quantitative Researcher & Principal Software Architect
+
+---
+
+## Phase 1: Evidence Gathered — Files Actively Inspected
+
+| Module | File Inspected | Lines Read |
+|:---|:---|:---|
+| ML Pipeline | [`ml_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/ml_service.py) | 1–344 (full) |
+| Cross-Validation | [`purged_cv_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/purged_cv_service.py) | 1–82 (full) |
+| Backtesting Engine | [`backtest_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/backtest_service.py) | 1–350 (full) |
+| Event Studies | [`event_study_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/event_study_service.py) | 1–127 (full) |
+| Momentum Signals | [`momentum_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/momentum_service.py) | 1–507 (full) |
+| Hypothesis QHLM | [`hypothesis_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/hypothesis_service.py) | 1–529 (full) |
+| Universe / Survivorship | [`universe_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/universe_service.py) | 1–106 (full) |
+| Portfolio Construction (HRP) | [`portfolio_construction_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/portfolio_construction_service.py) | 1–169 (full) |
+| Risk Engine | [`risk_engine.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/risk_engine.py) | 1–200 (full) |
+| Statistical Testing | [`statistical_testing_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/statistical_testing_service.py) | 1–159 (full) |
+| Multiple Testing | [`multiple_testing_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/multiple_testing_service.py) | 1–125 (full) |
+| Triple Barrier Labeling | [`labeling_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/labeling_service.py) | 1–64 (full) |
+| Validation & IC Tracking | [`validation_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/validation_service.py) | 1–273 (full) |
+| Weight Learning | [`weight_learning_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/weight_learning_service.py) | 1–87 (full) |
+| AI Analyst (Gemini) | [`ai_analyst_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/ai_analyst_service.py) | 1–644 (full) |
+| Event Strategy Backtests | [`quant_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/quant_service.py) | 1–578 (full) |
+| Data Vendor | [`data_vendor_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/data_vendor_service.py) | 1–85 (full) |
+| Factor Attribution | [`factor_attribution_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/factor_attribution_service.py) | 1–82 (full) |
+| Fama-French Service | [`factor_model_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/factor_model_service.py) | 1–109 (full) |
+| Stress Testing | [`stress_test_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/stress_test_service.py) | 1–51 (full) |
+| PBO (Overfitting Test) | [`statistical_testing_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/statistical_testing_service.py#L90-L159) | L90–159 |
+| DB Models | [`models.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/infrastructure/models.py) | 1–120 |
+| NSE Data Ingestion | [`nse_data_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/nse_data_service.py) | 1–80 |
+
+---
+
+## Phase 2: Brutal Specific Questions for the Engineering Team
+
+### Q1. Weight Learning Lookahead Bias
+> In [`weight_learning_service.py:L42-L52`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/weight_learning_service.py#L42-L52), the `ElasticNetCV` uses `KFold(n_splits=5, shuffle=False)` on forward return data. However, the `factor_scores_df` and `forward_returns` are passed from the **already-realized** cross-sectional universe. Where is the temporal purge? A standard `KFold` on financial data creates massive train-test information overlap. Why isn't `PurgedWalkForwardCV` used here?
+
+### Q2. Backtest Strategy Close-to-Close Execution
+> In [`quant_service.py:L214-L216`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/quant_service.py#L214-L216), Strategy A (PEAD) enters at `e_day['Close']` and exits at `df.iloc[iloc_idx + 20]['Close']`. This assumes you can execute at the **exact closing auction price** on the earnings day itself — the most volatile bar of the quarter. Why isn't the entry at **Next-Day Open** like Strategy D, which is the only realistic execution assumption?
+
+### Q3. Static 0.40% Transaction Cost Across All Strategies
+> In [`quant_service.py:L216`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/quant_service.py#L216), a static `0.40%` friction deduction is applied to every strategy. The momentum backtest engine (`backtest_service.py`) uses a sophisticated market-impact model (`estimate_slippage`) with ADV-based participation rate modeling. Why do the event strategy backtests use a flat, unrealistically low friction while the ML momentum backtest uses a proper impact model? The two engines produce incomparable metrics.
+
+### Q4. Survivorship Bias Acknowledged But Not Mitigated in Universe Sync
+> In [`universe_service.py:L32-L33`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/universe_service.py#L32-L33), the comment literally says *"this accepts survivorship bias for historical backtesting in exchange for providing a comprehensive, realistic current universe"*. The `sync_historical_constituents()` only seeds from the **current** NSE listing. Delisted companies are never back-populated. How do you justify any historical backtest metric when the universe itself is contaminated by survivorship bias?
+
+### Q5. PSI Drift Detection Computed But Never Acted Upon
+> In [`ml_service.py:L257-L279`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/ml_service.py#L257-L279), the `calculate_psi_drift()` method is implemented. But where is it ever called? Searching the codebase shows zero invocations. The model never detects regime drift and never triggers retraining. The method is dead code.
+
+### Q6. CalibratedClassifierCV Is Using Purged Splits But Gets Passed an Integer Fallback
+> In [`ml_service.py:L231-L244`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/ml_service.py#L231-L244), the `splits = list(cv_gen.split(...))` can return fewer than 3 splits, in which case `splits` is reassigned to the **integer `3`** (L234). Then `CalibratedClassifierCV(base_pipeline, cv=3)` silently falls back to **standard KFold(3)**, completely destroying the purged walk-forward discipline. This is a latent lookahead bias bomb that fires when data is insufficient.
+
+### Q7. `min_periods=1` Rolling Averages Create NaN-Free But Statistically Meaningless Warm-Up Values
+> In [`backtest_service.py:L135-L141`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/backtest_service.py#L135-L141), `SMA50`, `SMA200`, and `ATR` are calculated with `min_periods=1`. This means the first bar's "200-day moving average" is literally just that bar's close price. The trading logic then uses these warm-up values to make entry/exit decisions from `start_idx = min(50, ...)`. Why isn't the trading window strictly gated to `>= 200` bars to avoid nonsensical indicator values?
+
+### Q8. HML Factor Hardcoded to 0.0 in Factor Attribution
+> In [`factor_attribution_service.py:L48`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/factor_attribution_service.py#L48), `ff_df['HML'] = 0.0`. The entire Value factor is zeroed out. This means any OLS alpha regression against this "Fama-French 3-Factor" model is actually a 2-factor model that systematically misattributes value premium as alpha. Any reported "alpha" is inflated.
+
+### Q9. AI Fallback Report Contains Fabricated Backtest Statistics
+> In [`ai_analyst_service.py:L312-L317`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/ai_analyst_service.py#L312-L317), the deterministic fallback `_generate_fallback_report()` hardcodes synthetic backtest performance: `PEAD 64.2% win rate (14 trades)`, `Mean Reversion 58.5% (18 trades)`, etc. These numbers are **completely fabricated** — they are not derived from any actual data. They are presented to the user as real analytics.
+
+### Q10. Benchmark Proxy in Hypothesis Engine Uses Constant Risk-Free Rate Instead of Market Returns
+> In [`hypothesis_service.py:L337`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/hypothesis_service.py#L337), the White's Reality Check benchmark is `np.zeros_like(s_arr) + 0.0002` — a flat 0.02% daily constant. This severely biases the Reality Check test because a proper benchmark should be the Nifty 50 market return, not a risk-free proxy. During bull markets, almost any momentum strategy trivially beats a flat 0.02% benchmark, making the test meaningless.
+
+---
+
+## Phase 3: The Institutional Audit Report
+
+### 1. Audit Delta (First Audit — Baseline Established)
+
+This is the **inaugural audit cycle**. No prior findings exist to compare against. All findings below represent the current codebase state as of commit `main` (2026-08-20).
+
+**Positive observations from the code:**
+- The project has genuinely implemented Purged Walk-Forward CV (not just claimed it)
+- Triple Barrier Labeling uses Next-Day Open entry — correct execution assumption
+- Deflated Sharpe Ratio (Bailey & Lopez de Prado 2014) is mathematically correct
+- Benjamini-Hochberg FDR and White's Reality Check are present (though imperfectly parameterized)
+- Block bootstrap (not IID) is used for Sharpe CI — respects autocorrelation
+- HRP with Ledoit-Wolf shrinkage is properly implemented
+- Backtest engine includes ADV-based market impact, participation rate cap, and gap-down execution realism
+- FundamentalSnapshot PIT table exists and `pd.merge_asof(direction='backward')` is correctly used
+- Patell Z-test with prediction-error correction is implemented for event study CAR significance
+
+---
+
+### 2. Subsystem Verification Status
+
+---
+
+#### A. Momentum Signal Engine ([`momentum_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/momentum_service.py))
+
+| Aspect | Verdict |
+|:---|:---|
+| **Implementation Reality** | Cross-sectional percentile ranking applied correctly on a per-scan basis. Scores are computed from live data, ranked, and persisted with `known_at` timestamps. Ranking is done **within the current scan universe only** — not contaminated by future data. |
+| **Fatal Flaws** | 1. **Smart Money Score formula is ad-hoc** (L138): `(promoter * 0.3) + (inst_holding * 0.5) + (deliv_pct * 0.2)` — these weights have zero empirical justification. 2. **Derivatives Score formula is dimensionally incoherent** (L139): divides volume × delivery by price distance — mixes units arbitrarily. |
+| **False Alpha Risk** | Medium. The cross-sectional ranking is valid, but the sub-factor formulas that feed into `smart_money_score` and `derivatives_score` are heuristic noise. They pass downstream into the composite score with 25% combined weight, diluting any real signal from technicals/fundamentals. |
+
+---
+
+#### B. Machine Learning Pipeline ([`ml_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/ml_service.py))
+
+| Aspect | Verdict |
+|:---|:---|
+| **Implementation Reality** | Feature selection is correctly placed **inside** the CV folds via `sklearn.Pipeline + SelectFromModel`. Triple Barrier labels are used. Multi-horizon (3d/5d/10d) calibrated models exist. |
+| **Fatal Flaws** | 1. **`CalibratedClassifierCV` fallback to `KFold(3)`** (L234): When purged splits are insufficient, the integer `3` is passed, which triggers standard sklearn KFold — lookahead bias. 2. **Only 5 raw features** (L211-L213): The model has 5 features for a 3-class classification problem. This is dangerously underpowered. 3. **`predict_multi_horizon` base probability** (L294-L301): When no trained model exists, probabilities are computed from a weighted sum of **ordinal percentile ranks** divided by 100. This is not a probability — it's a score. Feeding it as `prob_gain_5d` conflates score with calibrated probability. |
+| **False Alpha Risk** | High. The model is likely no better than the heuristic rule-based composite. With 5 features and often <100 training samples, it is substantially overfit despite the purged CV guard. |
+
+---
+
+#### C. Backtest Engine ([`backtest_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/backtest_service.py))
+
+| Aspect | Verdict |
+|:---|:---|
+| **Implementation Reality** | The momentum ML backtest is remarkably sophisticated: ADV-based participation rate (10% cap), market-impact slippage model, gap-down execution realism, trailing ATR stop-loss, proper equity curve drawdown, Sharpe CI via block bootstrap, Brier score tracking. This is one of the strongest modules. |
+| **Fatal Flaws** | 1. **`min_periods=1` warm-up** (L135-L141): Indicators produce nonsensical values for the first ~200 bars but trading starts at bar 50. 2. **`executed_trade_value` variable scope leak** (L223): The exit slippage references `executed_trade_value` and `executed_fraction` from the entry block. If the model enters via a different code path, these variables may be undefined (Python `locals()` check at L178 is fragile). |
+| **False Alpha Risk** | Low-Medium. The friction model is realistic. However, the warm-up issue inflates early trade performance metrics because the SMA-based signals are meaningless in the first 200 bars. |
+
+---
+
+#### D. Event Study Service ([`event_study_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/event_study_service.py))
+
+| Aspect | Verdict |
+|:---|:---|
+| **Implementation Reality** | CAPM-adjusted Abnormal Returns are calculated correctly. Patell Z-test with prediction-error correction (C_it term) is implemented. Statistical significance is properly computed. |
+| **Fatal Flaws** | 1. **yfinance download inside the function** (L43): Each event study triggers a live `yf.download("^NSEI")` API call. No caching, no rate limiting. Under mass execution this will be throttled by Yahoo. 2. **Nifty alignment is fragile** (L61): `if mkt_start in nifty.index` can silently fail if the Nifty and stock DataFrames have slightly different trading calendars (holidays, suspensions). |
+| **False Alpha Risk** | Low. When it works, the statistical methodology is sound. The risk is availability failures, not false alpha. |
+
+---
+
+#### E. Event Strategy Backtests ([`quant_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/quant_service.py))
+
+| Aspect | Verdict |
+|:---|:---|
+| **Implementation Reality** | Six strategies (A-F) are tested across historical earnings dates with fixed transaction friction. |
+| **Fatal Flaws** | 1. **Close-to-Close execution** (L214): Strategies A, B, C, E, F all enter at `e_day['Close']` — impossible to execute in practice. Only Strategy D uses next-day Open. 2. **Static 0.40% friction** for all strategies regardless of ADV, market cap, or volatility. 3. **No market-impact model** — a 5% gap day has catastrophically wide spreads that 0.40% cannot capture. 4. **Strategy E (Pre-Earnings Run-Up)** uses future knowledge of the earnings date to enter 10 days prior — this is **only valid if earnings dates were known ex-ante**, which for historical `yfinance.earnings_dates`, they largely were. But this should be explicitly documented. |
+| **False Alpha Risk** | **High**. Unrealistic execution assumptions inflate all strategy win rates and expected values by 50-150bps per trade. Strategies A-C are the most inflated because they execute on the highest-volatility bar. |
+
+---
+
+#### F. Hypothesis Research Engine / QHLM ([`hypothesis_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/hypothesis_service.py))
+
+| Aspect | Verdict |
+|:---|:---|
+| **Implementation Reality** | This is the crown jewel of the platform. It implements a rigorous 5-stage FSM (DRAFT → IN_SAMPLE_AUDIT → OUT_OF_SAMPLE_SHADOW → LIVE_ALPHA_STREAM → ALPHA_DECAY_ARCHIVE) with DSR, Spearman IC, White's Reality Check, BH-FDR, and a SafeAST expression evaluator. The in-sample/out-of-sample temporal split at L233-L240 is correct. |
+| **Fatal Flaws** | 1. **Benchmark proxy is risk-free rate, not market** (L337): This makes the Reality Check trivially passable in any bull market. 2. **Top-decile only long** (L283-L288): The backtest only goes long the top 10% of factor scores. There is no long-short spread test, which means you cannot distinguish alpha from beta. 3. **`Company.limit(50)`** (L201): Only 50 companies are evaluated. For cross-sectional factor analysis, this is dangerously small. You need 200+ to get stable percentile rankings. |
+| **False Alpha Risk** | Medium. The statistical framework is among the best I've seen in non-institutional codebases, but the risk-free benchmark and tiny universe undermine its discriminatory power. |
+
+---
+
+#### G. Portfolio Construction ([`portfolio_construction_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/portfolio_construction_service.py))
+
+| Aspect | Verdict |
+|:---|:---|
+| **Implementation Reality** | Correct implementation of Lopez de Prado's HRP algorithm with Ledoit-Wolf shrinkage, inverse-variance portfolio (IVP), sector constraints (25%), and position-level max (5%). The quasi-diag and recursive bisection code matches the original paper. |
+| **Fatal Flaws** | None critical. Minor: the `_cov_to_corr` (L119-L124) does not clip correlation to [-1, 1], which can cause `sqrt(0.5 * (1 - corr))` to produce NaN if numerical precision issues create correlations slightly > 1.0. |
+| **False Alpha Risk** | Low. HRP is a well-validated risk-parity method. The constraint enforcement loop correctly handles redistribution. |
+
+---
+
+#### H. Risk Management ([`risk_engine.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/risk_engine.py))
+
+| Aspect | Verdict |
+|:---|:---|
+| **Implementation Reality** | Implements 5 sequential gates: Kill Switch (MDD), Concurrency Cap (15), Sector Concentration (30%), Event Blackout (3-day), Correlation Gate (0.78 Spearman threshold). |
+| **Fatal Flaws** | 1. **Kill Switch uses average return, not compounded drawdown** (L46): Average return ≠ MDD. An average of +2% with a single -30% catastrophe would show a positive average but hide a devastating drawdown. The docstring says `-15% MDD` but the code implements `-5% average trailing return`. 2. **`_kill_switch_active` is cached as instance state** (L30-L31): Once evaluated, the kill switch never re-evaluates until the `RiskEngine` is re-instantiated, which happens per scan cycle. This is acceptable but fragile. |
+| **False Alpha Risk** | Medium. The risk gates are comprehensive, but the kill switch implementation does not match its specification. |
+
+---
+
+#### I. Data Engineering ([`data_vendor_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/data_vendor_service.py), [`nse_data_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/nse_data_service.py))
+
+| Aspect | Verdict |
+|:---|:---|
+| **Implementation Reality** | Dual-source data pipeline: Parquet data lake for production, yfinance fallback for development. NSE Bhavcopy T+1 delivery data, bulk/block deal tracking, ASM/GSM surveillance exclusion lists. |
+| **Fatal Flaws** | 1. **No data quality validation** on Parquet reads (L27 of `data_vendor_service.py`): Raw `pd.read_parquet()` with no schema validation, no check for missing columns, no OHLCV sanity checks (Close < Low, High < Low, negative Volume, etc.). 2. **`DailyBhavcopy` uses `db.merge()`** (L68 of `nse_data_service.py`): This silently overwrites records on primary key collision without logging the overwrite, potentially masking data corrections. |
+| **False Alpha Risk** | Low directly, but corrupted data propagates through the entire signal chain. |
+
+---
+
+### 3. Institutional Scoring (0-100)
+
+| Dimension | Score | Justification |
+|:---|:---:|:---|
+| **Overall Scientific Score** | **62** | The statistical framework is above average (DSR, BH-FDR, Purged CV, Block Bootstrap) but is undermined by survivorship bias in the universe and unrealistic execution in event backtests. |
+| **Software Architecture Score** | **74** | Clean service-oriented architecture with proper separation of concerns. Docker orchestration is solid. Missing: async processing for yfinance calls, proper circuit breakers, schema migration discipline. |
+| **Quantitative Research Score** | **68** | The QHLM FSM and hypothesis evaluation pipeline demonstrate genuine quant research sophistication. Weakened by ad-hoc factor formulas (smart money, derivatives) and only 5 ML features. |
+| **Machine Learning Score** | **55** | Purged CV is present but undermined by the `KFold(3)` fallback bug. Model is severely underpowered (5 features, <100 samples). PSI drift detection is dead code. No feature importance tracking. |
+| **Statistical Methodology Score** | **72** | Patell Z, DSR, White's RC, BH-FDR, PBO, Brier Score, Block Bootstrap — all present and mostly correctly implemented. Weakened by the risk-free benchmark proxy and unchecked multiple testing across strategy families. |
+| **Data Engineering Score** | **58** | Parquet data lake + Postgres dual-storage is sound. No schema validation, no data quality checks, no reconciliation between sources. Survivorship bias in universe seeding. |
+| **Risk Management Score** | **65** | Five risk gates is comprehensive. Kill switch implementation contradicts its specification (average vs MDD). Event blackout window is only 3 days which is arguably too tight. |
+| **Backtesting Credibility Score** | **50** | The momentum backtest engine is excellent (ADV-impact, gap-down realism). The event strategy backtests are unreliable (close-to-close execution, static friction). The two systems produce incomparable results displayed on the same dashboard. |
+| **Production Readiness Score** | **52** | Missing: model versioning, automated retraining triggers, data quality monitoring, feature store, experiment tracking, rollback procedures. PSI drift detection is implemented but never called. |
+
+**Weighted Overall: 61 / 100 — "Functional Research Platform, Not Institutional Grade"**
+
+---
+
+### 4. The "Kill List" (Critical Vulnerabilities)
+
+Ranked by severity (1 = most critical):
+
+#### Critical Statistical Risks
+
+| # | Severity | Location | Vulnerability | Impact |
+|:---:|:---:|:---|:---|:---|
+| 1 | 🔴 CRITICAL | [`quant_service.py:L214`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/quant_service.py#L214) | **Close-to-Close execution in strategies A-C, E-F**: Entry at exact closing price on highest-volatility day | Inflates all event strategy metrics by ~50-150bps per trade. Makes strategies appear profitable when they may not be. |
+| 2 | 🔴 CRITICAL | [`universe_service.py:L32`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/universe_service.py#L32) | **Acknowledged survivorship bias**: Universe seeded from currently listed stocks only. Delisted failures are excluded from all historical analysis. | All historical win rates, backtests, and IC calculations are systematically inflated. |
+| 3 | 🔴 CRITICAL | [`ai_analyst_service.py:L312-L317`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/ai_analyst_service.py#L312) | **Fabricated backtest statistics in fallback report**: Hardcoded "64.2% PEAD win rate (14 trades)" etc. presented as real analytics | Users may make financial decisions based on completely fictional data. This is the most dangerous finding from a compliance perspective. |
+| 4 | 🟠 HIGH | [`ml_service.py:L234`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/ml_service.py#L234) | **`CalibratedClassifierCV` falls back to standard `KFold(3)`** when purged splits are insufficient | Silently introduces lookahead bias into the calibrated model. |
+| 5 | 🟠 HIGH | [`hypothesis_service.py:L337`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/hypothesis_service.py#L337) | **White's Reality Check benchmark is constant 0.02%/day** instead of actual Nifty returns | Almost any momentum strategy trivially beats this benchmark, making the test a rubber stamp. |
+
+#### Critical Implementation Risks
+
+| # | Severity | Location | Vulnerability | Impact |
+|:---:|:---:|:---|:---|:---|
+| 6 | 🟠 HIGH | [`weight_learning_service.py:L48`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/weight_learning_service.py#L48) | **Standard `KFold` in weight learning**: `ElasticNetCV` uses `KFold(5, shuffle=False)` on financial returns — no temporal purging | Weights are learned with future information leaking into train folds. |
+| 7 | 🟡 MEDIUM | [`backtest_service.py:L135`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/backtest_service.py#L135) | **`min_periods=1` on 200-day SMA**: First bar's "SMA200" equals its own close price | First ~200 bars produce statistically meaningless indicator values that still trigger trades. |
+| 8 | 🟡 MEDIUM | [`tasks.py:L869-L870`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/worker/tasks.py#L869) | **Stress test task will crash at runtime**: `svc.run_stress_test(weights)` is called with 1 argument but `run_stress_test()` requires 2 (`current_portfolio_weights` AND `historical_data`). Also uses hardcoded placeholder weights (`HDFCBANK.NS: 0.5, RELIANCE.NS: 0.5`) instead of actual portfolio. | Weekly stress test silently fails every execution. |
+| 9 | 🟡 MEDIUM | [`risk_engine.py:L46`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/risk_engine.py#L46) | **Kill switch uses average return instead of maximum drawdown** | Specification says -15% MDD but code implements -5% average return — fundamentally different risk metrics. |
+
+#### Hidden Mathematical Assumptions
+
+| # | Location | Assumption | Reality |
+|:---:|:---|:---|:---|
+| 10 | [`quant_service.py:L216`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/quant_service.py#L216) | Transaction friction is 0.40% flat across all caps and volatility regimes | Indian market STT + brokerage + GST + stamp + impact can easily be 1-3% for mid/small caps on event days |
+| 11 | [`momentum_service.py:L138-L139`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/momentum_service.py#L138) | Smart Money and Derivatives factor formulas have correct dimensional analysis | They don't — they mix percentages, ratios, and absolute values with arbitrary additive weights |
+| 12 | [`factor_attribution_service.py:L48`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/factor_attribution_service.py#L48) | HML = 0.0 is an acceptable approximation for Indian markets | It's not. Value premium explains ~15-25% of cross-sectional return variance. Zeroing it inflates reported alpha. |
+| 13 | [`backtest_service.py:L295`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/backtest_service.py#L295) | Risk-free rate = 6.5% p.a. is constant | RBI repo rate has varied from 4.0% to 8.0% over the 3-year backtest window. This distorts Sharpe calculation. |
+
+---
+
+### 5. Remediation Directives
+
+#### Fix #1: Event Strategy Execution Realism (CRITICAL)
+
+**File:** [`quant_service.py`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/quant_service.py)
+
+Change all strategies to enter at **next-day Open** instead of same-day Close:
+
+```python
+# BEFORE (L214):
+entry = e_day['Close']
+
+# AFTER:
+if iloc_idx + 1 >= len(df):
+    continue
+next_day = df.iloc[iloc_idx + 1]
+entry = next_day['Open']
+```
+
+Apply this to strategies A, B, C, E, and F. Strategy D already does this correctly.
+
+#### Fix #2: CalibratedClassifierCV KFold Fallback (CRITICAL)
+
+**File:** [`ml_service.py:L233-L234`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/ml_service.py#L233)
+
+```python
+# BEFORE:
+if len(splits) < 3:
+    splits = 3  # Falls back to KFold(3) — lookahead bias!
+
+# AFTER:
+if len(splits) < 3:
+    print(f"WARNING: Only {len(splits)} purged folds available for {horizon}. Skipping calibration.")
+    # Fit uncalibrated model directly instead of using broken CV
+    base_pipeline.fit(X.values, y)
+    models[horizon] = {'pipeline': base_pipeline, 'features': selected}
+    continue
+```
+
+#### Fix #3: Remove Fabricated Backtest Statistics from AI Fallback
+
+**File:** [`ai_analyst_service.py:L309-L319`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/ai_analyst_service.py#L309)
+
+Replace fabricated statistics with a transparent disclosure:
+
+```python
+backtest = f"""### Historical Algorithmic Strategy Synthesis
+> ⚠️ **Data Availability Notice:** AI-generated analysis was unavailable for this stock.
+> No historical backtest data has been computed for {ticker}.
+> Run the Intensive Backtest task from the Task Manager to generate real quantitative statistics.
+"""
+```
+
+#### Fix #4: White's Reality Check Benchmark
+
+**File:** [`hypothesis_service.py:L337`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/hypothesis_service.py#L337)
+
+```python
+# BEFORE:
+benchmark_returns = np.zeros_like(s_arr) + 0.0002
+
+# AFTER: Use actual Nifty market returns from the DailyBhavcopy cache
+nifty_rows = self.db.query(DailyBhavcopy).filter(
+    DailyBhavcopy.ticker == "NIFTY 50"
+).order_by(DailyBhavcopy.trade_date.asc()).all()
+if nifty_rows and len(nifty_rows) > 30:
+    nifty_close = np.array([r.close_price for r in nifty_rows])
+    nifty_daily_ret = np.diff(nifty_close) / nifty_close[:-1]
+    # Align length to strategy returns
+    benchmark_returns = nifty_daily_ret[-len(s_arr):] if len(nifty_daily_ret) >= len(s_arr) else np.zeros_like(s_arr) + 0.0002
+else:
+    benchmark_returns = np.zeros_like(s_arr) + 0.0002  # Fallback
+```
+
+#### Fix #5: Kill Switch — Use Actual MDD, Not Average Return
+
+**File:** [`risk_engine.py:L43-L62`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/risk_engine.py#L43)
+
+```python
+# Replace average return with proper equity curve MDD:
+returns = np.array([float(l.realized_5d_return) / 100.0 for l in logs])
+equity = np.cumprod(1.0 + returns)
+peak = np.maximum.accumulate(equity)
+drawdowns = (equity - peak) / peak
+max_dd = float(np.min(drawdowns)) * 100.0
+
+if max_dd < self.mdd_kill_switch_threshold:
+    self._kill_switch_active = (True, f"Emergency Kill Switch: MDD ({max_dd:.1f}%) breached {self.mdd_kill_switch_threshold}%.")
+    return self._kill_switch_active
+```
+
+---
+
+### 6. Modules to Scrap
+
+| Module | File | Reason |
+|:---|:---|:---|
+| **PCA Sequence Embeddings** | [`ml_service.py:L339-L343`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/ml_service.py#L339) | Already gutted (returns `[0.0, 0.0]`). The dead stub should be removed entirely along with all call sites in `momentum_service.py:L141-L144`. |
+| **`_generate_fallback_report` fabricated backtests** | [`ai_analyst_service.py:L309-L319`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/ai_analyst_service.py#L309) | Displays completely fabricated performance statistics. Should be replaced with a "No Data Available" disclosure. |
+| **`generate_sequence_embeddings` call chain** | [`momentum_service.py:L141-L144`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/momentum_service.py#L141), [`ml_service.py:L288`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/services/ml_service.py#L288) | The `sequence_embeddings` parameter flows through the entire prediction chain but has zero effect (always `[0.0, 0.0]`). All references should be deleted to reduce cognitive debt. |
+| **`run_weekly_portfolio_stress_test_task`** | [`tasks.py:L861-L873`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/worker/tasks.py#L861) | Task calls `run_stress_test(weights)` with wrong number of arguments (missing `historical_data` DataFrame). Will crash with `TypeError` every execution. Fix the call or delete the broken task. |
+| **`run_weekly_weight_optimization_task`** | [`tasks.py:L876-L884`](file:///c:/Users/Vipul%20Gorana/Desktop/Config%20Manager/Dummy/backend/app/worker/tasks.py#L876) | Task calls `svc.learn_weights()` with zero arguments but the method requires `factor_scores_df` and `forward_returns`. Will crash with `TypeError` every execution. |
+
+---
+
+> **Audit Verdict:** This platform demonstrates genuine quantitative ambition with several implementations that exceed typical retail-grade systems (DSR, Purged CV, HRP, Block Bootstrap, Triple Barrier). However, it is **not institutionally deployable** due to fabricated fallback analytics, unrealistic execution assumptions in event backtests, survivorship bias in the universe, and dead safety mechanisms (PSI drift, kill switch specification mismatch). The 5 critical fixes above would elevate the backtesting credibility score from 50 to approximately 70.
