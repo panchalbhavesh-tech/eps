@@ -16,7 +16,7 @@ import FinancialHealthScorecard from '../components/FinancialHealthScorecard';
 import QuarterlyMarketImpact from '../components/QuarterlyMarketImpact';
 import SocialSentimentCard from '../components/SocialSentimentCard';
 import { useThemeMode } from '../theme/ThemeContext';
-import { StatusBadge, ErrorBoundary } from '../components/common';
+import { StatusBadge, ErrorBoundary, ExpandableSection } from '../components/common';
 
 const COMPANY_DETAIL_QUERY = gql`
   query GetCompanyDetail($id: String!) {
@@ -245,31 +245,31 @@ const CompanyDetail: React.FC = () => {
     '& ul, & ol': { color: tokens.text.primary, fontSize: '13px', mb: 2, paddingLeft: '24px', fontFamily: tokens.typography.fontFamily },
     '& li': { mb: 1, lineHeight: 1.6 },
     '& strong': { color: tokens.text.primary, fontWeight: 700 },
-    '& table': { 
-      width: '100%', 
-      borderCollapse: 'collapse', 
-      mt: 2, 
-      mb: 3, 
+    '& table': {
+      width: '100%',
+      borderCollapse: 'collapse',
+      mt: 2,
+      mb: 3,
       fontSize: '12px',
       backgroundColor: tokens.background.paper,
       borderTop: `1px solid ${tokens.border.main}`,
       borderLeft: `1px solid ${tokens.border.main}`,
     },
-    '& th': { 
-      backgroundColor: tokens.background.header, 
-      color: tokens.text.secondary, 
-      fontWeight: 600, 
-      textAlign: 'left', 
-      p: '10px 12px', 
+    '& th': {
+      backgroundColor: tokens.background.header,
+      color: tokens.text.secondary,
+      fontWeight: 600,
+      textAlign: 'left',
+      p: '10px 12px',
       borderBottom: `1px solid ${tokens.border.main}`,
       borderRight: `1px solid ${tokens.border.main}`,
       textTransform: 'uppercase',
       fontSize: '11px',
       letterSpacing: '0.5px'
     },
-    '& td': { 
-      p: '10px 12px', 
-      color: tokens.text.primary, 
+    '& td': {
+      p: '10px 12px',
+      color: tokens.text.primary,
       borderBottom: `1px solid ${tokens.border.main}`,
       borderRight: `1px solid ${tokens.border.main}`,
       fontFamily: tokens.typography.fontFamily,
@@ -291,9 +291,10 @@ const CompanyDetail: React.FC = () => {
 
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: tokens.background.default, p: { xs: 2, md: 4 }, fontFamily: tokens.typography.fontFamily, color: tokens.text.primary }}>
-      <Button 
-        startIcon={<ArrowBackIcon />} 
-        onClick={() => navigate('/')} 
+      <Box sx={{ maxWidth: '1200px', mx: 'auto' }}>
+      <Button
+        startIcon={<ArrowBackIcon />}
+        onClick={() => navigate('/')}
         sx={{ color: tokens.text.secondary, mb: 3, textTransform: 'none', fontWeight: 600, fontSize: '13px', '&:hover': { color: tokens.text.primary } }}
       >
         Back to Dashboard
@@ -311,9 +312,9 @@ const CompanyDetail: React.FC = () => {
             </Typography>
             {aiReport?.overallRating && (
               <Box sx={{ display: 'inline-flex', alignItems: 'center', ml: 1 }}>
-                <StatusBadge 
-                  status={aiReport.overallRating} 
-                  variant={aiReport.overallRating.toLowerCase().includes('bullish') || aiReport.overallRating.toLowerCase().includes('strong') ? 'success' : aiReport.overallRating.toLowerCase().includes('bearish') ? 'error' : 'neutral'} 
+                <StatusBadge
+                  status={aiReport.overallRating}
+                  variant={aiReport.overallRating.toLowerCase().includes('bullish') || aiReport.overallRating.toLowerCase().includes('strong') ? 'success' : aiReport.overallRating.toLowerCase().includes('bearish') ? 'error' : 'neutral'}
                 />
               </Box>
             )}
@@ -333,15 +334,15 @@ const CompanyDetail: React.FC = () => {
             </Typography>
           </Box>
 
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             disabled={triggering}
             onClick={() => triggerAnalysis({ variables: { companyId: id } })}
-            sx={{ 
-              backgroundColor: tokens.primary.main, 
+            sx={{
+              backgroundColor: tokens.primary.main,
               color: isDark ? '#0A0A0C' : '#FFFFFF',
-              fontWeight: 600, 
-              px: 3, 
+              fontWeight: 600,
+              px: 3,
               py: 1.25,
               borderRadius: '4px',
               fontSize: '13px',
@@ -358,10 +359,10 @@ const CompanyDetail: React.FC = () => {
       </Box>
 
       {/* Tier 2: 8-Card Company Overview & Fundamental Snapshot */}
-      <Typography variant="h6" sx={{ color: tokens.text.primary, mb: 2, fontSize: '14px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+      <Typography variant="h6" sx={{ color: tokens.text.primary, mb: 1.5, fontSize: '14px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         Company Overview
       </Typography>
-      <Box sx={{ mb: 5, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr 1fr' }, borderTop: `1px solid ${tokens.border.main}`, borderLeft: `1px solid ${tokens.border.main}` }}>
+      <Box sx={{ mb: 4, display: 'inline-grid', gap: '1px', backgroundColor: tokens.border.main, gridTemplateColumns: { xs: '1fr', sm: 'max-content max-content', md: 'repeat(3, max-content)' }, border: `1px solid ${tokens.border.main}`, borderRadius: '4px', overflow: 'hidden' }}>
         {[
           { label: 'Market Cap', value: formatIndianLakhCr(company.marketCap) },
           { label: 'Enterprise Value', value: formatIndianLakhCr(company.enterpriseValue || company.marketCap) },
@@ -376,11 +377,11 @@ const CompanyDetail: React.FC = () => {
           { label: 'Institutional (FII)', value: formatPct(company.fiiHolding) },
           { label: 'Dividend Yield', value: formatPct(company.dividendYield) }
         ].map((item, idx) => (
-          <Box key={idx} sx={{ p: 2, borderBottom: `1px solid ${tokens.border.main}`, borderRight: `1px solid ${tokens.border.main}`, backgroundColor: tokens.background.paper }}>
-            <Typography sx={{ color: tokens.text.secondary, fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', mb: 0.5 }}>
+          <Box key={idx} sx={{ p: 0.75, px: 2, backgroundColor: tokens.background.paper, display: 'flex', alignItems: 'center' }}>
+            <Typography sx={{ color: tokens.text.secondary, fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', width: '130px', flexShrink: 0, mr: 2 }}>
               {item.label}
             </Typography>
-            <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.primary, fontSize: '14px', fontWeight: 600 }}>
+            <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.primary, fontSize: '12px', fontWeight: 700 }}>
               {item.value}
             </Typography>
           </Box>
@@ -388,189 +389,198 @@ const CompanyDetail: React.FC = () => {
       </Box>
 
       {/* Tier 3: Technical Analysis Indicator Deck */}
-      <Typography variant="h6" sx={{ color: tokens.text.primary, mb: 2, fontSize: '14px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-        Technical Analysis & Momentum
-      </Typography>
-      {tech ? (
-        <Box sx={{ mb: 5, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr 1fr' }, borderTop: `1px solid ${tokens.border.main}`, borderLeft: `1px solid ${tokens.border.main}` }}>
-          {[
-            { label: 'Trend / Cross Status', value: `${tech.trend || 'N/A'} / ${tech.crossStatus || 'N/A'}`, isTrend: true },
-            { label: 'RSI (14 Momentum)', value: tech?.rsi != null && !isNaN(Number(tech.rsi)) ? Number(tech.rsi).toFixed(2) : 'N/A' },
-            { label: 'MACD', value: tech?.macd != null && !isNaN(Number(tech.macd)) ? Number(tech.macd).toFixed(2) : 'N/A' },
-            { label: 'Imm Support / Resistance', value: `${formatIndianCurrency(tech.immSupport)} / ${formatIndianCurrency(tech.immResistance)}` }
-          ].map((item, idx) => (
-            <Box key={idx} sx={{ p: 2, borderBottom: `1px solid ${tokens.border.main}`, borderRight: `1px solid ${tokens.border.main}`, backgroundColor: tokens.background.paper }}>
-              <Typography sx={{ color: tokens.text.secondary, fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', mb: 0.5 }}>
-                {item.label}
-              </Typography>
-              <Typography className="mono-font tabular-nums" sx={{ color: item.isTrend ? (tech.trend === 'Bullish' ? tokens.status.success.main : tokens.status.error.main) : tokens.text.primary, fontSize: '14px', fontWeight: 600 }}>
-                {item.value}
-              </Typography>
-            </Box>
-          ))}
-        </Box>
-      ) : <Typography sx={{ mb: 5, color: tokens.text.tertiary, fontStyle: 'italic', fontSize: '13px' }}>No technical indicators generated. Click "Generate Deep Research" to compute.</Typography>}
+      <ExpandableSection title={
+        <>
+          <TrendingUpOutlinedIcon sx={{ fontSize: 16, color: tokens.primary.main, opacity: 0.9 }} />
+          Technical Analysis & Momentum
+        </>
+      } defaultExpanded={false}>
+        {tech ? (
+          <Box sx={{ display: 'grid', gap: '1px', backgroundColor: tokens.border.main, gridTemplateColumns: { xs: '1fr 1fr', sm: '1fr 1fr 1fr', md: 'repeat(4, 1fr)' }, border: `1px solid ${tokens.border.main}` }}>
+            {[
+              { label: 'Trend / Cross Status', value: `${tech.trend || 'N/A'} / ${tech.crossStatus || 'N/A'}`, isTrend: true },
+              { label: 'RSI (14 Momentum)', value: tech?.rsi != null && !isNaN(Number(tech.rsi)) ? Number(tech.rsi).toFixed(2) : 'N/A' },
+              { label: 'MACD', value: tech?.macd != null && !isNaN(Number(tech.macd)) ? Number(tech.macd).toFixed(2) : 'N/A' },
+              { label: 'Imm Support / Resistance', value: `${formatIndianCurrency(tech.immSupport)} / ${formatIndianCurrency(tech.immResistance)}` }
+            ].map((item, idx) => (
+              <Box key={idx} sx={{ p: 1, px: 1.5, backgroundColor: tokens.background.paper, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <Typography sx={{ color: tokens.text.secondary, fontSize: '9px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', mb: 0.25 }}>
+                  {item.label}
+                </Typography>
+                <Typography className="mono-font tabular-nums" sx={{ color: item.isTrend ? (tech.trend === 'Bullish' ? tokens.status.success.main : tokens.status.error.main) : tokens.text.primary, fontSize: '12px', fontWeight: 700 }}>
+                  {item.value}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        ) : <Typography sx={{ color: tokens.text.tertiary, fontStyle: 'italic', fontSize: '13px' }}>No technical indicators generated. Click "Generate Deep Research" to compute.</Typography>}
 
-      {/* Tier 4 & 5: Quarterly Earnings Market Impact & Social Sentiment Deck */}
-      <ErrorBoundary fallbackTitle="Quarterly Market Impact Error">
-        <QuarterlyMarketImpact company={company} />
-      </ErrorBoundary>
+        {/* Tier 4 & 5: Quarterly Earnings Market Impact & Social Sentiment Deck */}
+        <ErrorBoundary fallbackTitle="Quarterly Market Impact Error">
+          <QuarterlyMarketImpact company={company} />
+        </ErrorBoundary>
+      </ExpandableSection>
 
       <ErrorBoundary fallbackTitle="Social Sentiment Error">
         <SocialSentimentCard company={company} />
       </ErrorBoundary>
 
       {/* Tier 6: Strategy Backtests */}
-      <Typography variant="h6" sx={{ color: tokens.text.primary, mb: 2, fontSize: '14px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-        Quantitative Strategy Backtests & Event Study
-      </Typography>
-      {company.backtests && company.backtests.length > 0 ? (
-        <Box sx={{ mb: 5, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, borderTop: `1px solid ${tokens.border.main}`, borderLeft: `1px solid ${tokens.border.main}`, '& > div': { borderRight: `1px solid ${tokens.border.main}` } }}>
-          {company.backtests.map((b: any, idx: number) => {
-            const strategyMap: Record<string, {name: string, desc: string}> = {
-              'A': { 
-                name: 'Post-Earnings Drift (PEAD)', 
-                desc: 'Trades continued momentum in the direction of earnings surprise over a 1-month horizon.' 
-              },
-              'B': { 
-                name: 'Mean Reversion Fade', 
-                desc: 'Fades extreme overreactions immediately after earnings, betting price will revert to pre-earnings mean.' 
-              },
-              'C': { 
-                name: 'Volatility Breakout', 
-                desc: 'Enters trades on abnormally high volume post-earnings, signaling institutional accumulation.' 
-              },
-              'D': { 
-                name: 'Gap and Go', 
-                desc: 'Capitalizes on strong opening gaps that sustain their momentum intraday.' 
-              },
-              'E': { 
-                name: 'Pre-Earnings Run-Up', 
-                desc: 'Anticipatory strategy trading implied volatility and speculation ramp-up before earnings announcement.' 
-              },
-              'F': { 
-                name: 'Earnings Trap (Fakeout)', 
-                desc: 'Waits for false breakdowns post-earnings that trap bears, then trades in the opposite direction.' 
-              }
-            };
-            const meta = strategyMap[b.strategyName] || { name: `Strategy ${b.strategyName}`, desc: 'Quantitative backtest algorithm.' };
-            
-            return (
-              <Box key={idx} sx={{ p: 2, borderBottom: `1px solid ${tokens.border.main}`, backgroundColor: tokens.background.paper, display: 'flex', flexDirection: 'column' }}>
-                <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
-                  <Typography sx={{ color: tokens.text.primary, fontSize: '13px', fontWeight: 700 }}>{meta.name}</Typography>
-                  <Tooltip title={meta.desc} arrow placement="top">
-                    <IconButton size="small" sx={{ color: tokens.text.secondary, '&:hover': { color: tokens.text.primary } }}>
-                      <InfoOutlinedIcon fontSize="small" sx={{ width: 16, height: 16 }} />
-                    </IconButton>
-                  </Tooltip>
+      <ExpandableSection title={
+        <>
+          <AssessmentOutlinedIcon sx={{ fontSize: 16, color: tokens.primary.main, opacity: 0.9 }} />
+          Quantitative Strategy Backtests & Event Study
+        </>
+      } defaultExpanded={false}>
+        {company.backtests && company.backtests.length > 0 ? (
+          <Box sx={{ display: 'grid', gap: '1px', backgroundColor: tokens.border.main, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, 1fr)' }, border: `1px solid ${tokens.border.main}` }}>
+            {company.backtests.map((b: any, idx: number) => {
+              const strategyMap: Record<string, { name: string, desc: string }> = {
+                'A': {
+                  name: 'Post-Earnings Drift (PEAD)',
+                  desc: 'Trades continued momentum in the direction of earnings surprise over a 1-month horizon.'
+                },
+                'B': {
+                  name: 'Mean Reversion Fade',
+                  desc: 'Fades extreme overreactions immediately after earnings, betting price will revert to pre-earnings mean.'
+                },
+                'C': {
+                  name: 'Volatility Breakout',
+                  desc: 'Enters trades on abnormally high volume post-earnings, signaling institutional accumulation.'
+                },
+                'D': {
+                  name: 'Gap and Go',
+                  desc: 'Capitalizes on strong opening gaps that sustain their momentum intraday.'
+                },
+                'E': {
+                  name: 'Pre-Earnings Run-Up',
+                  desc: 'Anticipatory strategy trading implied volatility and speculation ramp-up before earnings announcement.'
+                },
+                'F': {
+                  name: 'Earnings Trap (Fakeout)',
+                  desc: 'Waits for false breakdowns post-earnings that trap bears, then trades in the opposite direction.'
+                }
+              };
+              const meta = strategyMap[b.strategyName] || { name: `Strategy ${b.strategyName}`, desc: 'Quantitative backtest algorithm.' };
+
+              return (
+                <Box key={idx} sx={{ p: 1.5, backgroundColor: tokens.background.paper, display: 'flex', flexDirection: 'column' }}>
+                  <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                    <Typography sx={{ color: tokens.text.primary, fontSize: '13px', fontWeight: 700 }}>{meta.name}</Typography>
+                    <Tooltip title={meta.desc} arrow placement="top">
+                      <IconButton size="small" sx={{ color: tokens.text.secondary, '&:hover': { color: tokens.text.primary } }}>
+                        <InfoOutlinedIcon fontSize="small" sx={{ width: 16, height: 16 }} />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mt="auto" pt={1}>
+                    <Typography sx={{ color: tokens.text.secondary, fontSize: '11px', fontWeight: 600 }}>
+                      WIN RATE: <span className="mono-font tabular-nums" style={{ color: Number(b.winRate || 0) >= 50 ? tokens.status.success.main : tokens.status.error.main, fontSize: '13px', fontWeight: 700, marginLeft: '4px' }}>{b.winRate != null && !isNaN(Number(b.winRate)) ? Number(b.winRate).toFixed(1) : '0.0'}%</span>
+                    </Typography>
+                    <Typography sx={{ color: tokens.text.secondary, fontSize: '11px', fontWeight: 600 }}>
+                      TRADES: <span className="mono-font tabular-nums" style={{ color: tokens.text.primary, fontSize: '13px', fontWeight: 700, marginLeft: '4px' }}>{b.totalTrades || 0}</span>
+                    </Typography>
+                  </Box>
                 </Box>
-                <Box display="flex" justifyContent="space-between" alignItems="center" mt="auto" pt={1}>
-                  <Typography sx={{ color: tokens.text.secondary, fontSize: '11px', fontWeight: 600 }}>
-                    WIN RATE: <span className="mono-font tabular-nums" style={{ color: Number(b.winRate || 0) >= 50 ? tokens.status.success.main : tokens.status.error.main, fontSize: '13px', fontWeight: 700, marginLeft: '4px' }}>{b.winRate != null && !isNaN(Number(b.winRate)) ? Number(b.winRate).toFixed(1) : '0.0'}%</span>
+              );
+            })}
+          </Box>
+        ) : <Typography sx={{ mb: 4, color: tokens.text.tertiary, fontStyle: 'italic', fontSize: '13px' }}>No quantitative backtests generated. Click "Generate Deep Research" to run algorithmic backtests.</Typography>}
+
+        {/* Tier 7: Interactive Quantitative Analyst Report Suite */}
+        <Box sx={{ border: `1px solid ${tokens.border.main}`, mb: 4, backgroundColor: tokens.background.paper }}>
+          <Box sx={{ backgroundColor: tokens.background.header, px: 3, pt: 2.5, borderBottom: `1px solid ${tokens.border.main}` }}>
+            <Typography variant="h5" sx={{ color: tokens.text.primary, fontWeight: 800, fontSize: '16px', mb: 0.5 }}>
+              Objective Quantitative Research & Risk Assessment Report
+            </Typography>
+            <Typography sx={{ color: tokens.text.secondary, mb: 2, fontSize: '13px' }}>
+              Complete, transparent financial calculations and measurable statistics. No speculative signals or target predictions.
+            </Typography>
+
+            <Tabs
+              value={tabIndex}
+              onChange={(_, newValue) => setTabIndex(newValue)}
+              variant="scrollable"
+              scrollButtons="auto"
+              sx={{
+                minHeight: '40px',
+                '& .MuiTab-root': { color: tokens.text.secondary, fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', py: 1, minHeight: '40px' },
+                '& .Mui-selected': { color: `${tokens.text.primary} !important`, fontWeight: 700 },
+                '& .MuiTabs-indicator': { backgroundColor: tokens.primary.main, height: '2px' }
+              }}
+            >
+              <Tab icon={<AssessmentOutlinedIcon sx={{ mb: '0 !important', mr: 1, fontSize: 18 }} />} iconPosition="start" label="Health Score & Calculations" />
+              <Tab icon={<TrendingUpOutlinedIcon sx={{ mb: '0 !important', mr: 1, fontSize: 18 }} />} iconPosition="start" label="Price, Trend & Momentum" />
+              <Tab icon={<AccountBalanceOutlinedIcon sx={{ mb: '0 !important', mr: 1, fontSize: 18 }} />} iconPosition="start" label="Fundamentals & Valuation" />
+              <Tab icon={<WarningAmberOutlinedIcon sx={{ mb: '0 !important', mr: 1, fontSize: 18 }} />} iconPosition="start" label="Risk Assessment Matrix" />
+              <Tab icon={<HistoryOutlinedIcon sx={{ mb: '0 !important', mr: 1, fontSize: 18 }} />} iconPosition="start" label="Strategy Synthesis" />
+              <Tab icon={<SummarizeOutlinedIcon sx={{ mb: '0 !important', mr: 1, fontSize: 18 }} />} iconPosition="start" label="Executive Summary" />
+            </Tabs>
+          </Box>
+
+          <Box sx={{ p: { xs: 2, md: 4 } }}>
+            {aiReport ? (
+              <Box sx={markdownStyles}>
+                <TabPanel value={tabIndex} index={0}>
+                  <FinancialHealthScorecard rawContent={aiReport.probabilityAnalysis || ''} />
+                </TabPanel>
+
+                <TabPanel value={tabIndex} index={1}>
+                  <Typography sx={{ color: tokens.text.primary, mb: 2, fontWeight: 700, fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    PRICE RETURN ESTIMATES, TREND CLASSIFICATION & MOMENTUM STATS
                   </Typography>
-                  <Typography sx={{ color: tokens.text.secondary, fontSize: '11px', fontWeight: 600 }}>
-                    TRADES: <span className="mono-font tabular-nums" style={{ color: tokens.text.primary, fontSize: '13px', fontWeight: 700, marginLeft: '4px' }}>{b.totalTrades || 0}</span>
+                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>{formatMarkdownTables(aiReport.statisticalAnalysis)}</ReactMarkdown>
+                </TabPanel>
+
+                <TabPanel value={tabIndex} index={2}>
+                  <Typography sx={{ color: tokens.text.primary, mb: 2, fontWeight: 700, fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    FUNDAMENTALS & OBJECTIVE VALUATION CLASSIFICATION
                   </Typography>
-                </Box>
+                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>{formatMarkdownTables(aiReport.patternRecognition)}</ReactMarkdown>
+                </TabPanel>
+
+                <TabPanel value={tabIndex} index={3}>
+                  <Typography sx={{ color: tokens.text.primary, mb: 2, fontWeight: 700, fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    MEASURABLE RISK ASSESSMENT MATRIX (LOW / MODERATE / HIGH)
+                  </Typography>
+                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>{formatMarkdownTables(aiReport.riskAssessment)}</ReactMarkdown>
+                </TabPanel>
+
+                <TabPanel value={tabIndex} index={4}>
+                  <Typography sx={{ color: tokens.text.primary, mb: 2, fontWeight: 700, fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    HISTORICAL QUANTITATIVE STRATEGY SYNTHESIS
+                  </Typography>
+                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>{formatMarkdownTables(aiReport.tradingPlan)}</ReactMarkdown>
+                </TabPanel>
+
+                <TabPanel value={tabIndex} index={5}>
+                  <Typography sx={{ color: tokens.text.primary, mb: 2, fontWeight: 700, fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    COMPANY OVERVIEW & STRICTLY FACTUAL OBSERVATIONS
+                  </Typography>
+                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>{formatMarkdownTables(aiReport.finalVerdict)}</ReactMarkdown>
+                </TabPanel>
               </Box>
-            );
-          })}
+            ) : (
+              <Box sx={{ py: 6, textAlign: 'center' }}>
+                <Typography sx={{ color: tokens.text.primary, mb: 1, fontSize: '16px', fontWeight: 700 }}>
+                  No quantitative research report available for this company.
+                </Typography>
+                <Typography sx={{ color: tokens.text.secondary, mb: 3, maxWidth: 600, mx: 'auto', fontSize: '13px' }}>
+                  Click the button below or in the header to initialize our professional quantitative models, calculate real-time technicals, run strategy backtests, and produce transparent financial score calculations.
+                </Typography>
+                <Button
+                  variant="contained"
+                  disabled={triggering}
+                  onClick={() => triggerAnalysis({ variables: { companyId: id } })}
+                  sx={{ backgroundColor: tokens.primary.main, color: isDark ? '#0A0A0C' : '#FFFFFF', fontWeight: 600, px: 3, py: 1, fontSize: '12px', borderRadius: '4px', textTransform: 'none', '&:hover': { opacity: 0.88, backgroundColor: tokens.primary.main } }}
+                >
+                  {triggering ? "Calculating Models..." : "Generate Deep Research"}
+                </Button>
+              </Box>
+            )}
+          </Box>
         </Box>
-      ) : <Typography sx={{ mb: 4, color: tokens.text.tertiary, fontStyle: 'italic', fontSize: '13px' }}>No quantitative backtests generated. Click "Generate Deep Research" to run algorithmic backtests.</Typography>}
-
-      {/* Tier 7: Interactive Quantitative Analyst Report Suite */}
-      <Box sx={{ border: `1px solid ${tokens.border.main}`, mb: 4, backgroundColor: tokens.background.paper }}>
-        <Box sx={{ backgroundColor: tokens.background.header, px: 3, pt: 2.5, borderBottom: `1px solid ${tokens.border.main}` }}>
-          <Typography variant="h5" sx={{ color: tokens.text.primary, fontWeight: 800, fontSize: '16px', mb: 0.5 }}>
-            Objective Quantitative Research & Risk Assessment Report
-          </Typography>
-          <Typography sx={{ color: tokens.text.secondary, mb: 2, fontSize: '13px' }}>
-            Complete, transparent financial calculations and measurable statistics. No speculative signals or target predictions.
-          </Typography>
-          
-          <Tabs 
-            value={tabIndex} 
-            onChange={(_, newValue) => setTabIndex(newValue)} 
-            variant="scrollable" 
-            scrollButtons="auto"
-            sx={{
-              minHeight: '40px',
-              '& .MuiTab-root': { color: tokens.text.secondary, fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', py: 1, minHeight: '40px' },
-              '& .Mui-selected': { color: `${tokens.text.primary} !important`, fontWeight: 700 },
-              '& .MuiTabs-indicator': { backgroundColor: tokens.primary.main, height: '2px' }
-            }}
-          >
-            <Tab icon={<AssessmentOutlinedIcon sx={{ mb: '0 !important', mr: 1, fontSize: 18 }} />} iconPosition="start" label="Health Score & Calculations" />
-            <Tab icon={<TrendingUpOutlinedIcon sx={{ mb: '0 !important', mr: 1, fontSize: 18 }} />} iconPosition="start" label="Price, Trend & Momentum" />
-            <Tab icon={<AccountBalanceOutlinedIcon sx={{ mb: '0 !important', mr: 1, fontSize: 18 }} />} iconPosition="start" label="Fundamentals & Valuation" />
-            <Tab icon={<WarningAmberOutlinedIcon sx={{ mb: '0 !important', mr: 1, fontSize: 18 }} />} iconPosition="start" label="Risk Assessment Matrix" />
-            <Tab icon={<HistoryOutlinedIcon sx={{ mb: '0 !important', mr: 1, fontSize: 18 }} />} iconPosition="start" label="Strategy Synthesis" />
-            <Tab icon={<SummarizeOutlinedIcon sx={{ mb: '0 !important', mr: 1, fontSize: 18 }} />} iconPosition="start" label="Executive Summary" />
-          </Tabs>
-        </Box>
-
-        <Box sx={{ p: { xs: 2, md: 4 } }}>
-          {aiReport ? (
-            <Box sx={markdownStyles}>
-              <TabPanel value={tabIndex} index={0}>
-                <FinancialHealthScorecard rawContent={aiReport.probabilityAnalysis || ''} />
-              </TabPanel>
-
-              <TabPanel value={tabIndex} index={1}>
-                <Typography sx={{ color: tokens.text.primary, mb: 2, fontWeight: 700, fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  PRICE RETURN ESTIMATES, TREND CLASSIFICATION & MOMENTUM STATS
-                </Typography>
-                <ReactMarkdown rehypePlugins={[rehypeRaw]}>{formatMarkdownTables(aiReport.statisticalAnalysis)}</ReactMarkdown>
-              </TabPanel>
-
-              <TabPanel value={tabIndex} index={2}>
-                <Typography sx={{ color: tokens.text.primary, mb: 2, fontWeight: 700, fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  FUNDAMENTALS & OBJECTIVE VALUATION CLASSIFICATION
-                </Typography>
-                <ReactMarkdown rehypePlugins={[rehypeRaw]}>{formatMarkdownTables(aiReport.patternRecognition)}</ReactMarkdown>
-              </TabPanel>
-
-              <TabPanel value={tabIndex} index={3}>
-                <Typography sx={{ color: tokens.text.primary, mb: 2, fontWeight: 700, fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  MEASURABLE RISK ASSESSMENT MATRIX (LOW / MODERATE / HIGH)
-                </Typography>
-                <ReactMarkdown rehypePlugins={[rehypeRaw]}>{formatMarkdownTables(aiReport.riskAssessment)}</ReactMarkdown>
-              </TabPanel>
-
-              <TabPanel value={tabIndex} index={4}>
-                <Typography sx={{ color: tokens.text.primary, mb: 2, fontWeight: 700, fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  HISTORICAL QUANTITATIVE STRATEGY SYNTHESIS
-                </Typography>
-                <ReactMarkdown rehypePlugins={[rehypeRaw]}>{formatMarkdownTables(aiReport.tradingPlan)}</ReactMarkdown>
-              </TabPanel>
-
-              <TabPanel value={tabIndex} index={5}>
-                <Typography sx={{ color: tokens.text.primary, mb: 2, fontWeight: 700, fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  COMPANY OVERVIEW & STRICTLY FACTUAL OBSERVATIONS
-                </Typography>
-                <ReactMarkdown rehypePlugins={[rehypeRaw]}>{formatMarkdownTables(aiReport.finalVerdict)}</ReactMarkdown>
-              </TabPanel>
-            </Box>
-          ) : (
-            <Box sx={{ py: 6, textAlign: 'center' }}>
-              <Typography sx={{ color: tokens.text.primary, mb: 1, fontSize: '16px', fontWeight: 700 }}>
-                No quantitative research report available for this company.
-              </Typography>
-              <Typography sx={{ color: tokens.text.secondary, mb: 3, maxWidth: 600, mx: 'auto', fontSize: '13px' }}>
-                Click the button below or in the header to initialize our professional quantitative models, calculate real-time technicals, run strategy backtests, and produce transparent financial score calculations.
-              </Typography>
-              <Button 
-                variant="contained" 
-                disabled={triggering}
-                onClick={() => triggerAnalysis({ variables: { companyId: id } })}
-                sx={{ backgroundColor: tokens.primary.main, color: isDark ? '#0A0A0C' : '#FFFFFF', fontWeight: 600, px: 4, py: 1.5, borderRadius: '8px', textTransform: 'none', '&:hover': { opacity: 0.88, backgroundColor: tokens.primary.main } }}
-              >
-                {triggering ? "Calculating Models..." : "Generate Deep Research"}
-              </Button>
-            </Box>
-          )}
-        </Box>
+      </ExpandableSection>
       </Box>
     </Box>
   );
