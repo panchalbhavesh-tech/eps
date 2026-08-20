@@ -27,3 +27,5 @@ curl-cffi
 feedparser
 croniter==2.0.1
 pytz
+pyarrow
+fastparquet

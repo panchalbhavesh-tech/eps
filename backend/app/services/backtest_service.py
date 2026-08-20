@@ -48,10 +48,13 @@ class IntensiveBacktestEngine:
 
         # Inject FundamentalSnapshots for PIT fundamentals to avoid Lookahead Bias
         from app.infrastructure.models import FundamentalSnapshot
-        snapshots = pd.read_sql(
-            self.db.query(FundamentalSnapshot).filter(FundamentalSnapshot.ticker == ticker).statement,
-            self.db.bind
-        )
+        query_results = self.db.query(FundamentalSnapshot).filter(FundamentalSnapshot.ticker == ticker).all()
+        if query_results:
+            snapshots = pd.DataFrame([r.__dict__ for r in query_results])
+            if '_sa_instance_state' in snapshots.columns:
+                snapshots.drop(columns=['_sa_instance_state'], inplace=True)
+        else:
+            snapshots = pd.DataFrame()
         if not snapshots.empty:
             snapshots = snapshots.sort_values('trade_date')
             snapshots['trade_date_dt'] = pd.to_datetime(snapshots['trade_date']).dt.tz_localize(None)

@@ -1,0 +1,66 @@
+import argparse
+import os
+import sys
+from dotenv import load_dotenv
+
+# Load variables from the root .env file automatically
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
+
+# Add root to path so we can run this directly
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from vendors.upstox_provider import UpstoxProvider
+from storage.data_lake import DataLakeStorage
+from sqlalchemy import text
+
+def get_universe(storage: DataLakeStorage):
+    """Fetch all active company tickers from the database."""
+    with storage.engine.connect() as conn:
+        result = conn.execute(text("SELECT ticker FROM companies"))
+        return [row[0] for row in result]
+
+def run_intraday():
+    """15-Min Snapshot: Fetch live quotes in bulk and upsert to Postgres."""
+    print("Running Intraday Harvester (Live Quotes)...")
+    provider = UpstoxProvider()
+    storage = DataLakeStorage()
+    
+    tickers = get_universe(storage)
+    if not tickers:
+        print("No active companies found in universe.")
+        return
+        
+    # Chunk into 500s (Upstox limit)
+    chunk_size = 500
+    for i in range(0, len(tickers), chunk_size):
+        chunk = tickers[i:i + chunk_size]
+        print(f"Fetching quotes for chunk {i} to {i+len(chunk)}...")
+        quotes = provider.fetch_bulk_market_quotes(chunk)
+        if quotes:
+            storage.update_live_quotes(quotes)
+    print("Intraday harvest complete.")
+
+def run_eod(days: int):
+    """End-Of-Day Batch: Fetch full daily candles and append to Parquet."""
+    print(f"Running EOD Harvester (Fetching last {days} days of ML Data)...")
+    provider = UpstoxProvider()
+    storage = DataLakeStorage()
+    
+    tickers = get_universe(storage)
+    for ticker in tickers:
+        print(f"Fetching EOD data for {ticker}...")
+        df = provider.fetch_historical_ohlcv(ticker, days=days) 
+        if not df.empty:
+            storage.append_daily_ohlcv(ticker, df)
+    print("EOD harvest complete.")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="EPS Data Harvester")
+    parser.add_argument("--mode", choices=["intraday", "eod"], required=True, help="Mode to run in.")
+    parser.add_argument("--days", type=int, default=5, help="Number of days to fetch for EOD mode (default 5)")
+    args = parser.parse_args()
+    
+    if args.mode == "intraday":
+        run_intraday()
+    elif args.mode == "eod":
+        run_eod(args.days)
