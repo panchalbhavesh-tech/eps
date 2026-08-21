@@ -394,10 +394,13 @@ class QuantService:
             norm_date = rel_dt.strftime('%Y-%m-%d')
             
             df_sorted = df.sort_index()
-            t_minus_df = df_sorted[df_sorted.index >= (rel_dt - timedelta(days=2)).strftime('%Y-%m-%d')]
-            if len(t_minus_df) >= 2:
-                start_p = float(t_minus_df['Close'].iloc[0])
-                end_p = float(t_minus_df['Close'].iloc[-1])
+            start_date = (rel_dt - timedelta(days=2)).strftime('%Y-%m-%d')
+            end_date = (rel_dt + timedelta(days=5)).strftime('%Y-%m-%d')
+            window_df = df_sorted[(df_sorted.index >= start_date) & (df_sorted.index <= end_date)]
+            
+            if len(window_df) >= 2:
+                start_p = float(window_df['Close'].iloc[0])
+                end_p = float(window_df['Close'].iloc[-1])
                 if start_p > 0:
                     ret = ((end_p - start_p) / start_p) * 100.0
                     return round(float(ret), 2)

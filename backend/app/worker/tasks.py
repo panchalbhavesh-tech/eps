@@ -109,6 +109,19 @@ def sync_nse_calendar_task():
                 db.rollback()
                 print(f"Failed to parse date or create report for {ticker} ({date_str}): {e}")
                 
+        # Clear expired dates
+        now = datetime.utcnow()
+        all_comps = db.query(Company).filter(Company.upcoming_date.isnot(None)).all()
+        for c in all_comps:
+            try:
+                dt = dateutil.parser.parse(c.upcoming_date)
+                # clear if it's more than 1 day in the past
+                if (now.date() - dt.date()).days > 1:
+                    c.upcoming_date = None
+            except Exception:
+                pass
+        db.commit()
+
         return f"Synced {len(upcoming)} upcoming earnings."
     except Exception as e:
         db.rollback()
@@ -204,36 +217,33 @@ def enrich_single_company(company, db):
             for name in row_names:
                 if name in inc.index:
                     s = inc.loc[name].dropna()
-                    if not s.empty and len(s) >= 4:
+                    if not s.empty:
                         return s
             return None
 
         eps_series = get_series('Basic EPS', 'Diluted EPS')
-        if eps_series is not None and len(eps_series) >= 4:
-            company.q4_eps = float(eps_series.iloc[0])
-            company.q3_eps = float(eps_series.iloc[1])
-            company.q2_eps = float(eps_series.iloc[2])
-            company.q1_eps = float(eps_series.iloc[3])
-            if len(eps_series) >= 5:
-                company.q0_eps = float(eps_series.iloc[4])
+        if eps_series is not None and len(eps_series) > 0:
+            company.q4_eps = float(eps_series.iloc[0]) if len(eps_series) > 0 else None
+            company.q3_eps = float(eps_series.iloc[1]) if len(eps_series) > 1 else None
+            company.q2_eps = float(eps_series.iloc[2]) if len(eps_series) > 2 else None
+            company.q1_eps = float(eps_series.iloc[3]) if len(eps_series) > 3 else None
+            company.q0_eps = float(eps_series.iloc[4]) if len(eps_series) > 4 else None
 
         rev_series = get_series('Total Revenue', 'Operating Revenue', 'Total Operating Income As Reported')
-        if rev_series is not None and len(rev_series) >= 4:
-            company.q4_revenue = float(rev_series.iloc[0])
-            company.q3_revenue = float(rev_series.iloc[1])
-            company.q2_revenue = float(rev_series.iloc[2])
-            company.q1_revenue = float(rev_series.iloc[3])
-            if len(rev_series) >= 5:
-                company.q0_revenue = float(rev_series.iloc[4])
+        if rev_series is not None and len(rev_series) > 0:
+            company.q4_revenue = float(rev_series.iloc[0]) if len(rev_series) > 0 else None
+            company.q3_revenue = float(rev_series.iloc[1]) if len(rev_series) > 1 else None
+            company.q2_revenue = float(rev_series.iloc[2]) if len(rev_series) > 2 else None
+            company.q1_revenue = float(rev_series.iloc[3]) if len(rev_series) > 3 else None
+            company.q0_revenue = float(rev_series.iloc[4]) if len(rev_series) > 4 else None
 
         prof_series = get_series('Net Income', 'Net Income Common Stockholders', 'Operating Income')
-        if prof_series is not None and len(prof_series) >= 4:
-            company.q4_profit = float(prof_series.iloc[0])
-            company.q3_profit = float(prof_series.iloc[1])
-            company.q2_profit = float(prof_series.iloc[2])
-            company.q1_profit = float(prof_series.iloc[3])
-            if len(prof_series) >= 5:
-                company.q0_profit = float(prof_series.iloc[4])
+        if prof_series is not None and len(prof_series) > 0:
+            company.q4_profit = float(prof_series.iloc[0]) if len(prof_series) > 0 else None
+            company.q3_profit = float(prof_series.iloc[1]) if len(prof_series) > 1 else None
+            company.q2_profit = float(prof_series.iloc[2]) if len(prof_series) > 2 else None
+            company.q1_profit = float(prof_series.iloc[3]) if len(prof_series) > 3 else None
+            company.q0_profit = float(prof_series.iloc[4]) if len(prof_series) > 4 else None
     
     if company.current_price in (0, 0.0, None):
         try:

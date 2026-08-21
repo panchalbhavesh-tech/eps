@@ -156,11 +156,13 @@ def get_company_news(ticker: str, name: str = ""):
     company_name = (name or ticker).strip()
     nse_ticker   = f"{ticker}.NS"
 
-    # Short keyword for name-based filtering (first meaningful word ≥ 4 chars)
+    # Short keyword for name-based filtering
+    # Extract the most meaningful leading word from the company name, ignoring generic suffixes
+    clean_name = re.sub(r'(?i)\b(limited|ltd|corp|corporation|industries|india|inc|co|bank)\b', '', company_name).strip()
     name_keyword = ""
-    for word in company_name.split():
-        clean = re.sub(r"[^a-zA-Z]", "", word)
-        if len(clean) >= 4 and clean.lower() not in {"limited", "india", "industries", "corp"}:
+    for word in clean_name.split():
+        clean = re.sub(r"[^a-zA-Z0-9]", "", word)
+        if len(clean) >= 3:
             name_keyword = clean
             break
     if not name_keyword:
@@ -175,8 +177,16 @@ def get_company_news(ticker: str, name: str = ""):
             return
             
         # STRICT RELEVANCE FILTER: The title MUST contain either the key company name word OR the ticker symbol
+        # We use regex word boundaries (\b) to prevent crude substring matches (e.g. "ACC" matching "accident")
         t_lower = title.lower()
-        if name_keyword.lower() not in t_lower and ticker.lower() not in t_lower:
+        ticker_lower = ticker.lower()
+        nk_lower = name_keyword.lower()
+        
+        escaped_ticker = re.escape(ticker_lower)
+        escaped_nk = re.escape(nk_lower)
+        pattern = r'\b(?:' + escaped_ticker + r'|' + escaped_nk + r')\b'
+        
+        if not re.search(pattern, t_lower):
             return  # Skip unrelated articles completely
 
         pub_date = None

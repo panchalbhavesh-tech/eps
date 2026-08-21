@@ -10,6 +10,7 @@ import InfoIcon from '@mui/icons-material/Info';
 
 import { StatusBadge, FilterChipGroup, SearchInput } from '../components/common';
 import { useThemeMode } from '../theme/ThemeContext';
+import TaskManager from './TaskManager';
 
 const GET_CELERY_SCHEDULES = gql`
   query GetCelerySchedules {
@@ -134,32 +135,16 @@ const Schedules: React.FC = () => {
   // KPI Metrics calculation
   const metrics = useMemo(() => {
     const total = rows.length;
-    let aiCount = 0;
-    let marketDataCount = 0;
-    let quantCount = 0;
-
-    rows.forEach((sched) => {
-      if (sched.category.includes('AI') || sched.category.includes('ML')) aiCount++;
-      else if (sched.category.includes('MARKET')) marketDataCount++;
-      else if (sched.category.includes('QUANT')) quantCount++;
-    });
-
-    return { total, aiCount, marketDataCount, quantCount };
+    return { total };
   }, [rows]);
 
   const filterOptions = [
     { label: 'All Schedules', value: 'ALL', count: metrics.total },
-    { label: 'AI & ML Workflows', value: 'AI', count: metrics.aiCount, color: tokens.primary.main },
-    { label: 'Market Data Sync', value: 'MARKET', count: metrics.marketDataCount, color: tokens.status.success.main },
-    { label: 'Quant Analytics', value: 'QUANT', count: metrics.quantCount, color: tokens.secondary.main },
+    { label: 'History of Workers', value: 'HISTORY', color: tokens.accent.main },
   ];
 
   const filteredRows = useMemo(() => {
     return rows.filter((sched) => {
-      if (categoryFilter === 'AI' && !sched.category.includes('AI') && !sched.category.includes('ML')) return false;
-      if (categoryFilter === 'MARKET' && !sched.category.includes('MARKET')) return false;
-      if (categoryFilter === 'QUANT' && !sched.category.includes('QUANT')) return false;
-
       if (searchQuery.trim() !== '') {
         const q = searchQuery.toLowerCase();
         const matchesName = sched.name.toLowerCase().includes(q);
@@ -488,8 +473,19 @@ const Schedules: React.FC = () => {
         </Box>
       </Box>
 
-      {/* Main Schedule DataGrid Table */}
-      <Box sx={{ height: 'calc(100vh - 120px)', minHeight: 520, width: '100%', bgcolor: tokens.background.paper, borderBottom: `1px solid ${tokens.border.main}`, overflow: 'hidden' }}>
+      {categoryFilter === 'HISTORY' ? (
+        <Box sx={{ 
+          '& > div': { 
+            minHeight: 'calc(100vh - 120px) !important', 
+            pb: 0 
+          } 
+        }}>
+          <TaskManager />
+        </Box>
+      ) : (
+        <>
+          {/* Main Schedule DataGrid Table */}
+          <Box sx={{ height: 'calc(100vh - 120px)', minHeight: 520, width: '100%', bgcolor: tokens.background.paper, borderBottom: `1px solid ${tokens.border.main}`, overflow: 'hidden' }}>
         <DataGrid
           rows={filteredRows}
           columns={columns}
@@ -624,6 +620,8 @@ const Schedules: React.FC = () => {
           </Box>
         )}
       </Drawer>
+        </>
+      )}
     </Box>
   );
 };

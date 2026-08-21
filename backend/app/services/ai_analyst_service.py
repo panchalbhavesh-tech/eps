@@ -49,6 +49,11 @@ class AIAnalystService:
                     text_response = data['candidates'][0]['content']['parts'][0]['text']
                     result = self._parse_ai_response(text_response)
                     if result.get("final_verdict") and result.get("probability_analysis"):
+                        # Overwrite LLM's hallucinated health score with the deterministic math
+                        det_health = self._calculate_deterministic_health_score(ticker, quantitative_data)
+                        result["financial_health_score"] = det_health["total_score"]
+                        grade = det_health["grade"]
+                        result["financial_health_grade"] = grade.split('(')[0].strip() if '(' in grade else grade
                         return result
             except Exception as e:
                 print(f"Gemini API call failed for {ticker}: {e}, falling back to deterministic synthesis.")
@@ -57,7 +62,88 @@ class AIAnalystService:
         print(f"Generating deterministic quantitative assessment for {ticker}...")
         return self._generate_fallback_report(ticker, quantitative_data)
 
+    def _calculate_deterministic_health_score(self, ticker: str, q: dict) -> dict:
+        sector_raw = q.get("sector", "Equities")
+        sector = sector_raw.lower()
+        
+        pe = safe_float(q.get("pe_ratio"), 0.0)
+        roe = safe_float(q.get("roe"), 0.0)
+        roce = safe_float(q.get("roce"), roe * 1.15 if roe > 0 else 0.0)
+        de = safe_float(q.get("debt_to_equity"), 0.0)
+        promoter = safe_float(q.get("promoter_holding"), 0.0)
+
+        # Dynamic Sector-Neutral Standardization (Proxied Z-Scores)
+        ideal_roe = 20.0
+        ideal_de_upper = 1.0
+        ideal_de_excellent = 0.5
+        ideal_pe_upper = 25.0
+        
+        if "bank" in sector or "finance" in sector or "nbfc" in sector:
+            ideal_roe = 15.0
+            ideal_de_upper = 8.0  # High leverage is structural
+            ideal_de_excellent = 5.0
+            ideal_pe_upper = 18.0
+        elif "it" in sector or "tech" in sector or "software" in sector:
+            ideal_roe = 25.0
+            ideal_de_upper = 0.3  # Tech should have near zero debt
+            ideal_de_excellent = 0.1
+            ideal_pe_upper = 40.0
+        elif "metal" in sector or "auto" in sector or "manufacturing" in sector:
+            ideal_roe = 12.0
+            ideal_de_upper = 1.5
+            ideal_de_excellent = 0.8
+            ideal_pe_upper = 18.0
+
+        # 1. Profitability (/25)
+        prof_score = min(25.0, max(5.0, (roe * 100 / ideal_roe) * 12.5 + (roce * 100 / (ideal_roe * 1.25)) * 12.5))
+        if roe == 0 and roce == 0: prof_score = 16.5
+        
+        # 2. Debt & Solvency (/20)
+        debt_score = 18.0 if de <= ideal_de_excellent else (14.0 if de <= ideal_de_upper else 8.0)
+        
+        # 3. Cash Flow & Liquidity (/15)
+        cf_score = 12.5
+        
+        # 4. Growth Momentum (/15)
+        growth_score = 11.8
+        
+        # 5. Valuation Classification (/10)
+        val_score = 8.5 if (pe > 0 and pe < ideal_pe_upper) else 6.5
+        
+        # 6. Market Stability (/10)
+        stab_score = 8.0
+        
+        # 7. Ownership Quality (/5)
+        own_score = 4.5 if (promoter * 100) > 45 else 3.5
+        
+        total_score = round(prof_score + debt_score + cf_score + growth_score + val_score + stab_score + own_score, 1)
+        if total_score >= 90: grade = f"Grade A ({total_score} / 100 - Excellent)"
+        elif total_score >= 80: grade = f"Grade B+ ({total_score} / 100 - Very Strong)"
+        elif total_score >= 70: grade = f"Grade B ({total_score} / 100 - Healthy)"
+        else: grade = f"Grade C ({total_score} / 100 - Average)"
+        
+        return {
+            "total_score": total_score,
+            "grade": grade,
+            "prof_score": prof_score,
+            "debt_score": debt_score,
+            "cf_score": cf_score,
+            "growth_score": growth_score,
+            "val_score": val_score,
+            "stab_score": stab_score,
+            "own_score": own_score,
+            "ideal_pe_upper": ideal_pe_upper,
+            "ideal_roe": ideal_roe,
+            "ideal_de_upper": ideal_de_upper,
+            "ideal_de_excellent": ideal_de_excellent
+        }
+
     def _build_prompt(self, ticker: str, quantitative_data: dict) -> str:
+        # Calculate deterministic health score to force LLM to use the mathematical ground truth
+        det_health = self._calculate_deterministic_health_score(ticker, quantitative_data)
+        total_score = det_health["total_score"]
+        grade = det_health["grade"]
+        
         # Safely serialize data
         def default_serializer(obj):
             try:
@@ -104,7 +190,9 @@ Evaluate margins, return ratios (ROE, ROCE), leverage (Debt/Equity), ownership p
 
 ===HEALTH_SCORE_CALCULATIONS===
 # Financial Health Score & Transparent Calculations
-Display Overall Score (out of 100), Grade (A+ to F), Category Breakdown (Profitability /25, Debt /20, Cash Flow /15, Growth /15, Valuation /10, Stability /10, Ownership /5), and COMPLETE normalization tables [clamp((Value-Minimum)/(Ideal-Minimum), 0, 1) × Weight] without hiding any calculations.
+The deterministic quantitative score for this company is EXACTLY {total_score} / 100.0, and its grade is {grade}.
+You MUST output EXACTLY this score and grade in your text.
+Display Overall Score (out of 100), Grade (A+ to C), Category Breakdown (Profitability /25, Debt /20, Cash Flow /15, Growth /15, Valuation /10, Stability /10, Ownership /5), and COMPLETE normalization tables [clamp((Value-Minimum)/(Ideal-Minimum), 0, 1) × Weight] without hiding any calculations. Ensure the components add up to {total_score}.
 
 ===RISK_ASSESSMENT===
 # Risk Assessment Matrix
@@ -115,7 +203,7 @@ Classify Business Risk, Financial Risk, Liquidity Risk, Governance Risk, and Vol
 Synthesize backtests (PEAD, Mean Reversion, Volatility Breakout, etc.) purely as scientific, objective statistical behaviors without trading recommendations.
 
 ===OVERALL_GRADE===
-[Output only the short summary grade and score on this line, e.g.: Grade A (88.4 / 100 - Very Strong)]
+[Output only the short summary grade and score on this line, EXACTLY matching: {grade}]
 """
 
     def _parse_ai_response(self, text_response: str) -> dict:
@@ -186,56 +274,22 @@ Synthesize backtests (PEAD, Mean Reversion, Volatility Breakout, etc.) purely as
         imm_sup = safe_float(techs.get("imm_support") or techs.get("immSupport"), price * 0.95 if price > 0 else 0.0)
         imm_res = safe_float(techs.get("imm_resistance") or techs.get("immResistance"), price * 1.05 if price > 0 else 0.0)
 
-        # Dynamic Sector-Neutral Standardization (Proxied Z-Scores)
-        ideal_roe = 20.0
-        ideal_de_upper = 1.0
-        ideal_de_excellent = 0.5
-        ideal_pe_upper = 25.0
-        
-        if "bank" in sector or "finance" in sector or "nbfc" in sector:
-            ideal_roe = 15.0
-            ideal_de_upper = 8.0  # High leverage is structural
-            ideal_de_excellent = 5.0
-            ideal_pe_upper = 18.0
-        elif "it" in sector or "tech" in sector or "software" in sector:
-            ideal_roe = 25.0
-            ideal_de_upper = 0.3  # Tech should have near zero debt
-            ideal_de_excellent = 0.1
-            ideal_pe_upper = 40.0
-        elif "metal" in sector or "auto" in sector or "manufacturing" in sector:
-            ideal_roe = 12.0
-            ideal_de_upper = 1.5
-            ideal_de_excellent = 0.8
-            ideal_pe_upper = 18.0
+        # Dynamic Sector-Neutral Standardization via Helper
+        det_health = self._calculate_deterministic_health_score(ticker, q)
+        ideal_roe = det_health["ideal_roe"]
+        ideal_pe_upper = det_health["ideal_pe_upper"]
+        ideal_de_upper = det_health["ideal_de_upper"]
+        ideal_de_excellent = det_health["ideal_de_excellent"]
 
-        # Calculate Health Score out of 100
-        # 1. Profitability (/25): based on ROE/ROCE (sector neutralized)
-        prof_score = min(25.0, max(5.0, (roe * 100 / ideal_roe) * 12.5 + (roce * 100 / (ideal_roe * 1.25)) * 12.5))
-        if roe == 0 and roce == 0: prof_score = 16.5  # default sector benchmark
-        
-        # 2. Debt & Solvency (/20): sector neutralized
-        debt_score = 18.0 if de <= ideal_de_excellent else (14.0 if de <= ideal_de_upper else 8.0)
-        
-        # 3. Cash Flow & Liquidity (/15)
-        cf_score = 12.5
-        
-        # 4. Growth Momentum (/15)
-        growth_score = 11.8
-        
-        # 5. Valuation Classification (/10)
-        val_score = 8.5 if (pe > 0 and pe < ideal_pe_upper) else 6.5
-        
-        # 6. Market Stability (/10)
-        stab_score = 8.0
-        
-        # 7. Ownership Quality (/5)
-        own_score = 4.5 if (promoter * 100) > 45 else 3.5
-        
-        total_score = round(prof_score + debt_score + cf_score + growth_score + val_score + stab_score + own_score, 1)
-        if total_score >= 90: grade = f"Grade A ({total_score} / 100 - Excellent)"
-        elif total_score >= 80: grade = f"Grade B+ ({total_score} / 100 - Very Strong)"
-        elif total_score >= 70: grade = f"Grade B ({total_score} / 100 - Healthy)"
-        else: grade = f"Grade C ({total_score} / 100 - Average)"
+        prof_score = det_health["prof_score"]
+        debt_score = det_health["debt_score"]
+        cf_score = det_health["cf_score"]
+        growth_score = det_health["growth_score"]
+        val_score = det_health["val_score"]
+        stab_score = det_health["stab_score"]
+        own_score = det_health["own_score"]
+        total_score = det_health["total_score"]
+        grade = det_health["grade"]
 
         val_classification = "Near Industry"
         if pe > 0 and pe < (ideal_pe_upper * 0.6): val_classification = "Below Industry"

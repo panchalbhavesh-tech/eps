@@ -6,6 +6,7 @@ export interface FilterOption {
   label: string;
   value: string;
   count?: number;
+  color?: string;
 }
 
 export interface QuickFilterPillsProps {
@@ -49,7 +50,7 @@ export const QuickFilterPills: React.FC<QuickFilterPillsProps> = ({
                     sx={{
                       fontSize: '11px',
                       fontWeight: 600,
-                      color: isSelected ? tokens.text.primary : tokens.text.secondary,
+                      color: isSelected ? (opt.color || tokens.text.primary) : (opt.color || tokens.text.secondary),
                     }}
                   >
                     ({opt.count})
@@ -68,9 +69,9 @@ export const QuickFilterPills: React.FC<QuickFilterPillsProps> = ({
               fontWeight: 600,
               lineHeight: '16px',
               transition: 'all 0.1s ease-in-out',
-              backgroundColor: isSelected ? (tokens.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)') : 'transparent',
-              color: isSelected ? tokens.text.primary : tokens.text.secondary,
-              border: `1px solid ${isSelected ? tokens.border.focus : tokens.border.main}`,
+              backgroundColor: isSelected ? (opt.color ? `${opt.color}15` : (tokens.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)')) : 'transparent',
+              color: isSelected ? (opt.color || tokens.text.primary) : (opt.color || tokens.text.secondary),
+              border: `1px solid ${isSelected ? (opt.color || tokens.border.focus) : (opt.color ? `${opt.color}40` : tokens.border.main)}`,
               boxShadow: 'none',
               '&:hover': {
                 backgroundColor: tokens.background.cardHover,
