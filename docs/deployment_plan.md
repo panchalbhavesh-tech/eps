@@ -275,6 +275,11 @@ AUTH_USER_1_EMAIL=<real_email>
 AUTH_USER_1_PASSWORD=<strong_password>
 AUTH_USER_2_EMAIL=<real_email>
 AUTH_USER_2_PASSWORD=<strong_password>
+
+# === DISCORD ALERTS ===
+DISCORD_TRADING_WEBHOOK_URL=<your_discord_trading_channel_webhook_url>  # For BUY/EXIT signals and catalysts
+DISCORD_ADMIN_WEBHOOK_URL=<your_discord_ops_channel_webhook_url>     # For VPS status, cron failures, and deploys
+DISCORD_ALERTS_ENABLED=True
 ```
 
 ### 4.5 Production Docker Compose
@@ -304,6 +309,9 @@ services:
       - FMP_API_KEY=${FMP_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - ENVIRONMENT=production
+      - DISCORD_TRADING_WEBHOOK_URL=${DISCORD_TRADING_WEBHOOK_URL}
+      - DISCORD_ADMIN_WEBHOOK_URL=${DISCORD_ADMIN_WEBHOOK_URL}
+      - DISCORD_ALERTS_ENABLED=${DISCORD_ALERTS_ENABLED}
     deploy:
       resources:
         limits:
@@ -338,6 +346,9 @@ services:
       - FMP_API_KEY=${FMP_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - ENVIRONMENT=production
+      - DISCORD_TRADING_WEBHOOK_URL=${DISCORD_TRADING_WEBHOOK_URL}
+      - DISCORD_ADMIN_WEBHOOK_URL=${DISCORD_ADMIN_WEBHOOK_URL}
+      - DISCORD_ALERTS_ENABLED=${DISCORD_ALERTS_ENABLED}
     deploy:
       resources:
         limits:
@@ -659,12 +670,27 @@ jobs:
 
             docker image prune -f
 
+      - name: Send Discord Success Notification
+        if: success()
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d '{"content": "🚀 **QEPS Deploy Successful!** New release built and deployed to production VPS."}' \
+            -s "${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}"
+
+      - name: Send Discord Failure Notification
+        if: failure()
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d '{"content": "❌ **QEPS Deploy FAILED!** Production release build/deploy failed. Check Github Actions run logs."}' \
+            -s "${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}"
+
   # Frontend auto-deploys via Cloudflare Pages GitHub integration
 ```
 
 **GitHub Secrets:**
 - `VPS_HOST` — VPS IP address
 - `VPS_SSH_KEY` — Private key for `deploy` user
+- `DISCORD_ADMIN_WEBHOOK_URL` — Discord webhook URL for `#ops-alerts` channel
 
 ### 4.9 Database Migration
 
@@ -714,7 +740,46 @@ The harvester needs to reach PostgreSQL. Since it runs on the host (not in Docke
 
 ### 4.11 Monitoring & Health Checks
 
+#### Discord Webhook Setup
+
+To enable notifications for deployments, container crashes, and system alerts directly on Discord, set up dedicated webhooks:
+
+1. **Create Discord Channels**:
+   - In your Discord Server, create two channels: `#trading-signals` (for stock setups/catalysts) and `#ops-alerts` (for system status, cron logs, backups, and outages).
+
+2. **Generate Webhook URLs**:
+   - For `#trading-signals`, open **Channel Settings** → **Integrations** → **Webhooks** → **New Webhook**. Name it `QEPS Signals` and click **Copy Webhook URL**.
+   - For `#ops-alerts`, do the same. Name it `QEPS Ops` and click **Copy Webhook URL**.
+
+3. **Deploy Alert Helper Script**:
+   Create a reusable notification script on the VPS to streamline alert delivery.
+   
+   **File: `/home/deploy/qeps/notify.sh`**
+   ```bash
+   #!/bin/bash
+   # Production Alert Notification Helper (Discord)
+   WEBHOOK_URL="YOUR_DISCORD_ADMIN_WEBHOOK_URL" # Pointing to #ops-alerts
+   MESSAGE="$1"
+
+   if [ -z "$MESSAGE" ]; then
+       echo "Usage: $0 \"alert message\""
+       exit 1
+   fi
+
+   # Send to Discord using JSON payload
+   curl -H "Content-Type: application/json" \
+     -d "{\"content\": \"$MESSAGE\"}" \
+     -s "$WEBHOOK_URL" > /dev/null
+   ```
+
+   ```bash
+   # Make the helper script executable
+   chmod +x /home/deploy/qeps/notify.sh
+   ```
+
 #### Uptime Kuma (Self-hosted, Free)
+
+Configure uptime and ping monitors inside a Docker container:
 
 ```bash
 docker run -d \
@@ -733,16 +798,23 @@ Access via SSH tunnel: `ssh -L 3001:localhost:3001 deploy@<VPS>`
 3. Docker containers: `qeps_backend`, `qeps_worker`, `qeps_scheduler`, `qeps_postgres`, `qeps_redis`
 4. Disk usage alert at 80%
 
-**Notifications:** Telegram Bot or Discord Webhook.
+**Discord Alert Integration in Uptime Kuma UI**:
+- Go to **Settings** → **Notifications** → **Setup Notification**.
+- Notification Type: **Discord**.
+- Title: `QEPS Ops`.
+- Discord Webhook URL: `<DISCORD_ADMIN_WEBHOOK_URL>`.
+- Click **Save** and test. Uptime Kuma will now push instant notifications on any outage or recovery to Discord.
 
-#### Cron-based Container Monitoring
+#### Cron-based Container & System Monitoring
+
+Integrate the `/home/deploy/qeps/notify.sh` script to report local host-level failures directly to Discord `#ops-alerts`:
 
 ```cron
 # Alert if critical containers are down (every 5 min)
-*/5 * * * * docker ps --format "{{.Names}}: {{.Status}}" | grep -E "qeps_(backend|worker|postgres|redis)" | grep -v "Up" && curl -fsS "https://your-uptime-kuma/api/push/<id>?status=down"
+*/5 * * * * docker ps --format "{{.Names}}: {{.Status}}" | grep -E "qeps_(backend|worker|postgres|redis)" | grep -v "Up" && /home/deploy/qeps/notify.sh "⚠️ **QEPS System Alert**: One or more critical containers are DOWN! Run \`docker ps\` on VPS to inspect."
 
-# Alert if disk >80% (every 6 hours)
-0 */6 * * * df -h / | awk 'NR==2 {if ($5+0 > 80) system("curl -fsS https://your-uptime-kuma/api/push/<id>?msg=disk_" $5)}'
+# Alert if host disk space exceeds 80% (every 6 hours)
+0 */6 * * * df -h / | awk 'NR==2 {if ($5+0 > 80) system("/home/deploy/qeps/notify.sh \"🚨 **QEPS Disk Warning**: Disk space is at " $5 " capacity on host!\"")}'
 ```
 
 ### 4.12 Rollback
@@ -862,20 +934,22 @@ docker run -it --rm \
 
  CI/CD
  25. [ ] Create .github/workflows/deploy.yml
- 26. [ ] Add GitHub Secrets: VPS_HOST, VPS_SSH_KEY
- 27. [ ] Test: push to main → auto-deploy works
+ 26. [ ] Add GitHub Secrets: VPS_HOST, VPS_SSH_KEY, DISCORD_ADMIN_WEBHOOK_URL
+ 27. [ ] Test: push to main → auto-deploy works and sends Discord status to #ops-alerts channel
 
  MONITORING + BACKUPS
- 28. [ ] Deploy Uptime Kuma, configure monitors + alerts
- 29. [ ] Set up PostgreSQL backup cron
- 30. [ ] Set up data lake backup cron
- 31. [ ] Set up off-site backup (Backblaze B2)
+ 28. [ ] Create Discord Channels (#trading-signals and #ops-alerts) and generate Webhook URLs
+ 29. [ ] Create and test /home/deploy/qeps/notify.sh script on VPS (pointing to Discord #ops-alerts Webhook)
+ 30. [ ] Deploy Uptime Kuma, configure monitors + Discord alerts
+ 31. [ ] Set up PostgreSQL backup cron
+ 32. [ ] Set up data lake backup cron
+ 33. [ ] Set up off-site backup (Backblaze B2)
 
  SMOKE TEST
- 32. [ ] Login works (JWT auth)
- 33. [ ] Company data loads (GraphQL)
- 34. [ ] News/sentiment responds
- 35. [ ] Worker logs show scheduled tasks running
- 36. [ ] Data Harvester cron fires on schedule
- 37. [ ] Monitoring alert fires on simulated failure
+ 34. [ ] Login works (JWT auth)
+ 35. [ ] Company data loads (GraphQL)
+ 36. [ ] News/sentiment responds
+ 37. [ ] Worker logs show scheduled tasks running
+ 38. [ ] Data Harvester cron fires on schedule and completes
+ 39. [ ] Monitoring alert fires on simulated failure and posts to Discord #ops-alerts
 ```

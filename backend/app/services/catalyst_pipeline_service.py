@@ -313,6 +313,22 @@ class CatalystPipelineService:
             self.db.add(source)
             self.db.commit()
             metrics["saved"] += 1
+
+            # Send Discord alert for high-impact announcements (impact_score >= 60)
+            if impact_score >= 60:
+                try:
+                    from app.services.notifier import DiscordNotifier
+                    notifier = DiscordNotifier()
+                    notifier.send_catalyst_alert(
+                        ticker=ann["ticker"],
+                        title=ann["subject"],
+                        category=category,
+                        impact_score=impact_score,
+                        why=why,
+                        url=ann["url"]
+                    )
+                except Exception as alert_ex:
+                    logger.error(f"Failed to dispatch Discord catalyst alert: {alert_ex}")
             
         metrics["execution_time_ms"] = int((time.time() - start_time) * 1000)
         
@@ -428,6 +444,22 @@ class CatalystPipelineService:
             self.db.add(source)
             self.db.commit()
             metrics["saved"] += 1
+
+            # Send Discord alert for high-impact bulk/block deals (impact_score >= 60)
+            if impact_score >= 60:
+                try:
+                    from app.services.notifier import DiscordNotifier
+                    notifier = DiscordNotifier()
+                    notifier.send_catalyst_alert(
+                        ticker=deal.ticker,
+                        title=f"{deal.client_name} - {deal.deal_type} deal of {deal.quantity:,} shares",
+                        category="BULK_BLOCK_DEAL",
+                        impact_score=impact_score,
+                        why=why,
+                        url=None
+                    )
+                except Exception as alert_ex:
+                    logger.error(f"Failed to dispatch Discord bulk deal alert: {alert_ex}")
         
         metrics["execution_time_ms"] = int((time.time() - start_time) * 1000)
         return metrics

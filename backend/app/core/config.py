@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     SHADOW_PROBATION_DAYS: int = int(os.environ.get("SHADOW_PROBATION_DAYS", "252"))
     ENVIRONMENT: str = os.environ.get("ENVIRONMENT", "development")
     
+    # Discord Alerting
+    DISCORD_TRADING_WEBHOOK_URL: str = os.environ.get("DISCORD_TRADING_WEBHOOK_URL", "")
+    DISCORD_ADMIN_WEBHOOK_URL: str = os.environ.get("DISCORD_ADMIN_WEBHOOK_URL", "")
+    DISCORD_ALERTS_ENABLED: bool = os.environ.get("DISCORD_ALERTS_ENABLED", "True").lower() in ("true", "1", "yes")
+    
     class Config:
         env_file = ".env"
         extra = "ignore"

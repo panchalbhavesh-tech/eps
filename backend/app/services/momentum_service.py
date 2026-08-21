@@ -371,6 +371,22 @@ class MomentumService:
             if signal == "BUY":
                 active_recommended_signals.append({"ticker": comp.ticker, "sector": comp.sector, "signal": signal, "score": comp_score})
 
+            # Send Discord alert for BUY or EXIT signals
+            if signal in ("BUY", "EXIT"):
+                try:
+                    from app.services.notifier import DiscordNotifier
+                    notifier = DiscordNotifier()
+                    notifier.send_momentum_alert(
+                        ticker=comp.ticker,
+                        comp_score=comp_score,
+                        signal=signal,
+                        price=cur_price,
+                        stop_loss=stop_loss,
+                        reasons=" | ".join(reasons) if reasons else None
+                    )
+                except Exception as alert_ex:
+                    print(f"Failed to dispatch Discord signal alert: {alert_ex}")
+
             # Section 9 Point-in-Time Prediction Snapshot Logging for IC tracking
             val_service.log_prediction_snapshot(
                 company_id=comp.id,
