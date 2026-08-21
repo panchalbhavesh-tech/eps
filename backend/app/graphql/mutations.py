@@ -166,7 +166,7 @@ class Mutation:
         economic_rationale_text: str,
         alpha_expression: str,
         author: Optional[str] = "HUMAN_QUANT_ANALYST",
-        target_universe: Optional[str] = "NIFTY500",
+        target_universe: Optional[str] = "NSE_ALL",
         holding_horizon_days: Optional[int] = 5
     ) -> str:
         from app.services.hypothesis_service import HypothesisService
@@ -178,7 +178,7 @@ class Mutation:
             economic_rationale_text=economic_rationale_text,
             alpha_expression=alpha_expression,
             author=author or "HUMAN_QUANT_ANALYST",
-            target_universe=target_universe or "NIFTY500",
+            target_universe=target_universe or "NSE_ALL",
             holding_horizon_days=holding_horizon_days or 5
         )
         if res.get("status") == "Error":

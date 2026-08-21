@@ -202,9 +202,10 @@ class QuantService:
             
             # STRATEGY A (PEAD): Buy if gap > 2%, hold 20 days
             if gap_pct > 2:
-                if iloc_idx + 20 < len(df):
-                    entry = e_day['Close']
-                    exit_val = df.iloc[iloc_idx + 20]['Close']
+                if iloc_idx + 21 < len(df):
+                    next_day = df.iloc[iloc_idx + 1]
+                    entry = next_day['Open']
+                    exit_val = df.iloc[iloc_idx + 21]['Close']
                     ret = (((exit_val - entry) / entry) * 100.0) - 0.40 # Net of 0.20% Indian STT/brokerage friction
                     strategies['A']['trades'].append(ret)
                     if ret > 0: strategies['A']['win'] += 1
@@ -212,9 +213,10 @@ class QuantService:
                     
             # STRATEGY B (Mean Reversion Fade): Short if gap > 5%, hold 3 days
             if gap_pct > 5:
-                if iloc_idx + 3 < len(df):
-                    entry = e_day['Close']
-                    exit_val = df.iloc[iloc_idx + 3]['Close']
+                if iloc_idx + 4 < len(df):
+                    next_day = df.iloc[iloc_idx + 1]
+                    entry = next_day['Open']
+                    exit_val = df.iloc[iloc_idx + 4]['Close']
                     ret = (((entry - exit_val) / entry) * 100.0) - 0.40 # Short position net of friction
                     strategies['B']['trades'].append(ret)
                     if ret > 0: strategies['B']['win'] += 1
@@ -222,9 +224,10 @@ class QuantService:
                     
             # STRATEGY C (Volatility Breakout): Buy if e_day volume > 2x 20d avg, hold 10 days
             if e_day['Volume'] > (e_day['Vol_20d_avg'] * 2):
-                if iloc_idx + 10 < len(df):
-                    entry = e_day['Close']
-                    exit_val = df.iloc[iloc_idx + 10]['Close']
+                if iloc_idx + 11 < len(df):
+                    next_day = df.iloc[iloc_idx + 1]
+                    entry = next_day['Open']
+                    exit_val = df.iloc[iloc_idx + 11]['Close']
                     ret = (((exit_val - entry) / entry) * 100.0) - 0.40
                     strategies['C']['trades'].append(ret)
                     if ret > 0: strategies['C']['win'] += 1
@@ -247,7 +250,7 @@ class QuantService:
             # STRATEGY E (Pre-Earnings Run-Up): Buy 10 days before, sell 1 day before
             if iloc_idx >= 10:
                 entry_day = df.iloc[iloc_idx - 10]
-                entry = entry_day['Close']
+                entry = df.iloc[iloc_idx - 9]['Open'] if iloc_idx >= 9 else entry_day['Close']
                 exit_val = prev_day['Close']
                 ret = (((exit_val - entry) / entry) * 100.0) - 0.40
                 strategies['E']['trades'].append(ret)
@@ -256,9 +259,10 @@ class QuantService:
                 
             # STRATEGY F (Earnings Trap): Gap down < -2%, but closes green (Close > Open). Buy close, hold 5 days.
             if gap_pct < -2 and e_day['Close'] > e_day['Open']:
-                if iloc_idx + 5 < len(df):
-                    entry = e_day['Close']
-                    exit_val = df.iloc[iloc_idx + 5]['Close']
+                if iloc_idx + 6 < len(df):
+                    next_day = df.iloc[iloc_idx + 1]
+                    entry = next_day['Open']
+                    exit_val = df.iloc[iloc_idx + 6]['Close']
                     ret = (((exit_val - entry) / entry) * 100.0) - 0.40
                     strategies['F']['trades'].append(ret)
                     if ret > 0: strategies['F']['win'] += 1

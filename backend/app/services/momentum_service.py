@@ -138,10 +138,7 @@ class MomentumService:
         smart_money_val = (promoter * 0.3) + (inst_holding * 0.5) + (deliv_pct * 0.2)
         derivatives_val = ((relative_volume * 40.0) + (deliv_pct * 0.6)) / max(1.0, abs(high_52w - dma_200) / max(0.1, dma_200))
 
-        # Phase 5 PCA Sequence Trajectory Embeddings
-        recent_prices = df['Close'].tail(30).tolist()
-        recent_vols = df['Volume'].tail(30).tolist()
-        seq_embeddings = ml_svc.generate_sequence_embeddings(recent_prices, recent_vols, n_components=2)
+        # Phase 5 PCA Sequence Trajectory Embeddings (Removed)
 
         return {
             "company": company,
@@ -163,8 +160,7 @@ class MomentumService:
             "pe_score": -pe_ratio,  # Lower PE is better in simple ranking
             "smart_money_val": smart_money_val,
             "inst_holding": inst_holding,
-            "derivatives_val": derivatives_val,
-            "sequence_embeddings": seq_embeddings
+            "derivatives_val": derivatives_val
         }
 
     def scan_and_rank_universe(self, limit: Optional[int] = None) -> Dict[str, Any]:
@@ -176,7 +172,7 @@ class MomentumService:
         from app.services.universe_service import UniverseService
         from datetime import datetime
         universe_svc = UniverseService(self.db)
-        # Using NIFTY500 as the baseline universe for the scan
+        # Using NSE_ALL as the baseline universe for the scan
         tickers = universe_svc.get_pit_universe("NSE_ALL", datetime.utcnow())
         
         companies = self.db.query(Company).filter(Company.ticker.in_(tickers)).all()
@@ -277,7 +273,6 @@ class MomentumService:
             fund_score = float(row['fundamental_score'])
             smart_score = float(row['smart_money_score'])
             deriv_score = float(row['derivatives_score'])
-            seq_embed = row.get('sequence_embeddings')
 
             # Calibrated Phase 3 & 5 Multi-Horizon ML Probability Inference P(gain, 3d/5d/10d)
             multi_probs = ml_svc.predict_multi_horizon({
@@ -294,7 +289,7 @@ class MomentumService:
                 "raw_pe": -float(row['pe_score']),
                 "raw_rel_vol": float(row['relative_volume']),
                 "raw_dma200_dist": float(row['dma200_dist_pct']) / 100.0 # Convert pct back to raw ratio
-            }, sequence_embeddings=seq_embed)
+            })
 
             prob_gain_3d = multi_probs["prob_3d"]
             prob_gain_5d = multi_probs["prob_5d"]

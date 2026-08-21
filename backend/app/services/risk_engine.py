@@ -41,9 +41,11 @@ class RiskEngine:
             ).all()
             if logs:
                 returns = np.array([float(l.realized_5d_return) / 100.0 for l in logs])
-                # Compute average realized return to evaluate system edge accurately,
-                # avoiding the mathematical fallacy of compounding overlapping individual trades.
-                avg_return = np.mean(returns) * 100.0
+                # Compute true portfolio MDD instead of average trade expectancy
+                equity_curve = np.cumprod(1 + returns)
+                peak = np.maximum.accumulate(equity_curve)
+                drawdown_pct = ((equity_curve - peak) / peak) * 100.0
+                mdd = float(np.min(drawdown_pct)) if len(drawdown_pct) > 0 else 0.0
                 win_rate = np.mean(returns > 0) * 100.0 if len(returns) > 0 else 0.0
 
                 # Determine dynamic threshold using regime
@@ -52,17 +54,20 @@ class RiskEngine:
                 regime = ml_svc.get_market_regime()
                 regime_status = regime.get("status", "Neutral")
                 
-                dynamic_threshold = -5.0
+                dynamic_threshold = self.mdd_kill_switch_threshold
                 if regime_status == "Bearish":
                     # Tighten stop loss
-                    dynamic_threshold = -3.0
+                    dynamic_threshold = -10.0
                     
-                # If average return is worse than dynamic threshold, kill switch
-                if avg_return < dynamic_threshold:
-                    self._kill_switch_active = (True, f"Emergency Kill Switch Tripped: Average Trailing Trade Return ({avg_return:.1f}%) breached dynamic safety boundary ({dynamic_threshold}%). Win rate: {win_rate:.1f}%.")
+                # If MDD is worse than dynamic threshold, kill switch
+                if mdd < dynamic_threshold:
+                    self._kill_switch_active = (True, f"Emergency Kill Switch Tripped: Maximum Drawdown ({mdd:.1f}%) breached dynamic safety boundary ({dynamic_threshold}%). Win rate: {win_rate:.1f}%.")
                     return self._kill_switch_active
         except Exception as e:
-            print(f"Error checking kill switch status: {e}")
+            import logging
+            logging.getLogger(__name__).critical(f"Kill switch DB unreachable: {e}. FAILING CLOSED.")
+            self._kill_switch_active = (True, f"⚠️ Emergency Kill Switch ACTIVE: Database unreachable ({e}). Failing closed to preserve capital.")
+            return self._kill_switch_active
 
         self._kill_switch_active = (False, "Normal operation. Capital safety boundaries intact.")
         return self._kill_switch_active

@@ -553,7 +553,7 @@ class Query:
                     economic_mechanism=h.economic_mechanism,
                     economic_rationale_text=h.economic_rationale_text,
                     alpha_expression=h.alpha_expression,
-                    target_universe=h.target_universe or "NIFTY500",
+                    target_universe=h.target_universe or "NSE_ALL",
                     holding_horizon_days=h.holding_horizon_days or 5,
                     current_stage=h.current_stage or "DRAFT_HYPOTHESIS",
                     created_at=h.created_at.isoformat() if h.created_at else "",

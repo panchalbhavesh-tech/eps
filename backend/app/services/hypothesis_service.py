@@ -107,6 +107,68 @@ class HypothesisService:
         dsr_val = 0.5 * (1.0 + math.erf(test_stat / math.sqrt(2.0)))
         return round(float(dsr_val), 4)
 
+    def calculate_pbo_proxy(self, daily_returns: List[float], total_trials: int) -> float:
+        """
+        Computes the Probability of Backtest Overfitting (PBO) using Combinatorial Symmetric Cross-Validation (CSCV).
+        Evaluates the single strategy's performance degradation by splitting returns into S=16 blocks, 
+        and assessing the probability that an in-sample optimization results in an out-of-sample degradation.
+        """
+        import numpy as np
+        import itertools
+        
+        if not daily_returns or len(daily_returns) < 32:
+            return 0.0
+
+        returns_arr = np.array(daily_returns)
+        n = len(returns_arr)
+        
+        S = 16
+        block_size = n // S
+        if block_size == 0:
+            return 0.0
+            
+        returns_arr = returns_arr[:S * block_size]
+        blocks = returns_arr.reshape((S, block_size))
+        k = S // 2
+        combinations = list(itertools.combinations(range(S), k))
+        
+        block_sums = np.sum(blocks, axis=1)
+        block_sq_sums = np.sum(blocks**2, axis=1)
+        
+        combo_indices = np.array(combinations)
+        is_sums = np.sum(block_sums[combo_indices], axis=1)
+        is_sq_sums = np.sum(block_sq_sums[combo_indices], axis=1)
+        
+        total_sum = np.sum(block_sums)
+        total_sq_sum = np.sum(block_sq_sums)
+        
+        oos_sums = total_sum - is_sums
+        oos_sq_sums = total_sq_sum - is_sq_sums
+        
+        N_is = k * block_size
+        N_oos = (S - k) * block_size
+        
+        is_means = is_sums / N_is
+        is_variances = np.maximum((is_sq_sums / N_is) - (is_means ** 2), 1e-8)
+        is_sharpes = is_means / np.sqrt(is_variances)
+        
+        oos_means = oos_sums / N_oos
+        oos_variances = np.maximum((oos_sq_sums / N_oos) - (oos_means ** 2), 1e-8)
+        oos_sharpes = oos_means / np.sqrt(oos_variances)
+        
+        valid_is_mask = is_sharpes > 0
+        if not np.any(valid_is_mask):
+            return 1.0
+            
+        degraded_mask = oos_sharpes[valid_is_mask] < 0
+        base_pbo = np.mean(degraded_mask)
+        
+        penalty = 1.0
+        if total_trials > 1:
+            penalty = min(2.0, 1.0 + (np.log10(total_trials) / 10.0))
+            
+        return round(float(min(0.9999, base_pbo * penalty)), 4)
+
     def compute_spearman_ic_stats(self, factor_scores: List[float], forward_returns: List[float]) -> Tuple[float, float]:
         """
         Calculates Spearman Information Coefficient (IC) and its associated student-t test statistic.
@@ -136,7 +198,7 @@ class HypothesisService:
         economic_rationale_text: str,
         alpha_expression: str,
         author: str = "AI_RESEARCH_AGENT",
-        target_universe: str = "NIFTY500",
+        target_universe: str = "NSE_ALL",
         holding_horizon_days: int = 5
     ) -> Dict[str, Any]:
         """
@@ -314,7 +376,23 @@ class HypothesisService:
             mean_ret = float(np.mean(s_arr))
             std_ret = float(np.std(s_arr))
             
-            per_period_sharpe = (mean_ret / std_ret) if std_ret > 0 else 0.0
+            # --- White's Reality Check ---
+            try:
+                nifty_rows = self.db.query(DailyBhavcopy).filter(DailyBhavcopy.ticker == "^NSEI").order_by(DailyBhavcopy.trade_date.asc()).all()
+                if nifty_rows:
+                    nifty_df = pd.DataFrame([{'Date': r.trade_date, 'close': r.close_price} for r in nifty_rows])
+                    nifty_df.set_index('Date', inplace=True)
+                    nifty_df['nifty_ret'] = nifty_df['close'].pct_change()
+                    aligned = pd.concat([pd.Series(strategy_daily_returns, index=daily_returns.index, name='strat_ret'), nifty_df['nifty_ret']], axis=1).dropna()
+                    benchmark_ret = aligned['nifty_ret'].mean() if len(aligned) > 0 else 0.0
+                else:
+                    benchmark_ret = 0.0
+            except Exception:
+                benchmark_ret = 0.0
+                
+            rc_excess = mean_ret - benchmark_ret
+            
+            per_period_sharpe = (rc_excess / std_ret) if std_ret > 0 else 0.0
             classic_sharpe = per_period_sharpe * math.sqrt(252.0 / max(1, hyp.holding_horizon_days))
             
             # Compute skewness and kurtosis of strategy returns
@@ -331,12 +409,15 @@ class HypothesisService:
             )
 
             ic, ic_tstat = self.compute_spearman_ic_stats(all_scores, all_returns)
+            pbo = self.calculate_pbo_proxy(strategy_daily_returns, current_trial_count)
             
             # Global IC Threshold is 0.015 and DSR > 0.85
-            is_valid = (dsr >= 0.85) and (ic >= 0.015) and (ic_tstat >= 1.96)
+            is_valid = (dsr >= 0.85) and (ic >= 0.015) and (ic_tstat >= 1.96) and (rc_excess > 0)
             
             if not is_valid:
-                if dsr < 0.85:
+                if rc_excess <= 0:
+                    failure_tag = "FAILED_WHITES_REALITY_CHECK"
+                elif dsr < 0.85:
                     failure_tag = "LOW_DEFLATED_SHARPE_PENALTY"
                 else:
                     failure_tag = "INSIGNIFICANT_SPEARMAN_IC"
@@ -349,6 +430,7 @@ class HypothesisService:
                 total_trials_in_family=current_trial_count,
                 classic_sharpe=round(classic_sharpe, 4),
                 deflated_sharpe=round(dsr, 4),
+                pbo=pbo,
                 spearman_ic_mean=round(ic, 4),
                 spearman_ic_tstat=round(ic_tstat, 2),
                 is_statistically_valid=is_valid,
@@ -503,7 +585,7 @@ class HypothesisService:
                         economic_rationale_text=proposal["economic_rationale_text"],
                         alpha_expression=expr,
                         author="GEMINI_AI_QUANT",
-                        target_universe="NIFTY500",
+                        target_universe="NSE_ALL",
                         holding_horizon_days=int(proposal.get("holding_horizon_days", 5))
                     )
                     

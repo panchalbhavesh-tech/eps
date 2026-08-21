@@ -35,17 +35,34 @@ class WeightLearningService:
             return self.DEFAULT_WEIGHTS
             
         features = list(self.DEFAULT_WEIGHTS.keys())
-        X = factor_scores_df[features].fillna(50.0).values
+        X = factor_scores_df[features].values
         y = forward_returns
         
         from sklearn.pipeline import Pipeline
-        from sklearn.model_selection import KFold
         from sklearn.linear_model import ElasticNetCV
+        from sklearn.impute import SimpleImputer
+        
+        n_samples = len(X)
+        n_splits = 5
+        embargo = 5
+        
+        def purged_cv():
+            fold_size = n_samples // (n_splits + 1)
+            for i in range(n_splits):
+                train_end = (i + 1) * fold_size - embargo
+                if train_end < 10:
+                    continue
+                test_start = (i + 1) * fold_size
+                test_end = (i + 2) * fold_size if i < n_splits - 1 else n_samples
+                yield np.arange(0, train_end), np.arange(test_start, test_end)
+                
+        custom_cv = list(purged_cv()) if n_samples >= 50 else 5
         
         pipeline = Pipeline([
+            ('imputer', SimpleImputer(strategy='median')),
             ('scaler', StandardScaler()),
             ('enet', ElasticNetCV(l1_ratio=[0.1, 0.5, 0.7, 0.9, 0.95, 0.99, 1.0], 
-                                  cv=KFold(n_splits=5, shuffle=False),
+                                  cv=custom_cv,
                                   positive=True, n_jobs=-1, random_state=42))
         ])
         

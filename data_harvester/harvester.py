@@ -52,6 +52,45 @@ def run_eod(days: int):
         df = provider.fetch_historical_ohlcv(ticker, days=days) 
         if not df.empty:
             storage.append_daily_ohlcv(ticker, df)
+            
+            # Update data health metadata in Postgres
+            try:
+                from datetime import datetime
+                from sqlalchemy import text
+                
+                # Fetch full data to get accurate history metrics
+                full_df = storage.get_historical_ohlcv(ticker)
+                if not full_df.empty:
+                    import pandas as pd
+                    earliest = pd.to_datetime(full_df.index.min()).to_pydatetime()
+                    latest = pd.to_datetime(full_df.index.max()).to_pydatetime()
+                    total_bars = len(full_df)
+                    years_available = (latest - earliest).days / 365.25
+                    
+                    with storage.engine.connect() as conn:
+                        conn.execute(
+                            text("""
+                                UPDATE companies 
+                                SET last_harvested_at = :now,
+                                    earliest_historical_date = :earliest,
+                                    latest_historical_date = :latest,
+                                    total_daily_bars = :total_bars,
+                                    historical_years_available = :years
+                                WHERE ticker = :ticker
+                            """),
+                            {"now": datetime.utcnow(), "earliest": earliest, "latest": latest, "total_bars": total_bars, "years": years_available, "ticker": ticker}
+                        )
+                        conn.commit()
+            except Exception as e:
+                print(f"Failed to update metadata for {ticker}: {e}")
+                
+                with storage.engine.connect() as conn:
+                    conn.execute(
+                        text("UPDATE companies SET last_error_log = :error WHERE ticker = :ticker"),
+                        {"error": str(e)[:250], "ticker": ticker}
+                    )
+                    conn.commit()
+                    
     print("EOD harvest complete.")
 
 if __name__ == "__main__":

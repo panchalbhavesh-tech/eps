@@ -363,14 +363,7 @@ Objective categorization of enterprise risk parameters across operational, capit
         backtest = f"""### Historical Algorithmic Strategy Synthesis
 Scientific evaluation of quantitative event behavior following major financial announcements and structural trend breakthroughs.
 
-| Quantitative Strategy Model | Statistical Win Rate (%) | Sample Trade Count | Objective Behavioral Observation |
-| :--- | :--- | :--- | :--- |
-| **Post-Earnings Drift (PEAD)**| **64.2%** | 14 Trades | Displays moderate persistence in directional momentum following quarterly margin reports. |
-| **Mean Reversion Fade** | **58.5%** | 18 Trades | Intraday gaps > 4% frequently demonstrate compression toward the 20-period moving equilibrium. |
-| **Volatility Breakout** | **61.1%** | 12 Trades | Volume surges exceeding 2x daily average volume correlate with sustained multiday momentum extensions. |
-| **Gap and Go Continuation** | **52.4%** | 21 Trades | Opening price imbalances show mixed continuation probability unless corroborated by sector breadth. |
-
-> **Scientific Synthesis:** Historical testing confirms that systematic volume breakouts and earnings drift exhibit statistically demonstrable expectancy over 10-to-20 day evaluation horizons. This data is purely analytical and does not constitute trading advice."""
+> **Scientific Synthesis:** No historical backtest data has been computed for {ticker} in offline mode. The platform requires live connectivity to the Quant Engine for rigorous empirical verification."""
 
         return {
             "final_verdict": summary,

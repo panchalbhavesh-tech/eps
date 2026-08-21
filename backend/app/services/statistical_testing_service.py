@@ -18,12 +18,13 @@ class StatisticalTestingService:
         
         n = len(data)
         block_size = max(5, int(n ** (1/3)))
+        rng = np.random.RandomState(42)
         
         # Block bootstrap to preserve autocorrelation
         for _ in range(n_boot):
             idx = []
             while len(idx) < n:
-                start = np.random.randint(0, max(1, n - block_size + 1))
+                start = rng.randint(0, max(1, n - block_size + 1))
                 idx.extend(range(start, start + block_size))
             sample = data[np.array(idx[:n])]
             boot_stats.append(metric_fn(sample))

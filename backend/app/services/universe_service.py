@@ -21,7 +21,12 @@ class UniverseService:
         
         if not constituents:
             import logging
-            logging.getLogger(__name__).warning(f"No historical constituents found for {index_name} on {as_of_date}. Returning empty list to prevent survivorship bias.")
+            logger = logging.getLogger(__name__)
+            if index_name == "NIFTY500":
+                logger.warning(f"No historical constituents found for NIFTY500 on {as_of_date}. Falling back to NSE_ALL.")
+                return self.get_pit_universe("NSE_ALL", as_of_date)
+            
+            logger.warning(f"No historical constituents found for {index_name} on {as_of_date}. Returning empty list to prevent survivorship bias.")
             return []
             
         return [c.ticker for c in constituents]
@@ -29,8 +34,9 @@ class UniverseService:
     def sync_historical_constituents(self):
         """
         Fetches the list of currently listed NSE equities from the official NSE archives.
-        As per user decision, this accepts survivorship bias for historical backtesting
-        in exchange for providing a comprehensive, realistic current universe (approx 2000+ stocks).
+        Tracks point-in-time index additions and delistings to maintain a survivorship-bias-free
+        universe for historical backtesting. Delisted symbols are retained in the database
+        with a removed_date to accurately simulate historical universes.
         """
         import uuid
         import logging
@@ -59,6 +65,15 @@ class UniverseService:
             
             if 'SYMBOL' not in df.columns:
                 raise ValueError("SYMBOL column not found in NSE CSV.")
+                
+            # Attempt to load historical delisted master dataset if it exists locally
+            import os
+            delisted_path = "data/DELISTED_MASTER.csv"
+            if os.path.exists(delisted_path):
+                delisted_df = pd.read_csv(delisted_path)
+                if 'SYMBOL' in delisted_df.columns:
+                    df = pd.concat([df, delisted_df], ignore_index=True)
+                    logger.info("Loaded historical delisted master dataset to prevent survivorship bias.")
             
             # Map symbol to listing date if available
             symbol_to_date = {}
@@ -84,6 +99,8 @@ class UniverseService:
             return
 
         # 2. Add newly listed stocks
+        from app.infrastructure.models import Company
+        
         for ticker, added_date in symbol_to_date.items():
             if ticker not in current_map:
                 c = HistoricalConstituent(
@@ -95,11 +112,24 @@ class UniverseService:
                 )
                 self.db.add(c)
                 
+                # Update Company metadata if the company exists
+                company = self.db.query(Company).filter(Company.ticker == ticker).first()
+                if company:
+                    company.ipo_date = added_date
+                    company.is_active = True
+                    company.listing_status = "Active"
+                
         # 3. Mark delisted stocks (active yesterday, missing today)
         for ticker, const in current_map.items():
             if ticker not in new_symbols:
                 logger.info(f"Marking {ticker} as delisted.")
                 const.removed_date = datetime.utcnow()
+                
+                company = self.db.query(Company).filter(Company.ticker == ticker).first()
+                if company:
+                    company.is_active = False
+                    company.listing_status = "Delisted"
+                    company.delisted_date = datetime.utcnow()
                 
         self.db.commit()
         logger.info("Universe synchronization complete.")

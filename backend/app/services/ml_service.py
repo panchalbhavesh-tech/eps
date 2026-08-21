@@ -12,7 +12,6 @@ try:
     import xgboost as xgb
     from sklearn.linear_model import LogisticRegression
     from sklearn.preprocessing import StandardScaler
-    from sklearn.metrics import accuracy_score, precision_recall_curve
     import shap
     ML_AVAILABLE = True
 except ImportError:
@@ -57,7 +56,7 @@ class MomentumMLService:
         and skips a buffer >= longest horizon (10 days) before evaluation.
         """
         if not ML_AVAILABLE or len(df) < 50:
-            return {"status": "Insufficient historical rows for 10-day embargoed CV", "gbm_accuracy": 0.0, "logistic_accuracy": 0.0, "clears_gate": True}
+            return {"status": "Insufficient historical rows for 10-day embargoed CV", "gbm_roc_auc": 0.0, "lr_roc_auc": 0.0, "clears_gate": True}
 
         from app.services.purged_cv_service import PurgedWalkForwardCV
         from sklearn.metrics import roc_auc_score
@@ -88,7 +87,7 @@ class MomentumMLService:
         ])
         
         lr_scores = cv.cross_val_score(df_sorted, feature_cols, target_col, time_col, lr_pipeline, roc_auc_score)
-        lr_acc = float(np.nanmean(lr_scores)) if len(lr_scores) > 0 and not np.isnan(np.nanmean(lr_scores)) else 0.5
+        lr_roc_auc = float(np.nanmean(lr_scores)) if len(lr_scores) > 0 and not np.isnan(np.nanmean(lr_scores)) else 0.5
         
         # LightGBM pipeline
         gbm_pipeline = Pipeline([
@@ -99,13 +98,13 @@ class MomentumMLService:
         ])
         
         gbm_scores = cv.cross_val_score(df_sorted, feature_cols, target_col, time_col, gbm_pipeline, roc_auc_score)
-        gbm_acc = float(np.nanmean(gbm_scores)) if len(gbm_scores) > 0 and not np.isnan(np.nanmean(gbm_scores)) else 0.5
+        gbm_roc_auc = float(np.nanmean(gbm_scores)) if len(gbm_scores) > 0 and not np.isnan(np.nanmean(gbm_scores)) else 0.5
 
-        clears_gate = gbm_acc >= lr_acc or gbm_acc > 0.55
+        clears_gate = gbm_roc_auc >= lr_roc_auc or gbm_roc_auc > 0.55
         return {
             "status": "Purged K-Fold validation complete",
-            "gbm_accuracy": round(gbm_acc, 4),
-            "logistic_accuracy": round(lr_acc, 4),
+            "gbm_roc_auc": round(gbm_roc_auc, 4),
+            "lr_roc_auc": round(lr_roc_auc, 4),
             "clears_gate": bool(clears_gate),
             "embargo_days": embargo_days
         }
@@ -230,8 +229,6 @@ class MomentumMLService:
             
             cv_gen = PurgedWalkForwardCV(n_splits=3)
             splits = list(cv_gen.split(df, "date_calculated", horizon_days=days))
-            if len(splits) < 3:
-                splits = 3
                 
             base_model = lgb.LGBMClassifier(n_estimators=50, random_state=42, verbose=-1)
             base_pipeline = Pipeline([
@@ -241,9 +238,13 @@ class MomentumMLService:
                 ('classifier', base_model)
             ])
             
-            calibrated = CalibratedClassifierCV(base_pipeline, method='isotonic', cv=splits)
-            calibrated.fit(X, y)
-            models[horizon] = {'pipeline': calibrated, 'features': selected}
+            if len(splits) < 3:
+                base_pipeline.fit(X, y)
+                models[horizon] = {'pipeline': base_pipeline, 'features': selected}
+            else:
+                calibrated = CalibratedClassifierCV(base_pipeline, method='isotonic', cv=splits)
+                calibrated.fit(X, y)
+                models[horizon] = {'pipeline': calibrated, 'features': selected}
 
         try:
             import joblib
@@ -285,10 +286,9 @@ class MomentumMLService:
         multi_probs = self.predict_multi_horizon(features)
         return multi_probs.get("prob_5d", 0.50)
 
-    def predict_multi_horizon(self, features: Dict[str, float], sequence_embeddings: Optional[List[float]] = None) -> Dict[str, float]:
+    def predict_multi_horizon(self, features: Dict[str, float]) -> Dict[str, float]:
         """
         Section 5 Multi-Horizon Modeling: Generates calibrated gain probabilities for 3-day, 5-day, and 10-day horizons.
-        Weaves PCA matrix trajectory sequence embeddings directly into the prediction feature vectors as orthogonal alpha inputs.
         """
         # Calculate base rule/GBM hybrid composite
         comp = (
@@ -338,8 +338,3 @@ class MomentumMLService:
             "prob_10d": prob_10d
         }
 
-    def generate_sequence_embeddings(self, prices: List[float], volumes: List[float], n_components: int = 2) -> List[float]:
-        """
-        Removed due to mathematical flaws (PCA on 2 columns is trivial) and destroying calibration.
-        """
-        return [0.0] * n_components

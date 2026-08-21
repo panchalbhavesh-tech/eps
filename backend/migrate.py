@@ -71,6 +71,10 @@ def upgrade_db():
         ("bulk_block_deals", "known_at", "TIMESTAMP"),
         ("surveillance_watchlist", "known_at", "TIMESTAMP"),
         ("score_prediction_logs", "known_at", "TIMESTAMP"),
+        ("hypothesis_experiments", "classic_sharpe", "FLOAT"),
+        ("hypothesis_experiments", "deflated_sharpe", "FLOAT"),
+        ("hypothesis_experiments", "pbo", "FLOAT"),
+        ("hypothesis_experiments", "spearman_ic_mean", "FLOAT"),
         ("strategy_backtests", "sharpe_ratio", "FLOAT"),
         ("strategy_backtests", "sharpe_ci_lower", "FLOAT"),
         ("strategy_backtests", "sharpe_ci_upper", "FLOAT"),
@@ -84,6 +88,18 @@ def upgrade_db():
         ("event_studies", "max_gain", "FLOAT"),
         ("event_studies", "max_drawdown", "FLOAT"),
         ("research_hypotheses", "normalized_expression", "VARCHAR(500)"),
+        ("companies", "ipo_date", "TIMESTAMP"),
+        ("companies", "delisted_date", "TIMESTAMP"),
+        ("companies", "is_active", "BOOLEAN"),
+        ("companies", "listing_status", "VARCHAR"),
+        ("companies", "earliest_historical_date", "TIMESTAMP"),
+        ("companies", "latest_historical_date", "TIMESTAMP"),
+        ("companies", "historical_years_available", "FLOAT"),
+        ("companies", "total_daily_bars", "INTEGER"),
+        ("companies", "data_completeness_pct", "FLOAT"),
+        ("companies", "system_added_date", "TIMESTAMP"),
+        ("companies", "last_harvested_at", "TIMESTAMP"),
+        ("companies", "last_error_log", "VARCHAR"),
     ]
 
     for table, column, datatype in columns_to_add:
@@ -91,8 +107,10 @@ def upgrade_db():
             cursor.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {datatype};")
             print(f"Checked/Added {column} on {table}")
         except psycopg2.errors.DuplicateColumn:
+            conn.rollback()
             print(f"Column {column} already exists in {table}, skipping.")
         except Exception as e:
+            conn.rollback()
             print(f"Error adding {column} to {table}: {e}")
 
     try:
@@ -151,7 +169,7 @@ def upgrade_db():
                 economic_rationale_text TEXT NOT NULL,
                 alpha_expression VARCHAR(500) NOT NULL,
                 normalized_expression VARCHAR(500) UNIQUE,
-                target_universe VARCHAR(100) DEFAULT 'NIFTY500',
+                target_universe VARCHAR(100) DEFAULT 'NSE_ALL',
                 holding_horizon_days INTEGER DEFAULT 5,
                 current_stage VARCHAR(50) DEFAULT 'DRAFT_HYPOTHESIS',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -176,6 +194,7 @@ def upgrade_db():
                 total_trials_in_family INTEGER DEFAULT 1,
                 classic_sharpe FLOAT,
                 deflated_sharpe FLOAT,
+                pbo FLOAT,
                 spearman_ic_mean FLOAT,
                 spearman_ic_tstat FLOAT,
                 max_drawdown_pct FLOAT,

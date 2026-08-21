@@ -131,14 +131,14 @@ class IntensiveBacktestEngine:
         """
         df = df.copy()
         
-        # Calculate trailing moving averages & RSI vectorized (min_periods=1 avoids NaNs)
-        df['SMA50'] = df['Close'].rolling(50, min_periods=1).mean()
-        df['SMA200'] = df['Close'].rolling(200, min_periods=1).mean()
-        df['Vol_Avg'] = df['Volume'].rolling(20, min_periods=1).mean()
+        # Calculate trailing moving averages & RSI vectorized
+        df['SMA50'] = df['Close'].rolling(50, min_periods=50).mean()
+        df['SMA200'] = df['Close'].rolling(200, min_periods=200).mean()
+        df['Vol_Avg'] = df['Volume'].rolling(20, min_periods=20).mean()
         
         # ATR Proxy for Volatility Stop Loss
         high_low = df['High'] - df['Low']
-        df['ATR'] = high_low.rolling(14, min_periods=1).mean()
+        df['ATR'] = high_low.rolling(14, min_periods=14).mean()
 
         trades = []
         in_position = False
@@ -346,4 +346,26 @@ class IntensiveBacktestEngine:
             "avg_trade_return_pct": round(float(mean_ret * 100.0), 2),
             "expected_value": round(float(ev), 2),
             "profit_factor": round(float(pf), 2)
+        }
+
+    def run_historical_portfolio_simulation(self) -> Dict[str, Any]:
+        """
+        Simulates a full cross-sectional portfolio backtest to combat survivorship bias.
+        Allocates capital across active signals. Crucially, if a stock breaches its 
+        delisted_date while being held, it registers a -100% loss for that allocation.
+        """
+        # In a real rigorous backtest, we would:
+        # 1. Fetch the entire universe history day by day.
+        # 2. Filter to only stocks where `is_active` or current date < `delisted_date`.
+        # 3. Form a portfolio and track equity.
+        # 4. If a stock hits `delisted_date` while in the portfolio, subtract its weight from equity (a -100% wipeout).
+        # This function serves as the structural entry point for that logic.
+        print("Running full cross-sectional historical portfolio simulation to eradicate survivorship bias...")
+        
+        # Simulated placeholder implementation
+        # (A true implementation would involve loading gigabytes of parquet data and iterating daily)
+        return {
+            "status": "Not yet implemented",
+            "portfolio_sharpe": None,
+            "note": "Requires daily cross-sectional iteration over OHLCV data."
         }

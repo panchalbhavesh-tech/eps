@@ -25,6 +25,24 @@ class Company(Base):
     purpose = Column(String, nullable=True)
     upcoming_date = Column(String, nullable=True)
     
+    # Lifecycle & Metadata
+    ipo_date = Column(DateTime, nullable=True)
+    delisted_date = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    listing_status = Column(String, default="Active")
+    
+    # Data Availability Metadata
+    earliest_historical_date = Column(DateTime, nullable=True)
+    latest_historical_date = Column(DateTime, nullable=True)
+    historical_years_available = Column(Float, nullable=True)
+    total_daily_bars = Column(Integer, nullable=True)
+    data_completeness_pct = Column(Float, nullable=True)
+    
+    # System Tracking
+    system_added_date = Column(DateTime, default=datetime.utcnow)
+    last_harvested_at = Column(DateTime, nullable=True)
+    last_error_log = Column(String, nullable=True)
+    
     # Bulk fetched data
     current_price = Column(Float, nullable=True)
     q1_eps = Column(Float, nullable=True)
@@ -323,7 +341,7 @@ class ResearchHypothesis(Base):
     economic_rationale_text = Column(Text, nullable=False)
     alpha_expression = Column(String, nullable=False)    # e.g., "rank(volatility_20) / adv_10"
     normalized_expression = Column(String, unique=True, index=True, nullable=True)
-    target_universe = Column(String, default="NIFTY500")
+    target_universe = Column(String, default="NSE_ALL")
     holding_horizon_days = Column(Integer, default=5)
     current_stage = Column(String, default="DRAFT_HYPOTHESIS", index=True) # FSM Stage
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -344,6 +362,7 @@ class HypothesisExperiment(Base):
     total_trials_in_family = Column(Integer, default=1)       # Crucial for Deflated Sharpe Ratio calculation
     classic_sharpe = Column(Float, nullable=True)
     deflated_sharpe = Column(Float, nullable=True)
+    pbo = Column(Float, nullable=True)
     spearman_ic_mean = Column(Float, nullable=True)
     spearman_ic_tstat = Column(Float, nullable=True)
     max_drawdown_pct = Column(Float, nullable=True)
@@ -408,6 +427,8 @@ class FundamentalSnapshot(Base):
     __table_args__ = (UniqueConstraint('ticker', 'trade_date', name='uq_fund_snapshot_ticker_trade_date'),)
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     ticker = Column(String, index=True, nullable=False)
+    # trade_date represents the date this information became publicly actionable 
+    # (e.g. filing/announcement date), NOT the fiscal period end date.
     trade_date = Column(DateTime, nullable=False, index=True)
     roe = Column(Float, nullable=True)
     debt_to_equity = Column(Float, nullable=True)
