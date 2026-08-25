@@ -1,138 +1,50 @@
-# Quantitative Earnings Prediction System (VD EPS)
+# QEPS - Quantitative Earnings Prediction System
 
-EPS is an institutional-grade quantitative analytics and surveillance platform for NSE-listed equities. It provides automated financial modeling, technical indicator calculation, algorithmic strategy backtesting, and AI-driven sentiment analysis.
+QEPS is a full-stack, containerized quantitative analytics and surveillance platform for NSE-listed equities. It provides automated financial modeling, algorithmic strategy backtesting, technical indicator calculation, and AI-driven sentiment analysis.
 
-## Features
+## Core Features
+- **High-Density Dashboard:** React-based terminal UI with dual themes (Institutional Light / Trading Floor Dark).
+- **Data Ingestion:** Standalone Upstox Data Harvester persisting OHLCV to a Parquet Data Lake and live quotes to PostgreSQL.
+- **Quantitative Engine:** Multi-factor momentum scanning, dynamic financial health scoring, and hypothesis lifecycle management.
+- **Asynchronous Workflows:** Robust Celery/Redis background task orchestration.
+- **AI Integration:** Automated institutional research report generation powered by Google Gemini.
 
-- **Company & Event Analytics**: Financial statement aggregation and event study modeling around earnings.
-- **Technical Analysis**: Real-time technical indicators (SMA, RSI, MACD, Trend/Cross detection).
-- **Verified News & Sentiment**: Live RSS news aggregation with Gemini-driven sentiment scoring.
-- **Quantitative Backtesting**: Algorithmic strategy evaluation and performance metrics.
-- **Financial Scoring**: Automated health grading and statistical probability analysis.
-- **Background Processing**: Celery-based workers for OHLCV caching and NSE universe synchronization.
+## System Architecture
+The application is orchestrated entirely via **Docker Compose**:
+- **Frontend:** React (Vite), TypeScript, Apollo Client, Material UI.
+- **Backend:** Python, FastAPI, Strawberry GraphQL, SQLAlchemy.
+- **Workers:** Celery & Celery Beat for task execution and scheduling.
+- **Data Stores:** PostgreSQL, Redis, and Parquet (Data Lake).
 
-## Tech Stack
+## Getting Started
 
-- **Frontend**: React (Vite), TypeScript, Material UI, Apollo Client (GraphQL)
-- **Backend**: Python, FastAPI, Strawberry (GraphQL), SQLAlchemy, pandas, scikit-learn
-- **Database**: PostgreSQL
-- **Cache/Queue**: Redis, Celery
-- **AI**: Google Gemini API
-- **Infrastructure**: Docker Compose, Nginx
+### 1. Prerequisites
+- Docker and Docker Compose installed.
 
-## Project Structure
-
-```text
-Eps/
-├── frontend/             # React SPA (Vite)
-├── backend/              # FastAPI & Celery services
-│   ├── app/              # Main application code (API, models, services)
-│   ├── docker/           # Service-specific Dockerfiles
-├── docker-compose.yml    # Full local environment orchestration
-```
-
-
-
-## 📡 Upstox Data Harvester & Parquet Data Lake
-Market data ingestion (live quotes & historical OHLCV) has been fully decoupled from the main FastAPI server to ensure zero API blocking and absolute lookahead-bias safety. 
-
-Data is harvested autonomously via Upstox API v2 and stored natively in a high-speed **Parquet Data Lake**.
-* **Documentation & Setup:** See [data_harvester/README.md](data_harvester/README.md) for instructions on using the 1-Year Analytics Token and deploying the cron jobs.
-
-
-## 🛠️ Essential Commands & Operation Guide
-
-```bash
-git clone <repository-url>
-cd Eps
-cp .env.example .env
-# Edit .env with your specific API keys
-docker compose up --build -d
-```
-
-- **Frontend Application**: [http://localhost:8080](http://localhost:8080)
-- **Backend API (GraphQL)**: [http://localhost:8000/graphql](http://localhost:8000/graphql)
-- **pgAdmin**: [http://localhost:5050](http://localhost:5050)
-
-## Environment Variables
-
-Configure these in `.env`:
-
+### 2. Environment Configuration
+Create a `.env` file in the root directory based on `.env.example`. Key variables:
 ```env
-DATABASE_URL=postgresql://qeps_user:qeps_password@postgres:5432/qeps_db
-REDIS_URL=redis://redis:6379/0
-JWT_SECRET=super_secret_jwt_key
-FMP_API_KEY=your_fmp_api_key_here          # Financial Modeling Prep API Key
-GEMINI_API_KEY=your_gemini_api_key_here    # Google Gemini API Key
-POSTGRES_DB=qeps_db
 POSTGRES_USER=qeps_user
-POSTGRES_PASSWORD=qeps_password
-PGADMIN_EMAIL=admin@example.com
-PGADMIN_PASSWORD=admin
+POSTGRES_PASSWORD=your_password
+POSTGRES_DB=qeps_db
+DATABASE_URL=postgresql://qeps_user:your_password@postgres:5432/qeps_db
+JWT_SECRET=your_jwt_secret
+GEMINI_API_KEY=your_google_gemini_key
+
+# Optional: Discord Alerts
+DISCORD_ALERTS_ENABLED=true
+DISCORD_TRADING_WEBHOOK_URL=your_webhook_url
 ```
 
-## Useful Commands
-
-**Docker Operations**
+### 3. Running the Stack
+Launch the full platform using Docker Compose:
 ```bash
-# Start all services in the background
-docker compose up --build -d
-
-# Check service status
-docker compose ps
-
-# View logs for all services
-docker compose logs -f
-
-# View logs for a specific service
-docker compose logs -f backend
-docker compose logs -f worker
-
-# Restart background workers (required after updating Python task logic)
-docker compose restart worker scheduler
-
-# Stop and remove all containers
-docker compose down
+docker compose up -d --build
 ```
+- **Dashboard:** Access via `http://localhost`
+- **GraphQL API:** Access via `http://localhost/api/graphql`
 
-**Frontend Development (Outside Docker)**
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-**Backend Database (Alembic Migrations)**
-*(Run from inside the backend container or locally with the virtual environment)*
-```bash
-alembic upgrade head
-alembic revision --autogenerate -m "description"
-```
-
-## Development Notes
-
-- **Worker Reloading**: The Celery `worker` and `scheduler` containers do NOT auto-reload on Python file changes. You must run `docker compose restart worker scheduler` to apply updates to background tasks.
-- **Data Ingestion**: Initial NSE universe sync and OHLCV data ingestion occur via background Celery tasks. If data is missing, check the `worker` logs for API limits or connection errors.
-- **Gemini Fallback**: If `GEMINI_API_KEY` is missing or invalid, the sentiment engine will safely fall back to a deterministic keyword-density heuristic rather than crashing.
-
-## Troubleshooting
-
-### Containers not starting / Port conflicts
-Check for existing services running on ports 8080, 8000, 5050, or 5432.
-```bash
-docker compose ps
-docker compose logs
-```
-
-### Missing Data on UI
-If the UI shows "Company not found" or missing data:
-1. Ensure the PostgreSQL database was initialized correctly.
-2. Check if the `scheduler` triggered the daily data fetch tasks.
-3. Check `worker` logs for `yfinance` rate limits or network blocks.
-```bash
-docker compose logs -f worker
-```
-
-## Authors
-- Vipul G.
-- Dhruv T.
+### 4. Data Harvester Setup
+Market data ingestion runs independently of the main API via the `data_harvester` script.
+- Requires `UPSTOX_ACCESS_TOKEN` (1-Year Analytics Token) in your `.env`.
+- Deploy via native Linux `cron` to capture intraday snapshots and end-of-day OHLCV. See [data_harvester/README.md](data_harvester/README.md) for detailed setup instructions.
