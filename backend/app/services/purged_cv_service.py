@@ -28,7 +28,7 @@ class PurgedWalkForwardCV:
             return
             
         fold_size = (n - min_train) // self.n_splits
-        embargo = max(1, int(n * self.embargo_pct))
+        embargo = horizon_days * 2
         
         for i in range(self.n_splits):
             test_start = min_train + i * fold_size

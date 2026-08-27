@@ -409,3 +409,11 @@ class EventAnalogStatsType:
     avg_3d_return: float
     avg_5d_return: float
     win_rate_5d: float
+
+@strawberry.type
+class PortfolioSimulationResultType:
+    start_date: str
+    end_date: str
+    equity_curve: List[float]
+    sharpe_ratio: float
+    max_drawdown_pct: float

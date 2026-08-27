@@ -41,10 +41,9 @@ class UniverseService:
         import uuid
         import logging
         
-        # Check if already seeded to avoid redundant downloads
-        if self.db.query(HistoricalConstituent).first():
-            return
-            
+        # Early return removed to allow incremental updates
+        pass
+
         logger = logging.getLogger(__name__)
         logger.info("Fetching current NSE equity universe...")
         
@@ -68,8 +67,13 @@ class UniverseService:
                 
             # Attempt to load historical delisted master dataset if it exists locally
             import os
+            import time
             delisted_path = "data/DELISTED_MASTER.csv"
             if os.path.exists(delisted_path):
+                file_age_days = (time.time() - os.path.getmtime(delisted_path)) / (24 * 3600)
+                if file_age_days > 30:
+                    logger.critical(f"DELISTED_MASTER.csv is {file_age_days:.1f} days old! Survivorship bias protection is degrading.")
+                    
                 delisted_df = pd.read_csv(delisted_path)
                 if 'SYMBOL' in delisted_df.columns:
                     df = pd.concat([df, delisted_df], ignore_index=True)

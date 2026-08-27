@@ -210,7 +210,7 @@ class MomentumService:
 
                 # Universe Liquidity Filter (ADV_MIN > 5 Cr / 50M INR)
                 adv = data["adv_20d"]
-                if adv < 500000 and len(companies) > 200:
+                if adv < 50000000 and len(companies) > 200:
                     excluded_count += 1
                     continue
 

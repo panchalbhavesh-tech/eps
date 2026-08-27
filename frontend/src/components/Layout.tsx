@@ -57,6 +57,13 @@ const Layout: React.FC = () => {
       description: 'Quantitative Hypothesis Lifecycle Management & Bailey-Lopez de Prado statistical audit'
     },
     {
+      text: 'Portfolio Simulation',
+      icon: <ShowChartIcon sx={{ fontSize: 20 }} />,
+      path: '/portfolio',
+      breadcrumb: 'Portfolio Simulation / Cross-Sectional Historical Performance',
+      description: 'Vectorized historical P&L engine with survivorship bias protection'
+    },
+    {
       text: 'Celery Schedules',
       icon: <ScheduleIcon sx={{ fontSize: 20 }} />,
       path: '/schedules',

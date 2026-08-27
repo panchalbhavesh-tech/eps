@@ -207,6 +207,18 @@ class MomentumMLService:
 
         df = pd.DataFrame(data)
         
+        # --- PSI Drift Monitoring ---
+        if len(df) >= 30:
+            df_sorted = df.sort_values(by='date_calculated')
+            mid_point = len(df_sorted) // 2
+            df_old = df_sorted.iloc[:mid_point]
+            df_new = df_sorted.iloc[mid_point:]
+            drift_val = self.calculate_psi_drift(df_old['raw_rel_vol'].tolist(), df_new['raw_rel_vol'].tolist())
+            if drift_val > 0.2:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"CRITICAL: Feature drift detected on raw_rel_vol! PSI = {drift_val}. Retraining recommended.")
+        
         candidate_features = [
             'raw_roe', 'raw_de', 'raw_pe',
             'raw_rel_vol', 'raw_dma200_dist'
