@@ -1,7 +1,7 @@
 import strawberry
 from typing import List, Optional
 from strawberry.types import Info
-from app.graphql.types import BackgroundJobLiveStatusType, CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType, HypothesisSignalType, AdminActivityLogType, CatalystEventType, CatalystSourceType, CatalystPipelineRunType, EventAnalogStatsType, WorkerExecutionHistoryType
+from app.graphql.types import BackgroundJobLiveStatusType, CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType, HypothesisSignalType, AdminActivityLogType, CatalystEventType, CatalystSourceType, CatalystPipelineRunType, EventAnalogStatsType, WorkerExecutionHistoryType, PortfolioSimulationResultType
 from app.services.company_service import CompanyService
 from app.graphql.context import Context
 import uuid
@@ -1160,4 +1160,27 @@ class Query:
             avg_3d_return=stats["avg_3d_return"],
             avg_5d_return=stats["avg_5d_return"],
             win_rate_5d=stats["win_rate_5d"]
+        )
+
+    @strawberry.field
+    def run_portfolio_simulation(self, info: Info[Context, None], start_date: str, end_date: str) -> Optional[PortfolioSimulationResultType]:
+        from app.services.backtest_service import IntensiveBacktestEngine
+        from datetime import datetime
+        db = info.context.db
+        
+        try:
+            start = datetime.strptime(start_date, "%Y-%m-%d")
+            end = datetime.strptime(end_date, "%Y-%m-%d")
+        except ValueError:
+            return None
+            
+        svc = IntensiveBacktestEngine(db)
+        res = svc.run_historical_portfolio_simulation(start, end)
+        
+        return PortfolioSimulationResultType(
+            start_date=start_date,
+            end_date=end_date,
+            equity_curve=res.get("equity_curve", []),
+            sharpe_ratio=res.get("sharpe_ratio", 0.0),
+            max_drawdown_pct=res.get("max_drawdown_pct", 0.0)
         )

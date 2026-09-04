@@ -260,8 +260,23 @@ class HypothesisService:
 
         try:
             # Query representative liquid symbols from cache
-            companies = self.db.query(Company).limit(50).all()
-            tickers = [c.ticker for c in companies]
+            from app.services.universe_service import UniverseService
+            universe_svc = UniverseService(self.db)
+            pit_tickers = universe_svc.get_pit_universe(hyp.target_universe, datetime.utcnow())
+            
+            # Apply liquidity filter to prevent garbage alpha on micro-caps
+            liquid_tickers = []
+            for t in pit_tickers:
+                company = self.db.query(Company).filter(Company.ticker == t).first()
+                if company and company.market_cap and company.market_cap > 5_000_000_000:
+                    liquid_tickers.append(t)
+            
+            import random
+            rng = random.Random(42)
+            if len(liquid_tickers) > 300:
+                tickers = rng.sample(liquid_tickers, 300)
+            else:
+                tickers = liquid_tickers
             
             # Fetch all rows for these tickers
             rows = self.db.query(DailyBhavcopy).filter(DailyBhavcopy.ticker.in_(tickers)).order_by(DailyBhavcopy.trade_date.asc()).all()
@@ -378,16 +393,20 @@ class HypothesisService:
             
             # --- White's Reality Check ---
             try:
-                nifty_rows = self.db.query(DailyBhavcopy).filter(DailyBhavcopy.ticker == "^NSEI").order_by(DailyBhavcopy.trade_date.asc()).all()
-                if nifty_rows:
-                    nifty_df = pd.DataFrame([{'Date': r.trade_date, 'close': r.close_price} for r in nifty_rows])
-                    nifty_df.set_index('Date', inplace=True)
-                    nifty_df['nifty_ret'] = nifty_df['close'].pct_change()
+                from app.services.data.data_manager import UnifiedDataManager
+                dm = UnifiedDataManager()
+                # Ensure we get enough benchmark history
+                nifty_df = dm.get_ohlcv("^NSEI", days=sample_length * 3) 
+                if not nifty_df.empty:
+                    nifty_df['nifty_ret'] = nifty_df['Close'].pct_change()
+                    nifty_df.index = pd.to_datetime(nifty_df.index).tz_localize(None)
+                    
                     aligned = pd.concat([pd.Series(strategy_daily_returns, index=daily_returns.index, name='strat_ret'), nifty_df['nifty_ret']], axis=1).dropna()
-                    benchmark_ret = aligned['nifty_ret'].mean() if len(aligned) > 0 else 0.0
+                    benchmark_ret = float(aligned['nifty_ret'].mean()) if len(aligned) > 0 else 0.0
                 else:
                     benchmark_ret = 0.0
-            except Exception:
+            except Exception as e:
+                print(f"White's reality check fallback due to error: {e}")
                 benchmark_ret = 0.0
                 
             rc_excess = mean_ret - benchmark_ret
@@ -523,7 +542,7 @@ class HypothesisService:
                     
             if p_values:
                 from app.services.multiple_testing_service import MultipleTestingService
-                reject_null = MultipleTestingService.benjamini_hochberg_fdr(np.array(p_values), alpha=0.05)
+                reject_null = MultipleTestingService.benjamini_hochberg_fdr(np.array(p_values), alpha=0.01)
                 for i, h in enumerate(hyp_ids):
                     if not reject_null[i]:
                         # Discovered as a false positive under FDR

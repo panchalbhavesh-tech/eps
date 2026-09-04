@@ -200,13 +200,21 @@ class QuantService:
             # gap percentage
             gap_pct = ((e_day['Open'] - prev_day['Close']) / prev_day['Close']) * 100
             
+            # Calculate dynamic friction (Almgren-Chriss style square root impact)
+            import numpy as np
+            adv_inr = e_day.get('Vol_20d_avg', 0) * e_day.get('Close', 1)
+            trade_val = 500000.0 # Standard 5 Lakh order size for backtest
+            participation = trade_val / adv_inr if adv_inr > 0 else 0.01
+            friction_pct = min((0.1 + 0.5 * np.sqrt(participation)) * 2, 2.0) # Round trip, capped at 2%
+
+            
             # STRATEGY A (PEAD): Buy if gap > 2%, hold 20 days
             if gap_pct > 2:
                 if iloc_idx + 21 < len(df):
                     next_day = df.iloc[iloc_idx + 1]
                     entry = next_day['Open']
                     exit_val = df.iloc[iloc_idx + 21]['Close']
-                    ret = (((exit_val - entry) / entry) * 100.0) - 0.40 # Net of 0.20% Indian STT/brokerage friction
+                    ret = (((exit_val - entry) / entry) * 100.0) - friction_pct # Net of ADV-scaled friction
                     strategies['A']['trades'].append(ret)
                     if ret > 0: strategies['A']['win'] += 1
                     else: strategies['A']['loss'] += 1
@@ -217,7 +225,7 @@ class QuantService:
                     next_day = df.iloc[iloc_idx + 1]
                     entry = next_day['Open']
                     exit_val = df.iloc[iloc_idx + 4]['Close']
-                    ret = (((entry - exit_val) / entry) * 100.0) - 0.40 # Short position net of friction
+                    ret = (((entry - exit_val) / entry) * 100.0) - friction_pct # Short position net of friction
                     strategies['B']['trades'].append(ret)
                     if ret > 0: strategies['B']['win'] += 1
                     else: strategies['B']['loss'] += 1
@@ -228,7 +236,7 @@ class QuantService:
                     next_day = df.iloc[iloc_idx + 1]
                     entry = next_day['Open']
                     exit_val = df.iloc[iloc_idx + 11]['Close']
-                    ret = (((exit_val - entry) / entry) * 100.0) - 0.40
+                    ret = (((exit_val - entry) / entry) * 100.0) - friction_pct
                     strategies['C']['trades'].append(ret)
                     if ret > 0: strategies['C']['win'] += 1
                     else: strategies['C']['loss'] += 1
@@ -242,7 +250,7 @@ class QuantService:
                         next_day = df.iloc[iloc_idx + 1]
                         entry = next_day['Open']
                         exit_val = df.iloc[iloc_idx + 6]['Close']
-                        ret = (((exit_val - entry) / entry) * 100.0) - 0.40
+                        ret = (((exit_val - entry) / entry) * 100.0) - friction_pct
                         strategies['D']['trades'].append(ret)
                         if ret > 0: strategies['D']['win'] += 1
                         else: strategies['D']['loss'] += 1
@@ -252,7 +260,7 @@ class QuantService:
                 entry_day = df.iloc[iloc_idx - 10]
                 entry = df.iloc[iloc_idx - 9]['Open'] if iloc_idx >= 9 else entry_day['Close']
                 exit_val = prev_day['Close']
-                ret = (((exit_val - entry) / entry) * 100.0) - 0.40
+                ret = (((exit_val - entry) / entry) * 100.0) - friction_pct
                 strategies['E']['trades'].append(ret)
                 if ret > 0: strategies['E']['win'] += 1
                 else: strategies['E']['loss'] += 1
@@ -263,7 +271,7 @@ class QuantService:
                     next_day = df.iloc[iloc_idx + 1]
                     entry = next_day['Open']
                     exit_val = df.iloc[iloc_idx + 6]['Close']
-                    ret = (((exit_val - entry) / entry) * 100.0) - 0.40
+                    ret = (((exit_val - entry) / entry) * 100.0) - friction_pct
                     strategies['F']['trades'].append(ret)
                     if ret > 0: strategies['F']['win'] += 1
                     else: strategies['F']['loss'] += 1
@@ -350,7 +358,7 @@ class QuantService:
                     dt = pd.to_datetime(d_clean)
                     norm_date = dt.strftime("%Y-%m-%d")
                 except Exception:
-                    norm_date = f"{datetime.utcnow().year}-06-15"
+                    continue
 
             post_df = df_sorted[df_sorted.index >= norm_date]
             if len(post_df) >= 7:
