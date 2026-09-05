@@ -26,7 +26,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1536M
+          memory: 1G
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -46,7 +46,7 @@ services:
       context: .
       dockerfile: docker/backend/Dockerfile
     container_name: qeps_worker
-    command: celery -A app.worker.celery_app worker --loglevel=warning --concurrency=3
+    command: celery -A app.worker.celery_app worker --loglevel=warning --concurrency=2
     restart: unless-stopped
     volumes:
       - data_lake:/app/data_lake:ro
@@ -63,7 +63,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 8G    # Headroom for 3 concurrent ML training jobs
+          memory: 3.5G    # Headroom for 2 concurrent ML jobs on 8GB VPS
     networks:
       - qeps_network
     depends_on:
@@ -120,7 +120,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 1G
 
   redis:
     image: redis:7-alpine

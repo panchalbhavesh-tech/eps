@@ -1,7 +1,7 @@
 # QEPS Production Deployment Strategy (Final)
 
 > [!NOTE]
-> Consolidated to a **single high-spec VPS** (16 GB RAM / 500 GB SSD) per team preference. Frontend hosted on **Cloudflare Pages** (free CDN). This eliminates cross-VPS networking complexity while providing ample headroom for concurrent ML training and historical data storage.
+> Consolidated to a **single VPS** — **OVHcloud VPS-2** (4 vCores / 8 GB RAM / 75 GB NVMe SSD / 1 Gbps) in **Canada (BHS) datacenter**. Frontend hosted on **Cloudflare Pages** (free CDN). The 8 GB RAM budget is tight and requires careful memory limits; the 75 GB disk is sufficient for now but will require a disk upgrade or additional storage as the Parquet data lake grows over time.
 
 ---
 
@@ -12,14 +12,14 @@
 | # | Process | Command | Port | RAM Estimate |
 |---|---------|---------|------|-------------|
 | 1 | **FastAPI** (Uvicorn x2) | `uvicorn main:app --workers 2` | 8000 | ~400 MB |
-| 2 | **Celery Worker** (x3 concurrency) | `celery worker --concurrency=3` | — | ~2–6 GB (ML training) |
+| 2 | **Celery Worker** (x2 concurrency) | `celery worker --concurrency=2` | — | ~1–3 GB (ML training) |
 | 3 | **Celery Beat** | `celery beat` | — | ~50 MB |
-| 4 | **PostgreSQL 17** | postgres:17-alpine | 5432 | ~500 MB–1 GB |
+| 4 | **PostgreSQL 17** | postgres:17-alpine | 5432 | ~300–600 MB |
 | 5 | **Redis 7** | redis:7-alpine | 6379 | ~100–200 MB |
 | 6 | **Nginx** | nginx:alpine (API proxy + SSL) | 80/443 | ~20 MB |
 | 7 | **Data Harvester** | cron: `python3 harvester.py` | — | ~200–500 MB (intermittent) |
 
-**Total peak**: ~4–9 GB RAM. With 16 GB, there's 7–12 GB of headroom — comfortable even with concurrent ML training spikes.
+**Total peak**: ~3–5 GB RAM. With 8 GB, there's ~3–5 GB of headroom — adequate with reduced concurrency. ML training runs sequentially (concurrency=2) to stay within budget.
 
 ### 1.2 Infrastructure Dependencies
 
@@ -47,7 +47,7 @@ No static IP, hosting region, or compliance constraints.
 
 - **Database**: PostgreSQL 17. Current dump: ~0.25 MB (tiny). Growth expected with historical data.
 - **Schema**: Triple migration approach (create_all → migrate.py → Alembic). Safe for additive changes; fragile for destructive ones.
-- **Parquet Data Lake**: One `.parquet` file per ticker. With full NSE universe (~2000+ tickers), expected growth to **50–200 GB** over 2–3 years. 500 GB SSD handles this comfortably.
+- **Parquet Data Lake**: One `.parquet` file per ticker. With full NSE universe (~2000+ tickers), expected growth to **50–200 GB** over 2–3 years. The 75 GB boot disk is enough for the initial phase, but storage will need to be upgraded or an additional disk attached later when the system gets bigger.
 
 ### 1.5 Frontend–Backend Communication
 
@@ -64,18 +64,19 @@ All URLs are relative → can be repointed to an absolute backend URL for Cloudf
 
 ---
 
-## Phase 2 — Decision: Single VPS
+## Phase 2 — Decision: Single VPS (OVHcloud VPS-2)
 
-### Why Single VPS Works at 16 GB
+### Why Single VPS Works at 8 GB (with constraints)
 
 | Concern | Mitigation |
 |---------|-----------|
-| ML training OOM | 16 GB total minus ~4 GB for other services = **~12 GB available** for the worker. Docker memory limit set to 8 GB. 4 GB swap as additional buffer. |
+| ML training OOM | 8 GB total minus ~2 GB for other services = **~6 GB available** for the worker. Docker memory limit set to 3 GB. Celery concurrency reduced to 2. 4 GB swap as additional buffer. |
 | Worker crash kills web server | Docker `restart: unless-stopped` + `deploy.resources.limits.memory` per container. Linux OOM killer targets the container that exceeded its limit, not random processes. |
-| Disk space for historical data | 500 GB SSD. Parquet lake grows ~50–200 GB over 2–3 years. ~300 GB headroom. |
-| CPU contention during training | `--concurrency=3` on worker. FastAPI uses async I/O and doesn't compete much for CPU. Training runs on scheduled cadence (daily/weekly), not during peak user activity. |
+| Disk space for historical data | 75 GB boot disk is sufficient for now. We will upgrade disk capacity later as the data lake grows. |
+| CPU contention during training | `--concurrency=2` on worker (reduced from 3). FastAPI uses async I/O and doesn't compete much for CPU. Training runs on scheduled cadence (daily/weekly), not during peak user activity. |
+| Latency to India | Canada (BHS) → India is ~200–250ms network latency. With Cloudflare Pages CDN for frontend and typical 50–200ms server processing, total API response = ~250–450ms. Usable for a dashboard, but not snappy. |
 
-**What would force a split**: If the stock universe grows beyond ~5000 tickers with concurrent training across all of them, or if the team adds real-time streaming workloads. At that point, move the worker to a dedicated machine — the architecture already supports this via `REDIS_URL` and `DATABASE_URL` changes.
+**What would force an upgrade**: If the stock universe grows beyond ~2000 tickers with concurrent training, or if 8 GB RAM proves too tight under real load. Upgrade path: OVHcloud VPS-4 (8 vCores / 16 GB / 160 GB) or move the worker to a dedicated machine — the architecture supports this via `REDIS_URL` and `DATABASE_URL` changes.
 
 ---
 
@@ -103,8 +104,8 @@ All URLs are relative → can be repointed to an absolute backend URL for Cloudf
                        │ HTTPS (GraphQL + REST)
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              SINGLE VPS (api.your-domain.com)               │
-│              4-6 vCPU / 16 GB / 500 GB SSD                  │
+│         OVHcloud VPS-2 (api.your-domain.com)                │
+│         4 vCores / 8 GB / 75 GB NVMe — Canada (BHS)         │
 │                                                             │
 │  ┌─────────────┐  ┌──────────────────────────────────────┐  │
 │  │   Nginx     │  │         Docker Network               │  │
@@ -114,55 +115,50 @@ All URLs are relative → can be repointed to an absolute backend URL for Cloudf
 │                    │  PostgreSQL 17 (:5432)               │  │
 │                    │  Redis 7 (:6379)                     │  │
 │                    │                                      │  │
-│                    │  Celery Worker (concurrency=3)       │  │
+│                    │  Celery Worker (concurrency=2)       │  │
 │                    │  Celery Beat (scheduler)             │  │
 │                    └──────────────────────────────────────┘  │
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │  Data Harvester (system cron)                        │   │
 │  │  Writes to: PostgreSQL (live_quotes)                 │   │
-│  │             Parquet Data Lake (/data_lake)            │   │
-│  └──────────────────────────────────────────────────────┘   │
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │  Parquet Data Lake: /home/deploy/data_lake            │   │
-│  │  ~50-200 GB historical OHLCV (500 GB SSD capacity)    │   │
+│  │  OVH Additional Disk (250-500 GB) mounted            │   │
+│  │  at /mnt/data_lake — Parquet OHLCV data lake         │   │
+│  │  ~50-200 GB historical data over 2-3 years           │   │
 │  └──────────────────────────────────────────────────────┘   │
 │                                                             │
 │         GitHub Actions CI/CD → SSH Deploy                    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 4.2 VPS Provider Comparison (16 GB RAM / 500 GB SSD tier)
+### 4.2 Chosen Provider: OVHcloud VPS-2 (Canada)
 
-| Provider | Plan | vCPU | RAM | SSD | Traffic | Location | Monthly Cost | Notes |
-|----------|------|------|-----|-----|---------|----------|-------------|-------|
-| **Contabo VPS L** | Shared | 8 | 30 GB | 800 GB | 32 TB | 🇩🇪 🇺🇸 🇯🇵 🇸🇬 | **~€12 ($14)** | Most specs/dollar by far. Support is slow. Performance inconsistent (oversubscribed). Singapore DC = ~50ms to India. |
-| **Hetzner CX52** | Shared | 8 | 16 GB | 240 GB | 20 TB | 🇩🇪 Germany | **€27 (~$31)** | Excellent reliability. 240 GB SSD — add a 300 GB Volume (+$14) = $45 total. ~100ms to India. |
-| **Hetzner CCX23** | Dedicated | 4 | 16 GB | 160 GB | 20 TB | 🇩🇪 Germany | **€36 (~$41)** | Dedicated CPU (no noisy neighbors). Add 400 GB Volume (+$19) = $60 total. Best for consistent ML performance. |
-| **OVH VPS** | Comfort | 4 | 16 GB | 320 GB | Unmetered | 🇫🇷 🇺🇸 🇸🇬 | **~€35 ($40)** | Singapore = ~50ms to India. Add 200 GB block storage (~$8) = $48 total. |
-| **Vultr High Freq** | — | 4 | 16 GB | 384 GB | 5 TB | 🇮🇳 **Mumbai** | **$96** | Mumbai = ~10ms latency. NVMe storage. Most expensive. |
-| **DigitalOcean** | Premium AMD | 4 | 16 GB | 320 GB | 6 TB | 🇮🇳 **Bangalore** | **$96** | Bangalore = ~10ms. Managed DB add-on available. |
-| **AWS Lightsail** | 2xlarge | 4 | 16 GB | 320 GB | 6 TB | 🇮🇳 **Mumbai** | **$80** | Mumbai. Simplified AWS. Can attach extra SSD volumes. |
-
-**Recommendation:**
-
-| Budget | Pick | Total | Latency to India |
-|--------|------|-------|-----------------|
-| 💰 **Tightest** | Contabo VPS L (Singapore) | **~$14/mo** | ~50ms |
-| ⚖️ **Best balance** | Hetzner CX52 + 300 GB Volume | **~$45/mo** | ~100ms |
-| ⚖️ **Best for ML** | Hetzner CCX23 (dedicated CPU) + 400 GB Volume | **~$60/mo** | ~100ms |
-| 🌏 **Lowest latency** | Vultr Mumbai or DigitalOcean Bangalore | **~$96/mo** | ~10ms |
+| Spec | Value |
+|------|-------|
+| **Plan** | VPS-2 |
+| **vCPU** | 4 vCores |
+| **RAM** | 8 GB |
+| **Storage** | 75 GB NVMe SSD (boot) |
+| **Bandwidth** | 1 Gbps / unmetered |
+| **Datacenter** | 🇨🇦 Canada (BHS — Beauharnois) |
+| **Latency to India** | ~200–250ms |
+| **Additional Disk** | None for now (upgrade later as data grows) |
 
 > [!IMPORTANT]
-> **Team Decision**: Since frontend is on Cloudflare Pages (CDN-cached, instant page loads globally), only **API latency** is affected by VPS location. GraphQL queries typically take 50-200ms of server processing. With Hetzner Germany (~100ms network), total API response = ~150-300ms. With Mumbai/Bangalore (~10ms), total = ~60-210ms. For a dashboard refreshing every few seconds, both are usable — but sub-200ms feels noticeably snappier. Choose based on budget priority.
+> **Disk constraint**: The 75 GB boot disk is sufficient initially for the OS, Docker, Postgres, and the starting Parquet data lake. We will upgrade the system storage when the data lake grows larger.
+>
+> **RAM constraint**: 8 GB is workable but tight. Celery concurrency is reduced to 2 (from 3), and all container memory limits are tuned aggressively. If ML training consistently OOMs, upgrade to VPS-4 (16 GB).
+>
+> **Latency note**: Canada → India adds ~200–250ms network latency. With Cloudflare Pages CDN for frontend (instant page loads), only API calls are affected. Total API response = ~250–450ms. Acceptable for a dashboard that refreshes every few seconds, but not snappy.
 
 ### 4.3 Provisioning
 
 #### OS Setup
 
 ```bash
-# Ubuntu 24.04 LTS
+# Ubuntu 24.04 LTS (OVHcloud VPS-2, BHS datacenter)
 apt update && apt upgrade -y
 timedatectl set-timezone Asia/Kolkata
 hostnamectl set-hostname qeps-prod
@@ -205,7 +201,7 @@ mkdir -p ~/.ssh && chmod 700 ~/.ssh
 chmod 600 ~/.ssh/authorized_keys
 ```
 
-#### Swap (OOM Safety Net)
+#### Swap (OOM Safety Net — critical on 8 GB)
 
 ```bash
 fallocate -l 4G /swapfile
@@ -235,6 +231,14 @@ EOF
 systemctl restart docker
 ```
 
+#### Parquet Data Lake Storage
+
+```bash
+# Create local directory for the data lake on the boot disk
+su - deploy
+mkdir -p ~/qeps/data_lake/ohlcv/daily
+```
+
 ### 4.4 Environment Setup
 
 ```bash
@@ -243,9 +247,6 @@ git clone <repository-url> ~/qeps
 cd ~/qeps
 cp .env.example .env
 chmod 600 .env
-
-# Create data lake directory
-mkdir -p /home/deploy/data_lake/ohlcv/daily
 ```
 
 #### Production `.env`
@@ -270,6 +271,8 @@ UPSTOX_ACCESS_TOKEN=<1yr_analytics_token>
 DATA_LAKE_PATH=/app/data_lake
 ENVIRONMENT=production
 
+# Note: /app/data_lake inside Docker maps to /home/deploy/qeps/data_lake on host
+
 # === AUTH ===
 AUTH_USER_1_EMAIL=<real_email>
 AUTH_USER_1_PASSWORD=<strong_password>
@@ -284,7 +287,7 @@ DISCORD_ALERTS_ENABLED=True
 
 ### 4.5 Production Docker Compose
 
-**File: `docker-compose.prod.yml`** — single file, all services on one machine.
+**File: `docker-compose.prod.yml`** — single file, all services on one machine. Memory limits tuned for 8 GB VPS.
 
 ```yaml
 services:
@@ -335,7 +338,7 @@ services:
       context: .
       dockerfile: docker/backend/Dockerfile
     container_name: qeps_worker
-    command: celery -A app.worker.celery_app worker --loglevel=warning --concurrency=3
+    command: celery -A app.worker.celery_app worker --loglevel=warning --concurrency=2
     restart: unless-stopped
     volumes:
       - data_lake:/app/data_lake:ro
@@ -352,7 +355,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 8G    # Headroom for 3 concurrent ML training jobs
+          memory: 3G    # Tight budget on 8 GB VPS — 2 concurrent ML training jobs
     networks:
       - qeps_network
     depends_on:
@@ -407,13 +410,13 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 768M   # Tuned for 8 GB VPS: shared_buffers=256MB, work_mem=32MB
 
   redis:
     image: redis:7-alpine
     container_name: qeps_redis
     restart: unless-stopped
-    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     networks:
@@ -426,7 +429,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768M
+          memory: 384M
 
   nginx:
     build:
@@ -467,33 +470,36 @@ volumes:
     driver: local
     driver_opts:
       type: none
-      device: /home/deploy/data_lake
+      device: /home/deploy/qeps/data_lake
       o: bind
 ```
 
-**Memory Budget & Limit Validation (16 GB VPS):**
+**Memory Budget & Limit Validation (8 GB VPS):**
 
-| Container / Process | Limit | Expected Baseline | Peak Usage | Safety Margin & OOM Risk Analysis |
-|---------------------|-------|-------------------|------------|-----------------------------------|
-| **Worker** (Celery) | **8 GB** | ~300 MB | ~1.5 - 2.5 GB | **400%+ Margin.** 3 concurrent workers running ML training (`lightgbm`, `xgboost`, `shap`) on tabular data (100k rows, <20 features) use ~500 MB per training fold. The 8 GB limit prevents memory leaks from crashing the host, triggering container-only restarts if exceeded. |
-| **PostgreSQL 17**   | **2 GB** | ~200 MB | ~800 MB | **250%+ Margin.** To prevent Postgres from exceeding the 2 GB limit, configure it with production-safe limits: `shared_buffers = 512MB` and `work_mem = 64MB`. This guarantees database memory remains bounded. |
-| **Backend** (FastAPI)| **1.5 GB** | ~250 MB | ~500 MB | **300%+ Margin.** Running 2 Uvicorn workers. Peak memory occurs during parallel GraphQL queries and RSS parsing. 1.5 GB is extremely safe. |
-| **Redis 7**         | **768 MB** | ~50 MB | ~550 MB | **140%+ Margin.** Bounded by running command: `redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru`. Redis will actively evict old keys, keeping usage strictly below 768 MB. |
-| **Scheduler** (Beat) | **256 MB** | ~40 MB | ~60 MB | **400%+ Margin.** Light process that only issues task execution signals to Redis. |
-| **Nginx Proxy**     | *(unset)* | ~15 MB | ~30 MB | Negligible footprint. Bypasses limit controls. |
-| **Total Container Limits** | **12.52 GB** | **~855 MB** | **~4.44 GB** | Leaves **3.48 GB** completely free on the host. |
+| Container / Process | Limit | Expected Baseline | Peak Usage | Notes |
+|---------------------|-------|-------------------|------------|-------|
+| **Worker** (Celery) | **3 GB** | ~300 MB | ~1.5–2 GB | 2 concurrent workers running ML training (`lightgbm`, `xgboost`, `shap`) on tabular data. ~500 MB per training fold. Tight but viable. |
+| **PostgreSQL 17**   | **768 MB** | ~150 MB | ~500 MB | Configure: `shared_buffers=256MB`, `work_mem=32MB`. Sufficient for current data size. |
+| **Backend** (FastAPI)| **1.5 GB** | ~250 MB | ~500 MB | 2 Uvicorn workers. Generous margin for GraphQL and RSS parsing. |
+| **Redis 7**         | **384 MB** | ~50 MB | ~280 MB | Bounded by `--maxmemory 256mb --maxmemory-policy allkeys-lru`. |
+| **Scheduler** (Beat) | **256 MB** | ~40 MB | ~60 MB | Light process, only issues task signals to Redis. |
+| **Nginx Proxy**     | *(unset)* | ~15 MB | ~30 MB | Negligible footprint. |
+| **Total Container Limits** | **~5.9 GB** | **~805 MB** | **~3.37 GB** | Leaves **~2.1 GB** free on the host. |
 
 **Host Memory Allocation:**
-- **Ubuntu OS kernel + system services**: ~800 MB
-- **Docker engine overhead**: ~300 MB
-- **Data Harvester cron job (runs on host)**: ~150 MB (fetches and saves OHLCV/quotes per ticker in a loop sequentially)
-- **Linux Page Cache (Buffers)**: ~2.2 GB (Linux automatically uses this free space to cache the Parquet data lake files, significantly accelerating I/O without triggering OOM).
+- **Ubuntu OS kernel + system services**: ~600 MB
+- **Docker engine overhead**: ~200 MB
+- **Data Harvester cron job (runs on host)**: ~150 MB
+- **Linux Page Cache**: ~1.1 GB (auto-used for Parquet file caching)
 
-**Why this will not cause any OOM issues:**
-1. **No Overcommit**: The sum of all container memory limits (12.52 GB) plus the host OS overhead (~1.25 GB total) is **13.77 GB**, which is strictly below the physical 16 GB limit. The system will never experience host-level swap thrashing or system-wide locks due to over-allocated memory.
-2. **Container Isolation (cgroups)**: If a specific process leaks memory (e.g., a worker process due to Python object reference holding), only that container is targeted by the Linux kernel's OOM killer when it hits its limit. The rest of the system (Web server, PostgreSQL database, host OS) remains fully unaffected.
-3. **Container Auto-Recovery**: All critical containers are configured with `restart: unless-stopped`, so if a memory-related crash occurs in a container, Docker automatically spins up a fresh replacement instance within seconds.
-4. **Swap Buffer**: The host is provisioned with a **4 GB Swap File** ([`4.3 OS Setup`](file:///C:/Users/Vipul%20Gorana/.gemini/antigravity-ide/brain/8e0f987d-cf05-40e5-8428-183b59d993cf/implementation_plan.md#L211-L218)) tuned to `swappiness=10`. This ensures that in the event of unexpected concurrent peaks, the kernel has a safety net to swap cold pages rather than terminating processes.
+**OOM Risk Analysis (8 GB):**
+1. **No Overcommit**: Container limits (5.9 GB) + host overhead (~0.95 GB) = **~6.85 GB**, under the 8 GB physical limit. The 4 GB swap provides an additional safety net.
+2. **Tighter margins than 16 GB**: If ML training on a particularly large ticker dataset pushes the worker past 3 GB, Docker kills only that container (cgroup isolation). `restart: unless-stopped` brings it back.
+3. **Container Auto-Recovery**: All critical containers restart automatically on crash.
+4. **Swap Buffer**: 4 GB swap at `swappiness=10` — kernel swaps cold pages before killing processes.
+
+> [!WARNING]
+> **8 GB is the minimum viable config**. Monitor memory usage closely after first deploy with `htop` and `docker stats`. If the worker consistently OOMs or swap usage stays high, upgrade to OVHcloud VPS-4 (16 GB).
 
 ### 4.6 Production Nginx Config
 
@@ -729,10 +735,10 @@ The harvester needs to reach PostgreSQL. Since it runs on the host (not in Docke
 ```cron
 # === DATA HARVESTER ===
 # Intraday: every 15 min during market hours (Mon-Fri, 9:00-15:30 IST)
-*/15 9-15 * * 1-5 cd /home/deploy/qeps/data_harvester && DATABASE_URL=postgresql://qeps_user:<password>@127.0.0.1:5432/qeps_db DATA_LAKE_PATH=/home/deploy/data_lake /home/deploy/qeps/data_harvester/.venv/bin/python harvester.py --mode intraday >> /home/deploy/qeps/data_harvester/harvester.log 2>&1
+*/15 9-15 * * 1-5 cd /home/deploy/qeps/data_harvester && DATABASE_URL=postgresql://qeps_user:<password>@127.0.0.1:5432/qeps_db DATA_LAKE_PATH=/home/deploy/qeps/data_lake /home/deploy/qeps/data_harvester/.venv/bin/python harvester.py --mode intraday >> /home/deploy/qeps/data_harvester/harvester.log 2>&1
 
 # EOD: full daily candles at 4:00 PM IST (Mon-Fri)
-0 16 * * 1-5 cd /home/deploy/qeps/data_harvester && DATABASE_URL=postgresql://qeps_user:<password>@127.0.0.1:5432/qeps_db DATA_LAKE_PATH=/home/deploy/data_lake /home/deploy/qeps/data_harvester/.venv/bin/python harvester.py --mode eod >> /home/deploy/qeps/data_harvester/harvester.log 2>&1
+0 16 * * 1-5 cd /home/deploy/qeps/data_harvester && DATABASE_URL=postgresql://qeps_user:<password>@127.0.0.1:5432/qeps_db DATA_LAKE_PATH=/home/deploy/qeps/data_lake /home/deploy/qeps/data_harvester/.venv/bin/python harvester.py --mode eod >> /home/deploy/qeps/data_harvester/harvester.log 2>&1
 
 # Log rotation: truncate weekly
 0 0 * * 0 truncate -s 0 /home/deploy/qeps/data_harvester/harvester.log
@@ -843,12 +849,13 @@ docker compose -f docker-compose.prod.yml up -d
 #### Full Disaster Recovery
 
 ```bash
-# 1. Provision new VPS (same specs)
+# 1. Provision new OVHcloud VPS-2 (same specs)
 # 2. Run OS setup from section 4.3
-# 3. Clone repo, restore .env
-# 4. Restore DB: pg_restore from off-site backup
-# 5. Restore data lake: tar -xzf data_lake_backup.tar.gz -C /home/deploy/
-# 6. docker compose -f docker-compose.prod.yml up -d
+# 3. Attach Additional Disk, mount at /mnt/data_lake
+# 4. Clone repo, restore .env
+# 5. Restore DB: pg_restore from off-site backup
+# 6. Restore data lake: tar -xzf data_lake_backup.tar.gz -C /mnt/
+# 7. docker compose -f docker-compose.prod.yml up -d
 ```
 
 ### 4.13 Backup Strategy
@@ -858,7 +865,7 @@ docker compose -f docker-compose.prod.yml up -d
 0 2 * * * docker exec qeps_postgres pg_dump -U qeps_user -Fc qeps_db > /home/deploy/backups/qeps_$(date +\%Y\%m\%d).dump && find /home/deploy/backups -name "qeps_*.dump" -mtime +14 -delete
 
 # === DATA LAKE (weekly Sunday 3 AM, retain 30 days) ===
-0 3 * * 0 tar -czf /home/deploy/backups/data_lake_$(date +\%Y\%m\%d).tar.gz /home/deploy/data_lake/ && find /home/deploy/backups -name "data_lake_*.tar.gz" -mtime +30 -delete
+0 3 * * 0 tar -czf /home/deploy/backups/data_lake_$(date +\%Y\%m\%d).tar.gz /mnt/data_lake/ && find /home/deploy/backups -name "data_lake_*.tar.gz" -mtime +30 -delete
 
 # === OFF-SITE (Backblaze B2 — $0.005/GB/month) ===
 0 4 * * * b2 upload-file qeps-backups /home/deploy/backups/qeps_$(date +\%Y\%m\%d).dump db/qeps_$(date +\%Y\%m\%d).dump
@@ -896,60 +903,64 @@ docker run -it --rm \
 ## First Deploy Checklist
 
 ```
- VPS PROVISIONING
- 1. [ ] Provision VPS: 4-6 vCPU / 16 GB RAM / 500 GB SSD
- 2. [ ] OS setup: firewall, fail2ban, swap, Docker
- 3. [ ] Create deploy user + SSH keys
- 4. [ ] Create /home/deploy/data_lake and /home/deploy/backups
+ VPS PROVISIONING (OVHcloud VPS-2)
+ 1. [ ] Provision OVHcloud VPS-2: 4 vCores / 8 GB RAM / 75 GB NVMe (Canada BHS)
+ 2. [ ] Order & attach OVH Additional Disk (250-500 GB)
+ 3. [ ] OS setup: firewall, fail2ban, swap (4 GB), Docker
+ 4. [ ] Create deploy user + SSH keys
+ 5. [ ] Format & mount Additional Disk at /mnt/data_lake (see 4.3)
+ 6. [ ] Create /home/deploy/backups
 
  SECURITY
- 5. [ ] Rotate leaked FMP_API_KEY and GEMINI_API_KEY
- 6. [ ] Purge .env from git history (BFG or filter-branch)
- 7. [ ] Create production .env (chmod 600)
+ 7. [ ] Rotate leaked FMP_API_KEY and GEMINI_API_KEY
+ 8. [ ] Purge .env from git history (BFG or filter-branch)
+ 9. [ ] Create production .env (chmod 600)
 
  BACKEND (VPS)
- 8.  [ ] Clone repo to ~/qeps
- 9.  [ ] Create docker-compose.prod.yml
- 10. [ ] Create docker/nginx/prod.conf + Dockerfile.prod
- 11. [ ] Start: docker compose -f docker-compose.prod.yml up -d
- 12. [ ] Verify: curl http://localhost:8000/health
+ 10. [ ] Clone repo to ~/qeps
+ 11. [ ] Create docker-compose.prod.yml
+ 12. [ ] Create docker/nginx/prod.conf + Dockerfile.prod
+ 13. [ ] Start: docker compose -f docker-compose.prod.yml up -d
+ 14. [ ] Verify: curl http://localhost:8000/health
+ 15. [ ] Check memory: docker stats (confirm within budget)
 
  SSL + DNS
- 13. [ ] DNS: api.your-domain.com → VPS_IP
- 14. [ ] Certbot: get SSL certificate
- 15. [ ] Enable HTTPS in nginx config, restart
+ 16. [ ] DNS: api.your-domain.com → VPS_IP
+ 17. [ ] Certbot: get SSL certificate
+ 18. [ ] Enable HTTPS in nginx config, restart
 
  DATA HARVESTER
- 16. [ ] Set up Python venv + install requirements
- 17. [ ] Expose Postgres on 127.0.0.1:5432
- 18. [ ] Set up cron jobs (intraday + EOD + log rotation)
- 19. [ ] Test: run harvester manually
+ 19. [ ] Set up Python venv + install requirements
+ 20. [ ] Expose Postgres on 127.0.0.1:5432
+ 21. [ ] Set up cron jobs (intraday + EOD + log rotation)
+ 22. [ ] Test: run harvester manually
 
  FRONTEND (CLOUDFLARE PAGES)
- 20. [ ] Apply code changes (VITE_API_URL, apiUrl helper, CORS)
- 21. [ ] Connect repo to Cloudflare Pages
- 22. [ ] Set VITE_API_URL=https://api.your-domain.com
- 23. [ ] DNS: app.your-domain.com → Cloudflare Pages
- 24. [ ] Verify: frontend loads, API calls succeed
+ 23. [ ] Apply code changes (VITE_API_URL, apiUrl helper, CORS)
+ 24. [ ] Connect repo to Cloudflare Pages
+ 25. [ ] Set VITE_API_URL=https://api.your-domain.com
+ 26. [ ] DNS: app.your-domain.com → Cloudflare Pages
+ 27. [ ] Verify: frontend loads, API calls succeed
 
  CI/CD
- 25. [ ] Create .github/workflows/deploy.yml
- 26. [ ] Add GitHub Secrets: VPS_HOST, VPS_SSH_KEY, DISCORD_ADMIN_WEBHOOK_URL
- 27. [ ] Test: push to main → auto-deploy works and sends Discord status to #ops-alerts channel
+ 28. [ ] Create .github/workflows/deploy.yml
+ 29. [ ] Add GitHub Secrets: VPS_HOST, VPS_SSH_KEY, DISCORD_ADMIN_WEBHOOK_URL
+ 30. [ ] Test: push to main → auto-deploy works and sends Discord status to #ops-alerts channel
 
  MONITORING + BACKUPS
- 28. [ ] Create Discord Channels (#trading-signals and #ops-alerts) and generate Webhook URLs
- 29. [ ] Create and test /home/deploy/qeps/notify.sh script on VPS (pointing to Discord #ops-alerts Webhook)
- 30. [ ] Deploy Uptime Kuma, configure monitors + Discord alerts
- 31. [ ] Set up PostgreSQL backup cron
- 32. [ ] Set up data lake backup cron
- 33. [ ] Set up off-site backup (Backblaze B2)
+ 31. [ ] Create Discord Channels (#trading-signals and #ops-alerts) and generate Webhook URLs
+ 32. [ ] Create and test /home/deploy/qeps/notify.sh script on VPS (pointing to Discord #ops-alerts Webhook)
+ 33. [ ] Deploy Uptime Kuma, configure monitors + Discord alerts
+ 34. [ ] Set up PostgreSQL backup cron
+ 35. [ ] Set up data lake backup cron
+ 36. [ ] Set up off-site backup (Backblaze B2)
 
  SMOKE TEST
- 34. [ ] Login works (JWT auth)
- 35. [ ] Company data loads (GraphQL)
- 36. [ ] News/sentiment responds
- 37. [ ] Worker logs show scheduled tasks running
- 38. [ ] Data Harvester cron fires on schedule and completes
- 39. [ ] Monitoring alert fires on simulated failure and posts to Discord #ops-alerts
+ 37. [ ] Login works (JWT auth)
+ 38. [ ] Company data loads (GraphQL)
+ 39. [ ] News/sentiment responds
+ 40. [ ] Worker logs show scheduled tasks running
+ 41. [ ] Data Harvester cron fires on schedule and completes
+ 42. [ ] Monitoring alert fires on simulated failure and posts to Discord #ops-alerts
+ 43. [ ] Verify memory usage stays within budget (htop, docker stats)
 ```
