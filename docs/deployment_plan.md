@@ -247,9 +247,12 @@ git clone <repository-url> ~/qeps
 cd ~/qeps
 cp .env.example .env
 chmod 600 .env
+nano .env  # Opens the file in a text editor for you to paste the values below
 ```
 
 #### Production `.env`
+
+Copy the following into your `.env` file (replace the placeholders with real values):
 
 ```env
 # === DATABASE (Docker internal) ===
