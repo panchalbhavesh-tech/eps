@@ -116,12 +116,21 @@ class UniverseService:
                 )
                 self.db.add(c)
                 
-                # Update Company metadata if the company exists
+                # Create stub Company record if it doesn't exist yet
                 company = self.db.query(Company).filter(Company.ticker == ticker).first()
                 if company:
                     company.ipo_date = added_date
                     company.is_active = True
                     company.listing_status = "Active"
+                else:
+                    self.db.add(Company(
+                        id=uuid.uuid4(),
+                        ticker=ticker,
+                        name=ticker,  # Stub name; harvester will enrich later
+                        ipo_date=added_date,
+                        is_active=True,
+                        listing_status="Active",
+                    ))
                 
         # 3. Mark delisted stocks (active yesterday, missing today)
         for ticker, const in current_map.items():
