@@ -613,10 +613,17 @@ app.add_middleware(
 )
 ```
 
-**4. Cloudflare Pages settings:**
-- Build command: `cd frontend && npm run build`
-- Output directory: `frontend/dist`
-- Environment variable: `VITE_API_URL=https://api.your-domain.com`
+**4. Cloudflare Pages Deployment Steps:**
+1. Create a free account at [Cloudflare](https://dash.cloudflare.com/sign-up).
+2. Go to **Workers & Pages** -> **Create application** -> **Pages** -> **Connect to Git**.
+3. Select your GitHub repository and the `main` branch.
+4. **Build settings:**
+   - Framework preset: `None` (or `Vite`)
+   - Build command: `cd frontend && npm run build`
+   - Build output directory: `frontend/dist`
+5. **Environment variables (Add before building):**
+   - `VITE_API_URL=https://api.your-domain.com` (If you don't have a domain yet, use your VPS IP like `http://<VPS_IP>:8000`, but HTTPS via a domain is strongly recommended).
+6. Click **Save and Deploy**. Cloudflare will provide a free `.pages.dev` subdomain (e.g., `https://qeps.pages.dev`).
 
 ### 4.8 CI/CD Pipeline (GitHub Actions)
 
@@ -891,12 +898,21 @@ docker run -it --rm \
 0 0 1 * * docker exec qeps_nginx nginx -s reload
 ```
 
-### DNS Records
+### Getting a Free Domain & DNS Setup
 
-| Record | Type | Value |
-|--------|------|-------|
-| `api.your-domain.com` | A | `<VPS_IP>` |
-| `app.your-domain.com` | CNAME | `<project>.pages.dev` (Cloudflare Pages) |
+If you want a custom domain but don't want to pay for a `.com`, you have a few options:
+1. **Use the free `.pages.dev` domain**: Cloudflare Pages gives you a free domain (e.g., `qeps.pages.dev`). You can use this for the frontend, but you still need a domain or raw IP for the backend API.
+2. **Free Domains**: Services like **eu.org** (e.g. `yourname.eu.org`) offer free domains, though approval can take time.
+3. **Cheap Domains (Recommended)**: Namecheap offers 6-digit `.xyz` domains for ~$1/year, which is often easier and more reliable than a free domain.
+
+Once you have a domain (e.g., `your-domain.xyz`), add it to Cloudflare as a new Website, change your domain registrar's Nameservers to Cloudflare's, and then set up these DNS Records in Cloudflare:
+
+| Record | Type | Value | Proxy Status |
+|--------|------|-------|--------------|
+| `api.your-domain.com` | A | `<VPS_IP>` | **DNS Only (Gray cloud)** - Required for Certbot |
+| `app.your-domain.com` | CNAME | `<project>.pages.dev` | **Proxied (Orange cloud)** |
+
+*Note: For the Cloudflare Pages frontend, go to your Pages project -> **Custom Domains** -> add `app.your-domain.com`.*
 
 ---
 
