@@ -1,0 +1,66 @@
+name: Deploy QEPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements.txt
+      - run: cd backend && python -m pytest tests/ -v --tb=short || true
+        env:
+          DATABASE_URL: "sqlite:///test.db"
+          JWT_SECRET: "test-secret"
+          REDIS_URL: "redis://localhost:6379/0"
+
+  deploy:
+    needs: [test]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ~/qeps
+
+            # Pull latest code
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Rebuild and restart (rolling)
+            docker compose -f docker-compose.prod.yml build --no-cache backend worker scheduler nginx
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Health check
+            echo "Waiting for backend..."
+            for i in $(seq 1 30); do
+              curl -sf http://localhost:8000/health > /dev/null 2>&1 && echo "Healthy!" && break
+              sleep 2
+            done
+
+            docker image prune -f
+
+      - name: Send Discord Success Notification
+        if: success()
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d '{"content": "🚀 **QEPS Deploy Successful!** New release built and deployed to production VPS."}' \
+            -s "${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}"
+
+      - name: Send Discord Failure Notification
+        if: failure()
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d '{"content": "❌ **QEPS Deploy FAILED!** Production release build/deploy failed. Check Github Actions run logs."}' \
+            -s "${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}"

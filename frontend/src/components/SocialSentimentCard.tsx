@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useThemeMode } from '../theme/ThemeContext';
+import { apiUrl } from '../utils/api';
 import { 
   Box, Typography, Paper, Grid, CircularProgress, Alert, Chip, Button, Stack, 
   Drawer, IconButton, Tooltip
@@ -67,14 +68,14 @@ const SocialSentimentCard: React.FC<SocialSentimentCardProps> = ({ company }) =>
       const headers = { 'X-API-Key': 'QEPS-INTERNAL-SECURE-KEY' };
       
       // Fetch Sentiment
-      let sentimentRes = await fetch(`/api/news-sentiment/${company.ticker}${queryParams}`, { headers });
-      if (!sentimentRes.ok) sentimentRes = await fetch(`/news-sentiment/${company.ticker}${queryParams}`, { headers });
+      let sentimentRes = await fetch(apiUrl(`/api/news-sentiment/${company.ticker}${queryParams}`), { headers });
+      if (!sentimentRes.ok) sentimentRes = await fetch(apiUrl(`/news-sentiment/${company.ticker}${queryParams}`), { headers });
       if (!sentimentRes.ok) throw new Error(`Failed to retrieve news sentiment (Status: ${sentimentRes.status})`);
       const sData: NewsSentimentData = await sentimentRes.json();
       
       // Fetch Raw News
-      let newsRes = await fetch(`/api/news/${company.ticker}${queryParams}`, { headers });
-      if (!newsRes.ok) newsRes = await fetch(`/news/${company.ticker}${queryParams}`, { headers });
+      let newsRes = await fetch(apiUrl(`/api/news/${company.ticker}${queryParams}`), { headers });
+      if (!newsRes.ok) newsRes = await fetch(apiUrl(`/news/${company.ticker}${queryParams}`), { headers });
       if (!newsRes.ok) throw new Error(`Failed to retrieve news articles (Status: ${newsRes.status})`);
       const nData = await newsRes.json();
 

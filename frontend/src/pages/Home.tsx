@@ -13,6 +13,7 @@ import { StatusBadge, ErrorBoundary, FilterChipGroup, BulkActionBar, RowTintedDa
 import { SmartCron } from '../components/common/SmartCron';
 import { sentimentCache, SentimentData } from '../store/sentimentCache';
 import { useThemeMode } from '../theme/ThemeContext';
+import { apiUrl } from '../utils/api';
 
 // ─── Standalone News Cell ──────────────────────────────────────────────────────
 interface NewsItem { title: string; summary: string; url: string; source: string; published: string; }
@@ -29,7 +30,7 @@ const NewsCell: React.FC<{ ticker: string; name: string }> = ({ ticker, name }) 
     setLoading(true);
     setExpanded(true);
     try {
-      const res = await fetch(`/api/news/${ticker}?name=${encodeURIComponent(name || ticker)}`);
+      const res = await fetch(apiUrl(`/api/news/${ticker}?name=${encodeURIComponent(name || ticker)}`));
       if (res.ok) {
         const data = await res.json();
         setNews(data.news || []);

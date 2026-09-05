@@ -1,3 +1,5 @@
+import { apiUrl } from '../utils/api';
+
 export interface SentimentData {
   overallSentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'MIXED' | 'INSUFFICIENT_DATA';
   sentimentScore: number;
@@ -76,7 +78,7 @@ class SentimentCache {
 
     const promise = (async () => {
       try {
-        const res = await window.fetch(`/api/news-sentiment/${ticker}?name=${encodeURIComponent(name || ticker)}`);
+        const res = await window.fetch(apiUrl(`/api/news-sentiment/${ticker}?name=${encodeURIComponent(name || ticker)}`));
         if (!res.ok) throw new Error('API Error');
         const data: SentimentData = await res.json();
         

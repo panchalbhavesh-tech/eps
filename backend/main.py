@@ -57,6 +57,19 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="QEPS API", lifespan=lifespan)
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://app.your-domain.com",   # Cloudflare Pages
+        "http://localhost:5173",           # Local dev
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 graphql_app = GraphQLRouter(schema, context_getter=get_context)
 app.include_router(graphql_app, prefix="/graphql")
 
