@@ -940,7 +940,7 @@ Once you have a domain (e.g., `your-domain.xyz`), add it to Cloudflare as a new 
  11. [ ] Create docker-compose.prod.yml
  12. [ ] Create docker/nginx/prod.conf + Dockerfile.prod
  13. [ ] Start: docker compose -f docker-compose.prod.yml up -d
- 14. [ ] Verify: curl http://localhost:8000/health
+ 14. [ ] Verify: docker exec qeps_backend curl http://localhost:8000/health
  15. [ ] Check memory: docker stats (confirm within budget)
 
  SSL + DNS
