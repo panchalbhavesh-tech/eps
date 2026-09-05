@@ -145,4 +145,25 @@ class UniverseService:
                     company.delisted_date = datetime.utcnow()
                 
         self.db.commit()
-        logger.info("Universe synchronization complete.")
+
+        # 4. Backfill: create Company stubs for any constituent that still lacks a Company row
+        #    (handles the case where historical_constituents was already populated on a prior run)
+        existing_tickers = {t for (t,) in self.db.query(Company.ticker).all()}
+        backfill_count = 0
+        for ticker, const in {**current_map, **{t: None for t in new_symbols if t not in current_map}}.items():
+            if ticker not in existing_tickers:
+                added_date = symbol_to_date.get(ticker, default_added_date)
+                self.db.add(Company(
+                    id=uuid.uuid4(),
+                    ticker=ticker,
+                    name=ticker,  # Stub name; harvester will enrich later
+                    ipo_date=added_date,
+                    is_active=True,
+                    listing_status="Active",
+                ))
+                backfill_count += 1
+                if backfill_count % 500 == 0:
+                    self.db.flush()
+
+        self.db.commit()
+        logger.info(f"Universe synchronization complete. Backfilled {backfill_count} new Company stubs.")
