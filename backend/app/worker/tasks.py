@@ -1,4 +1,4 @@
-from celery import shared_task, group
+from celery import shared_task, group, current_task
 from sqlalchemy.exc import IntegrityError
 from app.infrastructure.database import SessionLocal
 from app.services.prediction_service import PredictionService
@@ -7,6 +7,7 @@ from app.services.technical_indicator_service import TechnicalIndicatorService
 from app.services.event_study_service import EventStudyService
 from app.services.ai_analyst_service import AIAnalystService
 from app.services.nse_service import NSEService
+from app.worker.observability import TaskObserver
 from app.infrastructure.models import (
     Company, EarningsReport, Prediction,
     EventStudyResult, StrategyBacktest, TechnicalSnapshot, AIAnalysisReport
@@ -269,6 +270,15 @@ def sync_nse_universe_task():
 
     db = SessionLocal()
     try:
+        from app.services.universe_service import UniverseService
+        obs.update(log_msg="Starting historical constituents sync (full NSE universe)...")
+        try:
+            UniverseService(db).sync_historical_constituents()
+            obs.update(log_msg="NSE universe constituents sync completed.")
+        except Exception as e:
+            obs.update(log_msg=f"Error syncing NSE universe constituents: {e}", log_level="ERROR")
+            print(f"Error syncing NSE universe constituents: {e}")
+
         company_ids = [c.id for c in db.query(Company.id).filter(Company.sector == "NSE").all()]
         total = len(company_ids)
         updated = 0

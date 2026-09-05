@@ -64,3 +64,12 @@ class DataLakeStorage:
                     ON CONFLICT (ticker) 
                     DO UPDATE SET price = EXCLUDED.price, timestamp = EXCLUDED.timestamp
                 """), quote)
+
+    def get_historical_ohlcv(self, ticker: str) -> pd.DataFrame:
+        """
+        Reads historical OHLCV data from Parquet for a ticker.
+        """
+        file_path = os.path.join(self.ohlcv_path, f"{ticker}.parquet")
+        if os.path.exists(file_path):
+            return pd.read_parquet(file_path)
+        return pd.DataFrame()
