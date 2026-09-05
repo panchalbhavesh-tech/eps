@@ -255,9 +255,9 @@ def enrich_single_company(company, db):
             pass
     return company
 
-@shared_task(name="app.worker.tasks.sync_nse_universe_task")
-def sync_nse_universe_task():
-    task_id = current_task.request.id if current_task else "sync_nse_universe_local"
+@shared_task(bind=True, name="app.worker.tasks.sync_nse_universe_task")
+def sync_nse_universe_task(self):
+    task_id = self.request.id if self.request and self.request.id else "sync_nse_universe_local"
     obs = TaskObserver(task_id)
     obs.update(log_msg="Starting NSE calendar sync...")
 
@@ -432,9 +432,9 @@ def generate_deep_research_report_task(company_id: str):
     finally:
         db.close()
 
-@shared_task(name="app.worker.tasks.calculate_universe_health_task")
-def calculate_universe_health_task():
-    task_id = current_task.request.id if current_task else "calculate_health_local"
+@shared_task(bind=True, name="app.worker.tasks.calculate_universe_health_task")
+def calculate_universe_health_task(self):
+    task_id = self.request.id if self.request and self.request.id else "calculate_health_local"
     obs = TaskObserver(task_id)
     obs.update(log_msg="Starting universe health calculation...")
 
