@@ -279,7 +279,7 @@ def sync_nse_universe_task(self):
             obs.update(log_msg=f"Error syncing NSE universe constituents: {e}", log_level="ERROR")
             print(f"Error syncing NSE universe constituents: {e}")
 
-        company_ids = [c.id for c in db.query(Company.id).filter(Company.sector == "NSE").all()]
+        company_ids = [c.id for c in db.query(Company.id).filter(Company.is_active == True).all()]
         total = len(company_ids)
         updated = 0
         failed = 0
