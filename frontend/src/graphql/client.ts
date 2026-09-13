@@ -4,7 +4,7 @@ import { setContext } from '@apollo/client/link/context';
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const httpLink = createHttpLink({
-  uri: `${API_BASE}/graphql`, // Proxied by Nginx
+  uri: `${API_BASE}/api/graphql`, // Proxied by Nginx
 });
 
 const authLink = setContext((_, { headers }) => {

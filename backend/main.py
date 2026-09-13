@@ -82,9 +82,6 @@ _rate_limits = defaultdict(list)
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    if request.method == "OPTIONS":
-        return await call_next(request)
-        
     if not request.url.path.startswith("/health"):
         client_ip = request.client.host if request.client else "unknown"
         now = time.time()

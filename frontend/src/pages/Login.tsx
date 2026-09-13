@@ -30,7 +30,9 @@ const Login: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    loginMutation({ variables: { email, password } });
+    loginMutation({ variables: { email, password } }).catch(() => {
+      // The error will be available in the `error` object returned from useMutation
+    });
   };
 
   const handleClickShowPassword = () => setShowPassword((show) => !show);

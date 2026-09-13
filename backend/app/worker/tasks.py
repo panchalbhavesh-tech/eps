@@ -639,22 +639,58 @@ def sync_single_ohlcv_task(ticker: str):
         db.close()
 
 
-@shared_task(time_limit=300)
-def sync_ohlcv_cache_task():
+from celery import chord
+
+@shared_task(bind=True, time_limit=300)
+def sync_ohlcv_cache_task(self):
     """Nightly master task: Fans out OHLCV sync to individual micro-tasks."""
     db = SessionLocal()
     try:
         companies = db.query(Company).all()
         tickers = [c.ticker for c in companies]
         
-        # Dispatch individual celery tasks
+        # Dispatch individual celery tasks using a chord to aggregate results
         if tickers:
-            job = group(sync_single_ohlcv_task.s(ticker) for ticker in tickers)
+            callback = sync_ohlcv_cache_callback.s(self.request.id)
+            job = chord((sync_single_ohlcv_task.s(ticker) for ticker in tickers), callback)
             job.apply_async()
             
-        return f"Dispatched {len(tickers)} OHLCV sync sub-tasks to the worker pool."
+        return f"Dispatched {len(tickers)} OHLCV sync sub-tasks. Awaiting aggregation..."
     finally:
         db.close()
+
+@shared_task(time_limit=300)
+def sync_ohlcv_cache_callback(results, parent_task_id):
+    """Callback after all OHLCV sub-tasks finish. Aggregates results and updates parent job."""
+    successes = 0
+    failures = 0
+    failed_tickers = []
+    
+    for r in results:
+        if isinstance(r, dict) and r.get("error"):
+            failures += 1
+            failed_tickers.append(r.get("ticker", "Unknown"))
+        else:
+            successes += 1
+            
+    result_str = f"Completed OHLCV Sync. Successes: {successes}, Failures: {failures}"
+    if failed_tickers:
+        sample = ", ".join(failed_tickers[:10])
+        result_str += f". Failed Tickers: {sample}" + ("..." if len(failed_tickers) > 10 else "")
+        
+    db = SessionLocal()
+    try:
+        from app.infrastructure.models import BackgroundJob
+        job = db.query(BackgroundJob).filter(BackgroundJob.celery_task_id == parent_task_id).first()
+        if job:
+            job.result = result_str
+            db.commit()
+    except Exception as e:
+        print(f"Error updating parent task in callback: {e}")
+    finally:
+        db.close()
+        
+    return result_str
 
 
 @shared_task
@@ -998,12 +1034,12 @@ def enrich_external_market_cap_task(tickers: list):
     Caches successful results in Redis with a 24-hour TTL.
     """
     import logging
-    from app.services.data_vendor_service import DataVendorService
+    from app.services.data.data_manager import UnifiedDataManager
     from app.worker.observability import get_redis_client
     
     logger = logging.getLogger(__name__)
     redis_client = get_redis_client()
-    vendor = DataVendorService()
+    vendor = UnifiedDataManager()
     
     for ticker in tickers:
         try:
@@ -1013,8 +1049,8 @@ def enrich_external_market_cap_task(tickers: list):
             
             logger.info(f"[MARKET_CAP] External lookup required: {ticker}")
             
-            info = vendor.fetch_financial_metrics(ticker)
-            market_cap = info.get("marketCap")
+            info = vendor.get_company_info(ticker)
+            market_cap = info.get("market_cap")
             
             if market_cap and market_cap > 0:
                 redis_client.setex(cache_key, 86400, str(market_cap))

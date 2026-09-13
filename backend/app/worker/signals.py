@@ -5,8 +5,16 @@ from datetime import datetime
 from app.services.activity_logger import log_activity_finish, log_activity_start
 from app.worker.task_mappings import get_task_metadata
 
+IGNORED_TASKS = {
+    "app.worker.tasks.sync_single_ohlcv_task",
+    "app.worker.tasks.sync_ohlcv_cache_callback"
+}
+
 @task_prerun.connect
 def task_prerun_handler(task_id, task, *args, **kwargs):
+    if task.name in IGNORED_TASKS:
+        return
+        
     db = SessionLocal()
     try:
         job = db.query(BackgroundJob).filter(BackgroundJob.celery_task_id == task_id).first()

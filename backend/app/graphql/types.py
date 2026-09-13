@@ -59,6 +59,12 @@ class EventStudyResultType:
     ret_10d: Optional[float] = None
     ret_20d: Optional[float] = None
     ret_30d: Optional[float] = None
+    ar_1d: Optional[float] = None
+    ar_5d: Optional[float] = None
+    ar_10d: Optional[float] = None
+    ar_30d: Optional[float] = None
+    car_30d: Optional[float] = None
+    car_pvalue: Optional[float] = None
     max_gain: Optional[float] = None
     max_drawdown: Optional[float] = None
 

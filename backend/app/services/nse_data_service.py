@@ -81,12 +81,13 @@ class NseDataService:
         """
         known_regulatory_flags = []
         try:
-            session = requests.Session()
+            from curl_cffi import requests as curl_requests
+            session = curl_requests.Session(impersonate="chrome110")
             session.headers.update(self.headers)
             session.get("https://www.nseindia.com", timeout=10)
             
             # ASM
-            asm_resp = session.get("https://www.nseindia.com/api/corporates-asmList", timeout=10)
+            asm_resp = session.get("https://www.nseindia.com/api/reportASM?json=true", timeout=10)
             if asm_resp.status_code == 200:
                 for item in asm_resp.json().get("data", []):
                     if item.get("symbol"):
@@ -97,7 +98,7 @@ class NseDataService:
                         })
             
             # GSM
-            gsm_resp = session.get("https://www.nseindia.com/api/corporates-gsmList", timeout=10)
+            gsm_resp = session.get("https://www.nseindia.com/api/reportGSM?json=true", timeout=10)
             if gsm_resp.status_code == 200:
                 for item in gsm_resp.json().get("data", []):
                     if item.get("symbol"):
@@ -140,7 +141,8 @@ class NseDataService:
         """
         count = 0
         try:
-            session = requests.Session()
+            from curl_cffi import requests as curl_requests
+            session = curl_requests.Session(impersonate="chrome110")
             session.headers.update(self.headers)
             session.get("https://www.nseindia.com", timeout=10) # to get cookies
             
@@ -242,7 +244,8 @@ class NseDataService:
         
         for attempt in range(max_retries):
             try:
-                session = requests.Session()
+                from curl_cffi import requests as curl_requests
+                session = curl_requests.Session(impersonate="chrome110")
                 ua = random.choice(USER_AGENTS)
                 session.headers.update({
                     "User-Agent": ua,
@@ -301,12 +304,12 @@ class NseDataService:
                     _time.sleep(2 ** attempt + random.uniform(0.5, 1.5))
                     continue
                     
-            except requests.exceptions.Timeout:
+            except curl_requests.exceptions.Timeout:
                 logger.warning(f"NSE API timeout on attempt {attempt + 1}/{max_retries}")
                 last_error = "Connection timeout"
                 _time.sleep(2 ** attempt + random.uniform(0.5, 1.5))
                 continue
-            except requests.exceptions.ConnectionError as e:
+            except (curl_requests.exceptions.ConnectionError, curl_requests.exceptions.CurlError) as e:
                 logger.warning(f"NSE API connection error on attempt {attempt + 1}: {e}")
                 last_error = f"Connection error: {str(e)[:200]}"
                 _time.sleep(2 ** attempt + random.uniform(0.5, 1.5))

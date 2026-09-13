@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
-from app.services.data_vendor_service import DataVendorService
+from app.services.data.data_manager import UnifiedDataManager
 
 logger = logging.getLogger(__name__)
 
@@ -11,12 +11,12 @@ class OHLCVCacheService:
     """
     Phase 2: Deprecated Postgres Caching Layer.
     Now acts as a simple proxy routing historical data requests to the Parquet Data Lake 
-    via DataVendorService. 
+    via UnifiedDataManager. 
     """
 
     def __init__(self, db: Session):
         self.db = db
-        self.vendor_svc = DataVendorService(db)
+        self.vendor_svc = UnifiedDataManager(db)
 
     def sync_ticker(self, ticker: str, years: int = 2) -> int:
         """
@@ -30,7 +30,8 @@ class OHLCVCacheService:
         Retrieves historical OHLCV from the Parquet Data Lake.
         """
         try:
-            df = self.vendor_svc.fetch_historical_ohlcv(ticker, years=5)
+            df = self.vendor_svc.get_ohlcv(ticker, start_date=None, end_date=None, days=5*365)
+
             
             if df.empty:
                 return df
