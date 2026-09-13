@@ -6,7 +6,8 @@ class NSEService:
     def __init__(self):
         self.base_url = "https://www.nseindia.com"
         self.api_url = "https://www.nseindia.com/api/event-calendar?index=equities"
-        self.session = requests.Session()
+        from curl_cffi import requests as curl_requests
+        self.session = curl_requests.Session(impersonate="chrome110")
 
     def get_upcoming_results(self) -> List[Dict[str, Any]]:
         """

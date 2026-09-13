@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 class InsiderTradingService:
     def __init__(self, db: Session):
         self.db = db
-        self.session = requests.Session()
+        from curl_cffi import requests as curl_requests
+        self.session = curl_requests.Session(impersonate="chrome110")
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
             "Accept": "application/json, text/javascript, */*; q=0.01",
