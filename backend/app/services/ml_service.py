@@ -109,14 +109,18 @@ class MomentumMLService:
             "embargo_days": embargo_days
         }
 
-    def train_or_load_model(self, force_retrain: bool = False) -> Any:
+    def train_or_load_model(self, force_retrain: bool = False, model_type: str = "production", train_cutoff_date: Optional[datetime] = None) -> Any:
         """
         Trains the primary LightGBM model on database signals and saves/loads from disk.
         """
         if not ML_AVAILABLE:
             return None
             
-        model_path = os.path.join(self.model_dir, "lgb_momentum_multi.joblib")
+        if force_retrain or model_type == "shadow":
+            model_path = os.path.join(self.model_dir, "lgb_momentum_multi_shadow.joblib")
+        else:
+            model_path = os.path.join(self.model_dir, "lgb_momentum_multi.joblib")
+            
         if not force_retrain and os.path.exists(model_path):
             try:
                 return _load_cached_models(model_path)
@@ -124,9 +128,12 @@ class MomentumMLService:
                 pass
 
         from app.infrastructure.models import ScorePredictionLog, Company
-        logs = self.db.query(ScorePredictionLog).filter(
+        logs_query = self.db.query(ScorePredictionLog).filter(
             ScorePredictionLog.realized_5d_return != None
-        ).all()
+        )
+        if train_cutoff_date:
+            logs_query = logs_query.filter(ScorePredictionLog.date_evaluated < train_cutoff_date)
+        logs = logs_query.all()
 
         if not logs or len(logs) < 30:
             self.models = None
@@ -291,14 +298,14 @@ class MomentumMLService:
         psi_val = np.sum((act_percents - exp_percents) * np.log(act_percents / exp_percents))
         return round(float(psi_val), 4)
 
-    def predict_gain_probability(self, features: Dict[str, float]) -> float:
+    def predict_gain_probability(self, features: Dict[str, float], model_type: str = "production") -> float:
         """
         Returns calibrated 5-day forward gain probability P(gain, 5d) between 0.0 and 1.0.
         """
-        multi_probs = self.predict_multi_horizon(features)
+        multi_probs = self.predict_multi_horizon(features, model_type=model_type)
         return multi_probs.get("prob_5d", 0.50)
 
-    def predict_multi_horizon(self, features: Dict[str, float]) -> Dict[str, float]:
+    def predict_multi_horizon(self, features: Dict[str, float], model_type: str = "production") -> Dict[str, float]:
         """
         Section 5 Multi-Horizon Modeling: Generates calibrated gain probabilities for 3-day, 5-day, and 10-day horizons.
         """
@@ -312,7 +319,7 @@ class MomentumMLService:
         )
         base_prob = min(0.95, max(0.05, comp / 100.0))
 
-        models = self.train_or_load_model() if ML_AVAILABLE else None
+        models = self.train_or_load_model(model_type=model_type) if ML_AVAILABLE else None
         
         prob_3d, prob_5d, prob_10d = base_prob, base_prob, base_prob
         
@@ -349,4 +356,123 @@ class MomentumMLService:
             "prob_5d": prob_5d,
             "prob_10d": prob_10d
         }
+
+    def promote_shadow_model(self) -> Dict[str, Any]:
+        shadow_path = os.path.join(self.model_dir, "lgb_momentum_multi_shadow.joblib")
+        prod_path = os.path.join(self.model_dir, "lgb_momentum_multi.joblib")
+        
+        if not os.path.exists(shadow_path):
+            return {"promoted": False, "reason": "No shadow model file found on disk."}
+        
+        # Backup current production model for rollback safety
+        backup_path = prod_path + ".bak"
+        if os.path.exists(prod_path):
+            import shutil
+            shutil.copy2(prod_path, backup_path)
+        
+        # Atomic replacement (os.replace is atomic on same filesystem)
+        os.replace(shadow_path, prod_path)
+        
+        # CRITICAL: Invalidate the LRU cache so workers pick up the new model
+        _load_cached_models.cache_clear()
+        
+        return {"promoted": True, "backup_at": backup_path}
+
+    def run_historical_probation(self) -> Dict[str, Any]:
+        """
+        Instant historical probation: trains on data up to T-14, evaluates on T-14 to T0.
+        Promotes shadow model if it outperforms production on the unseen window.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        probation_days = int(os.environ.get("SHADOW_PROBATION_DAYS", 14))
+        cutoff_date = datetime.utcnow() - timedelta(days=probation_days)
+        
+        # Step 1: Train shadow model on data up to T-14 only
+        shadow_model = self.train_or_load_model(
+            force_retrain=True,
+            model_type="shadow",
+            train_cutoff_date=cutoff_date
+        )
+        if shadow_model is None:
+            return {"status": "SKIPPED", "reason": "Insufficient training data before cutoff."}
+        
+        # Step 2: Fetch the T-14 to T0 evaluation window
+        from app.infrastructure.models import ScorePredictionLog
+        eval_logs = self.db.query(ScorePredictionLog).filter(
+            ScorePredictionLog.realized_5d_return != None,
+            ScorePredictionLog.date_evaluated >= cutoff_date,
+            ScorePredictionLog.is_shadow == False  # Production predictions only
+        ).all()
+        
+        if len(eval_logs) < 20:
+            logger.warning(f"Historical probation: Only {len(eval_logs)} resolved production logs in eval window. Need ≥20.")
+            return {
+                "status": "INSUFFICIENT_DATA",
+                "reason": f"Only {len(eval_logs)} resolved production logs in the last {probation_days} days. Need ≥20.",
+                "promoted": False
+            }
+        
+        # Step 3: Generate shadow predictions on eval window features
+        shadow_correct = 0
+        prod_correct = 0
+        for log in eval_logs:
+            # Get the MomentumSignal features for this prediction
+            signal = self.db.query(MomentumSignal).filter(
+                MomentumSignal.company_id == log.company_id,
+                MomentumSignal.date_calculated <= log.date_evaluated
+            ).order_by(MomentumSignal.date_calculated.desc()).first()
+            
+            if not signal:
+                continue
+            
+            features = {
+                "raw_roe": 0.0, "raw_de": 1.0, "raw_pe": 30.0,
+                "raw_rel_vol": float(getattr(signal, 'raw_rel_vol', 1.0) or 1.0),
+                "raw_dma200_dist": float(getattr(signal, 'raw_dma200_dist', 0.0) or 0.0),
+                "technical_score": float(signal.technical_score or 50.0),
+                "fundamental_score": float(signal.fundamental_score or 50.0),
+                "regime_score": float(signal.regime_score or 50.0),
+                "smart_money_score": float(signal.smart_money_score or 50.0),
+                "derivatives_score": float(signal.derivatives_score or 50.0),
+            }
+            
+            shadow_probs = self.predict_multi_horizon(features, model_type="shadow")
+            shadow_5d = shadow_probs["prob_5d"]
+            actual_return = float(log.realized_5d_return)
+            
+            # Shadow hit-rate
+            if (shadow_5d > 0.5 and actual_return > 2.0) or (shadow_5d <= 0.5 and actual_return <= 2.0):
+                shadow_correct += 1
+            
+            # Production hit-rate (from its own logged predictions)
+            if log.prob_gain_5d:
+                prod_5d = float(log.prob_gain_5d)
+                if (prod_5d > 0.5 and actual_return > 2.0) or (prod_5d <= 0.5 and actual_return <= 2.0):
+                    prod_correct += 1
+        
+        total = len(eval_logs)
+        shadow_hr = shadow_correct / total if total > 0 else 0.0
+        prod_hr = prod_correct / total if total > 0 else 0.5
+        
+        should_promote = shadow_hr > prod_hr and total >= 20
+        
+        result = {
+            "status": "PASSED" if should_promote else "FAILED",
+            "shadow_hit_rate": round(shadow_hr, 4),
+            "production_hit_rate": round(prod_hr, 4),
+            "eval_sample_size": total,
+            "promoted": False
+        }
+        
+        if should_promote:
+            promo_result = self.promote_shadow_model()
+            result["promoted"] = promo_result.get("promoted", False)
+            result["backup_at"] = promo_result.get("backup_at")
+            logger.info(f"Shadow model PROMOTED to production. HR: {shadow_hr:.2%} vs {prod_hr:.2%}")
+        else:
+            logger.info(f"Shadow model RETAINED in shadow. HR: {shadow_hr:.2%} vs {prod_hr:.2%}")
+        
+        return result
 

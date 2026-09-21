@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import pandas_ta as ta
@@ -393,6 +394,38 @@ class MomentumService:
                 signal=signal,
                 baseline_price=cur_price
             )
+
+            # Shadow model live monitoring (if a shadow model file exists on disk)
+            shadow_model_path = os.path.join(ml_svc.model_dir, "lgb_momentum_multi_shadow.joblib")
+            if os.path.exists(shadow_model_path):
+                try:
+                    shadow_probs = ml_svc.predict_multi_horizon({
+                        "fundamental_score": fund_score,
+                        "technical_score": tech_score,
+                        "regime_score": float(row['regime_score']),
+                        "smart_money_score": smart_score,
+                        "derivatives_score": deriv_score,
+                        "raw_roe": float(row['roe']),
+                        "raw_de": -float(row['de_score']),
+                        "raw_pe": -float(row['pe_score']),
+                        "raw_rel_vol": float(row['relative_volume']),
+                        "raw_dma200_dist": float(row['dma200_dist_pct']) / 100.0
+                    }, model_type="shadow")
+                    
+                    val_service.log_prediction_snapshot(
+                        company_id=comp.id,
+                        ticker=comp.ticker,
+                        composite_score=comp_score,
+                        prob_3d=shadow_probs["prob_3d"],
+                        prob_5d=shadow_probs["prob_5d"],
+                        prob_10d=shadow_probs["prob_10d"],
+                        signal=signal,
+                        baseline_price=cur_price,
+                        is_shadow=True,
+                        model_version="latest_shadow"
+                    )
+                except Exception as shadow_ex:
+                    print(f"Shadow model inference failed for {comp.ticker}: {shadow_ex}")
 
             # Persist to DB with Point-in-Time discipline
             try:

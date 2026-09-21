@@ -568,8 +568,21 @@ def retrain_momentum_ml_model_task(force_retrain: bool = True):
             if psi_val < 0.20 and not force_retrain:
                 return f"No drift detected (PSI: {psi_val:.4f}). Skipping retrain."
         
-        model = ml_service.train_or_load_model(force_retrain=force_retrain)
-        return f"Phase 3 ML Model Retrained: {model is not None} (PSI: {psi_val:.4f})"
+        # Train into shadow slot with date cutoff to prevent data leakage
+        import os
+        probation_days = int(os.environ.get("SHADOW_PROBATION_DAYS", 14))
+        cutoff_date = datetime.utcnow() - timedelta(days=probation_days)
+        
+        model = ml_service.train_or_load_model(
+            force_retrain=force_retrain,
+            model_type="shadow",
+            train_cutoff_date=cutoff_date
+        )
+        
+        # Run instant historical probation
+        probation_result = ml_service.run_historical_probation()
+        
+        return f"Phase 3 ML Model Retrained: {model is not None} (PSI: {psi_val:.4f}) | Probation: {probation_result}"
     except Exception as e:
         print(f"Error during ML model retraining: {e}")
         raise e
@@ -612,10 +625,18 @@ def resolve_realized_forward_returns_task():
 @shared_task
 def audit_shadow_model_performance_task(model_id: str = "latest_shadow"):
     from app.services.validation_service import ValidationService
+    from app.services.ml_service import MomentumMLService
     db = SessionLocal()
     try:
         val_svc = ValidationService(db)
         res = val_svc.evaluate_model_probation(new_model_id=model_id)
+        
+        # If live probation passes, promote the shadow model
+        if res.get("promoted_to_live"):
+            ml_svc = MomentumMLService(db)
+            promo = ml_svc.promote_shadow_model()
+            res["promotion_result"] = promo
+        
         return f"Shadow Model Probation Audit: {res}"
     except Exception as e:
         print(f"Error evaluating model probation: {e}")
