@@ -3,6 +3,7 @@ import { Box, Typography, CircularProgress, Alert } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { ResponsiveContainer, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Bar, ComposedChart } from 'recharts';
 import { useThemeMode } from '../theme/ThemeContext';
+import { apiUrl } from '../utils/api';
 
 interface HistoricalDataChartProps {
   ticker: string;
@@ -28,12 +29,8 @@ const HistoricalDataChart: React.FC<HistoricalDataChartProps> = ({ ticker }) => 
       setLoading(true);
       setError(null);
       try {
-        // Use relative URL so it goes through Nginx on port 8080.
-        // Fallback to non-/api prefix for live VPS if needed.
-        let response = await fetch(`/api/data_lake/ohlcv/${ticker}`);
-        if (!response.ok && response.status === 404) {
-          response = await fetch(`/data_lake/ohlcv/${ticker}`);
-        }
+        // Use absolute URL via API utility so it correctly hits the backend VPS in production.
+        let response = await fetch(apiUrl(`/data_lake/ohlcv/${ticker}`));
         
         if (!response.ok) {
           throw new Error(`Failed to fetch historical data (Status: ${response.status}).`);
