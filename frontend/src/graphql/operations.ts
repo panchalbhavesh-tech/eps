@@ -91,3 +91,13 @@ export const CATALYST_EVENTS_QUERY = gql`
     }
   }
 `;
+
+export const DATA_LAKE_STOCKS_QUERY = gql`
+  query GetDataLakeStocks {
+    dataLakeStocks {
+      ticker
+      name
+      hasHistoricalData
+    }
+  }
+`;

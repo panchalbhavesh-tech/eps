@@ -1,7 +1,7 @@
 import strawberry
 from typing import List, Optional
 from strawberry.types import Info
-from app.graphql.types import BackgroundJobLiveStatusType, CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType, HypothesisSignalType, AdminActivityLogType, CatalystEventType, CatalystSourceType, CatalystPipelineRunType, EventAnalogStatsType, WorkerExecutionHistoryType, PortfolioSimulationResultType
+from app.graphql.types import BackgroundJobLiveStatusType, CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType, HypothesisSignalType, AdminActivityLogType, CatalystEventType, CatalystSourceType, CatalystPipelineRunType, EventAnalogStatsType, WorkerExecutionHistoryType, PortfolioSimulationResultType, DataLakeStockType
 from app.services.company_service import CompanyService
 from app.graphql.context import Context
 import uuid
@@ -802,6 +802,35 @@ class Query:
                     error_message=j.error_message
                 )
             )
+        return result
+
+    @strawberry.field
+    def data_lake_stocks(self, info: Info[Context, None]) -> List[DataLakeStockType]:
+        import os
+        from app.infrastructure.models import Company
+        db = info.context.db
+        
+        companies = db.query(Company.ticker, Company.name).all()
+        # In docker-compose, data_harvester/data_lake is mounted at /app/data_lake
+        data_lake_dir = os.path.join(os.path.dirname(__file__), "..", "..", "data_lake", "ohlcv", "daily")
+        existing_files = set()
+        if os.path.exists(data_lake_dir):
+            for f in os.listdir(data_lake_dir):
+                if f.endswith(".parquet"):
+                    existing_files.add(f.replace(".parquet", ""))
+        
+        result = []
+        for c in companies:
+            result.append(
+                DataLakeStockType(
+                    ticker=c.ticker,
+                    name=c.name or c.ticker,
+                    has_historical_data=(c.ticker in existing_files)
+                )
+            )
+        
+        # Sort so that stocks with data appear first
+        result.sort(key=lambda x: (not x.has_historical_data, x.ticker))
         return result
 
     @strawberry.field

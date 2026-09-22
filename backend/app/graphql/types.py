@@ -423,3 +423,10 @@ class PortfolioSimulationResultType:
     equity_curve: List[float]
     sharpe_ratio: float
     max_drawdown_pct: float
+
+@strawberry.type
+class DataLakeStockType:
+    ticker: str
+    name: str
+    has_historical_data: bool
+

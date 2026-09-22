@@ -12,6 +12,7 @@ import BiotechIcon from '@mui/icons-material/Biotech';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import RadarIcon from '@mui/icons-material/Radar';
+import StorageIcon from '@mui/icons-material/Storage';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { useThemeMode } from '../theme/ThemeContext';
@@ -83,6 +84,13 @@ const Layout: React.FC = () => {
       path: '/catalyst',
       breadcrumb: 'Catalyst Radar / Early-Detection Catalyst Engine',
       description: 'Advanced early-catalyst detection and market-repricing intelligence'
+    },
+    {
+      text: 'Historical Data',
+      icon: <StorageIcon sx={{ fontSize: 20 }} />,
+      path: '/data-lake',
+      breadcrumb: 'Historical Data / Parquet Data Lake View',
+      description: 'Search and visualize OHLCV historical time-series data from the Parquet data lake'
     },
   ];
 

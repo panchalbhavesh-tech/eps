@@ -578,3 +578,45 @@ def _deterministic_news_sentiment(articles: list, ticker: str) -> dict:
         "keyDrivers": key_drivers,
         "contradictions": contradictions
     }
+
+# ---------------------------------------------------------------------------
+# Data Lake Endpoints
+# ---------------------------------------------------------------------------
+import os
+import pandas as pd
+from fastapi import HTTPException
+from app.infrastructure.database import SessionLocal
+from app.infrastructure.models import Company
+
+@app.get("/data_lake/ohlcv/{ticker}")
+def get_data_lake_ohlcv(ticker: str):
+    # In docker-compose, data_harvester/data_lake is mounted at /app/data_lake
+    data_lake_dir = os.path.join(os.path.dirname(__file__), "data_lake", "ohlcv", "daily")
+    file_path = os.path.join(data_lake_dir, f"{ticker}.parquet")
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Historical data not found for this ticker")
+        
+    try:
+        df = pd.read_parquet(file_path)
+        if df.index.name == 'Date' or ('Date' not in df.columns and not df.index.empty and isinstance(df.index, pd.DatetimeIndex)):
+            df = df.reset_index()
+            # If after reset_index the column is named 'index', rename to 'Date'
+            if 'index' in df.columns and 'Date' not in df.columns:
+                df = df.rename(columns={'index': 'Date'})
+            
+        if 'Date' in df.columns:
+            # handle cases where Date might not be datetime format natively
+            try:
+                df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
+            except:
+                pass
+                
+        # Fill NaN values with None for JSON serialization
+        df = df.where(pd.notnull(df), None)
+            
+        records = df.to_dict(orient="records")
+        return records
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

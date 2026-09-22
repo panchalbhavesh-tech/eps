@@ -46,6 +46,11 @@ export class ErrorBoundary extends Component<Props, State> {
           <Typography sx={{ fontSize: '0.9rem', color: '#881337', fontWeight: 600 }}>
             This section is temporarily unavailable. Something went wrong while loading this content.
           </Typography>
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(255,255,255,0.5)', borderRadius: 2, width: '100%', overflow: 'auto' }}>
+            <Typography sx={{ fontFamily: 'monospace', color: '#9f1239', fontSize: '0.85rem' }}>
+              {this.state.errorMessage}
+            </Typography>
+          </Box>
           <Button
             variant="contained"
             onClick={() => this.setState({ hasError: false, errorMessage: '', stackTrace: '' })}
