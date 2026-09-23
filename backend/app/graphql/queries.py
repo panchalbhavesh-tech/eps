@@ -810,22 +810,82 @@ class Query:
         from app.infrastructure.models import Company
         db = info.context.db
         
-        companies = db.query(Company.ticker, Company.name).all()
+        companies = db.query(
+            Company.ticker, 
+            Company.name, 
+            Company.earliest_historical_date, 
+            Company.latest_historical_date, 
+            Company.total_daily_bars, 
+            Company.last_harvested_at
+        ).all()
+        
         # In docker-compose, data_harvester/data_lake is mounted at /app/data_lake
         data_lake_dir = os.path.join(os.path.dirname(__file__), "..", "..", "data_lake", "ohlcv", "daily")
-        existing_files = set()
+        file_stats = {}
         if os.path.exists(data_lake_dir):
             for f in os.listdir(data_lake_dir):
                 if f.endswith(".parquet"):
-                    existing_files.add(f.replace(".parquet", ""))
+                    full_path = os.path.join(data_lake_dir, f)
+                    file_stats[f.replace(".parquet", "")] = os.path.getsize(full_path)
         
+        # Cache NSE valid days if we have any companies with dates
+        valid_days = None
+        min_date = None
+        max_date = None
+        for c in companies:
+            if c.earliest_historical_date and c.latest_historical_date:
+                if not min_date or c.earliest_historical_date < min_date:
+                    min_date = c.earliest_historical_date
+                if not max_date or c.latest_historical_date > max_date:
+                    max_date = c.latest_historical_date
+                    
+        if min_date and max_date:
+            try:
+                import pandas_market_calendars as mcal
+                bse = mcal.get_calendar('BSE')
+                # Add 1 day buffer to max_date just in case
+                valid_days = bse.valid_days(start_date=min_date.strftime('%Y-%m-%d'), end_date=(max_date).strftime('%Y-%m-%d'))
+                # convert to set of strings for fast lookup
+                valid_days_set = set([d.strftime('%Y-%m-%d') for d in valid_days])
+            except Exception as e:
+                print(f"Error loading market calendar: {e}")
+                valid_days = None
+
         result = []
         for c in companies:
+            ticker = c.ticker
+            has_data = ticker in file_stats
+            size_bytes = file_stats.get(ticker) if has_data else None
+            
+            missing_days = None
+            total_days = c.total_daily_bars
+            
+            if c.earliest_historical_date and c.latest_historical_date and total_days is not None:
+                if valid_days is not None:
+                    try:
+                        import pandas as pd
+                        # Instead of slice counting which is slow, we can just use busday_count if we want or just slice the valid_days index
+                        # Wait, valid_days is a pandas DatetimeIndex. 
+                        # We can just count the number of days in valid_days that fall between earliest and latest
+                        e_dt = c.earliest_historical_date.strftime('%Y-%m-%d')
+                        l_dt = c.latest_historical_date.strftime('%Y-%m-%d')
+                        expected_days = len(valid_days[(valid_days >= e_dt) & (valid_days <= l_dt)])
+                        missing_days = max(0, expected_days - total_days)
+                    except Exception as e:
+                        print(f"Error computing missing days for {ticker}: {e}")
+                        missing_days = None
+                
+            last_updated = str(c.last_harvested_at) if c.last_harvested_at else None
+
             result.append(
                 DataLakeStockType(
-                    ticker=c.ticker,
-                    name=c.name or c.ticker,
-                    has_historical_data=(c.ticker in existing_files)
+                    ticker=ticker,
+                    name=c.name or ticker,
+                    has_historical_data=has_data,
+                    file_size_bytes=size_bytes,
+                    total_days=total_days,
+                    missing_days=missing_days,
+                    last_updated=last_updated
                 )
             )
         

@@ -98,6 +98,10 @@ export const DATA_LAKE_STOCKS_QUERY = gql`
       ticker
       name
       hasHistoricalData
+      fileSizeBytes
+      totalDays
+      missingDays
+      lastUpdated
     }
   }
 `;

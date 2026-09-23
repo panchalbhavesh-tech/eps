@@ -78,7 +78,7 @@ def run_eod(days: int):
                                     historical_years_available = :years
                                 WHERE ticker = :ticker
                             """),
-                            {"now": datetime.utcnow(), "earliest": earliest, "latest": latest, "total_bars": total_bars, "years": years_available, "ticker": ticker}
+                            {"now": datetime.now(datetime.UTC), "earliest": earliest, "latest": latest, "total_bars": total_bars, "years": years_available, "ticker": ticker}
                         )
                         conn.commit()
             except Exception as e:
@@ -93,13 +93,46 @@ def run_eod(days: int):
                     
     print("EOD harvest complete.")
 
+import traceback
+import requests
+
+def notify_discord(message: str, is_error: bool = False):
+    """Sends a notification to the Discord Admin Webhook."""
+    webhook_url = os.environ.get("DISCORD_ADMIN_WEBHOOK_URL")
+    if not webhook_url:
+        print("Notice: DISCORD_ADMIN_WEBHOOK_URL not set in .env. Skipping Discord alert.")
+        return
+        
+    color = 16711680 if is_error else 65280 # Red for error, Green for success
+    prefix = "🚨 **HARVESTER CRASHED**" if is_error else "✅ **HARVESTER SUCCESS**"
+    
+    payload = {
+        "embeds": [{
+            "title": prefix,
+            "description": message[:4000], # Discord limits description to 4096 chars
+            "color": color
+        }]
+    }
+    
+    try:
+        requests.post(webhook_url, json=payload, timeout=5)
+    except Exception as e:
+        print(f"Failed to send Discord notification: {e}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="EPS Data Harvester")
     parser.add_argument("--mode", choices=["intraday", "eod"], required=True, help="Mode to run in.")
     parser.add_argument("--days", type=int, default=5, help="Number of days to fetch for EOD mode (default 5)")
     args = parser.parse_args()
     
-    if args.mode == "intraday":
-        run_intraday()
-    elif args.mode == "eod":
-        run_eod(args.days)
+    try:
+        if args.mode == "intraday":
+            run_intraday()
+        elif args.mode == "eod":
+            run_eod(args.days)
+            notify_discord(f"EOD Harvester successfully collected data for the last {args.days} days.", is_error=False)
+    except Exception as e:
+        error_trace = traceback.format_exc()
+        print(f"FATAL ERROR: {error_trace}")
+        notify_discord(f"The {args.mode.upper()} harvester encountered a fatal error and stopped:\n```python\n{error_trace}\n```", is_error=True)
+        sys.exit(1)

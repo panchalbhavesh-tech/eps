@@ -429,4 +429,8 @@ class DataLakeStockType:
     ticker: str
     name: str
     has_historical_data: bool
+    file_size_bytes: Optional[int] = None
+    total_days: Optional[int] = None
+    missing_days: Optional[int] = None
+    last_updated: Optional[str] = None
 

@@ -93,7 +93,10 @@ class UpstoxProvider(DataProvider):
                         })
                         
             except ApiException as e:
-                print(f"Exception calling Upstox HistoryApi for {ticker} ({from_date_str} to {to_date_str}): {e}")
+                if e.status == 400 and "UDAPI100011" in str(e.body):
+                    print(f"Skipping {ticker} - Invalid Instrument Key (likely delisted or suspended)")
+                else:
+                    print(f"Exception calling Upstox HistoryApi for {ticker} ({from_date_str} to {to_date_str}): {e}")
                 break # stop paginating on error
                 
             days_remaining -= chunk_days
