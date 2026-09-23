@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, TextField, Grid, Card, CardActionArea, CardContent, InputAdornment, Dialog, DialogContent, DialogTitle, IconButton, Chip, CircularProgress, Tooltip } from '@mui/material';
+import { Box, Typography, TextField, Grid, Card, CardActionArea, CardContent, InputAdornment, Dialog, DialogContent, DialogTitle, IconButton, Chip, CircularProgress, Tooltip, Select, MenuItem, FormControl, InputLabel, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -52,6 +52,9 @@ const DataLakePage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(60);
+  const [sortBy, setSortBy] = useState('ticker');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [filterStatus, setFilterStatus] = useState('all');
 
   const { data, loading, error } = useQuery(DATA_LAKE_STOCKS_QUERY);
   const stocks: StockInfo[] = data?.dataLakeStocks || [];
@@ -82,86 +85,188 @@ const DataLakePage: React.FC = () => {
     if (!stocks.length) return [];
     
     const searchLower = search.trim().toLowerCase();
-    const results = stocks.filter(stock => {
+    let results = stocks.filter(stock => {
       if (!stock) return false;
+      if (filterStatus === 'available' && !stock.hasHistoricalData) return false;
+      if (filterStatus === 'missing' && stock.hasHistoricalData) return false;
+      
       if (!searchLower) return true;
       return (stock.ticker || '').toLowerCase().includes(searchLower) || 
              (stock.name || '').toLowerCase().includes(searchLower);
     });
+
+    results.sort((a, b) => {
+      let valA: any = a[sortBy as keyof StockInfo];
+      let valB: any = b[sortBy as keyof StockInfo];
+      
+      if (sortBy === 'completeness') {
+        const getPct = (s: StockInfo) => {
+          if (s.totalDays === 0 && s.missingDays === 0) return 0;
+          if (s.totalDays == null || s.missingDays == null) return -1;
+          const exp = s.totalDays + s.missingDays;
+          if (exp === 0) return 0;
+          return s.totalDays / exp;
+        };
+        valA = getPct(a);
+        valB = getPct(b);
+      } else if (sortBy === 'lastUpdated') {
+        valA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
+        valB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
+      } else if (sortBy === 'fileSizeBytes') {
+        valA = a.fileSizeBytes || 0;
+        valB = b.fileSizeBytes || 0;
+      }
+      
+      if (valA === valB) return 0;
+      if (valA < valB) return sortDir === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
     
     return results.slice(0, visibleCount);
-  }, [stocks, search, visibleCount]);
+  }, [stocks, search, filterStatus, sortBy, sortDir, visibleCount]);
 
   return (
     <Box sx={{ p: 4, maxWidth: 1400, margin: '0 auto' }}>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
-        <Box>
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 4 }}>
+        <Box sx={{ flex: 1, minWidth: { xs: '100%', md: 600 } }}>
           <Typography variant="h4" sx={{ color: tokens.text.primary, fontWeight: 700, mb: 1 }}>
             Parquet Data Lake
           </Typography>
-          <Typography sx={{ color: tokens.text.secondary }}>
+          <Typography sx={{ color: tokens.text.secondary, mb: 4 }}>
             Explore historical OHLCV data availability and visualize cross-sectional records.
           </Typography>
+
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+            <TextField
+              fullWidth
+              size="small"
+              variant="outlined"
+              placeholder="Search stocks by ticker or name..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              sx={{
+                flex: 1,
+                minWidth: 300,
+                '& .MuiOutlinedInput-root': {
+                  bgcolor: tokens.background.card,
+                  '& fieldset': { borderColor: tokens.border.main },
+                  '&:hover fieldset': { borderColor: tokens.border.light },
+                  '&.Mui-focused fieldset': { borderColor: tokens.primary.main },
+                },
+                input: { color: tokens.text.primary }
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: tokens.text.tertiary }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <InputLabel sx={{ color: tokens.text.secondary }}>Sort By</InputLabel>
+              <Select
+                value={sortBy}
+                label="Sort By"
+                onChange={(e) => setSortBy(e.target.value)}
+                sx={{
+                  bgcolor: tokens.background.card,
+                  color: tokens.text.primary,
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: tokens.border.main },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: tokens.border.light },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: tokens.primary.main },
+                  '.MuiSvgIcon-root': { color: tokens.text.secondary }
+                }}
+              >
+                <MenuItem value="ticker">Ticker</MenuItem>
+                <MenuItem value="fileSizeBytes">File Size</MenuItem>
+                <MenuItem value="completeness">% Complete</MenuItem>
+                <MenuItem value="lastUpdated">Last Updated</MenuItem>
+              </Select>
+            </FormControl>
+
+            <ToggleButtonGroup
+              value={sortDir}
+              exclusive
+              size="small"
+              onChange={(e, val) => val && setSortDir(val)}
+              sx={{
+                bgcolor: tokens.background.card,
+                '& .MuiToggleButton-root': {
+                  color: tokens.text.secondary,
+                  borderColor: tokens.border.main,
+                  padding: '5px 12px',
+                  '&.Mui-selected': {
+                    color: tokens.primary.main,
+                    bgcolor: 'rgba(33, 150, 243, 0.08)',
+                  },
+                }
+              }}
+            >
+              <ToggleButton value="asc">ASC</ToggleButton>
+              <ToggleButton value="desc">DESC</ToggleButton>
+            </ToggleButtonGroup>
+
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel sx={{ color: tokens.text.secondary }}>Filter</InputLabel>
+              <Select
+                value={filterStatus}
+                label="Filter"
+                onChange={(e) => setFilterStatus(e.target.value)}
+                sx={{
+                  bgcolor: tokens.background.card,
+                  color: tokens.text.primary,
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: tokens.border.main },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: tokens.border.light },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: tokens.primary.main },
+                  '.MuiSvgIcon-root': { color: tokens.text.secondary }
+                }}
+              >
+                <MenuItem value="all">All Stocks</MenuItem>
+                <MenuItem value="available">Data Available</MenuItem>
+                <MenuItem value="missing">Missing Data</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
         </Box>
 
         {!loading && !error && (
           <Box sx={{ 
-            display: 'flex', 
-            gap: 3, 
-            alignItems: 'center', 
-            p: 2, 
             bgcolor: tokens.background.card, 
             borderRadius: 2, 
             border: `1px solid ${tokens.border.main}`,
+            p: 2,
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
           }}>
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="caption" sx={{ color: tokens.text.tertiary, textTransform: 'uppercase', fontWeight: 600 }}>Total</Typography>
-              <Typography variant="h6" sx={{ color: tokens.text.primary, fontWeight: 700, lineHeight: 1 }}>{totalCount}</Typography>
-            </Box>
-            <Box sx={{ width: 1, height: 30, bgcolor: tokens.border.main }} />
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="caption" sx={{ color: tokens.text.tertiary, textTransform: 'uppercase', fontWeight: 600 }}>Available</Typography>
-              <Typography variant="h6" sx={{ color: '#4caf50', fontWeight: 700, lineHeight: 1 }}>{availableCount}</Typography>
-            </Box>
-            <Box sx={{ width: 1, height: 30, bgcolor: tokens.border.main }} />
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="caption" sx={{ color: tokens.text.tertiary, textTransform: 'uppercase', fontWeight: 600 }}>Missing</Typography>
-              <Typography variant="h6" sx={{ color: '#f44336', fontWeight: 700, lineHeight: 1 }}>{missingCount}</Typography>
-            </Box>
-            <Box sx={{ width: 1, height: 30, bgcolor: tokens.border.main }} />
-            <Box sx={{ textAlign: 'center', minWidth: 'max-content' }}>
-              <Typography variant="caption" sx={{ color: tokens.text.tertiary, textTransform: 'uppercase', fontWeight: 600, whiteSpace: 'nowrap' }}>Data Size</Typography>
-              <Typography variant="h6" sx={{ color: tokens.primary.main, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap' }}>{formatBytes(totalSizeBytes)}</Typography>
+            <Typography variant="subtitle2" sx={{ color: tokens.text.secondary, mb: 1.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: `1px solid ${tokens.border.light}`, pb: 1 }}>
+              Data Lake Summary
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+              <Box sx={{ textAlign: 'center', px: 1 }}>
+                <Typography variant="caption" sx={{ color: tokens.text.tertiary, textTransform: 'uppercase', fontWeight: 600 }}>Total</Typography>
+                <Typography variant="h6" sx={{ color: tokens.text.primary, fontWeight: 700, lineHeight: 1.2, mt: 0.5 }}>{totalCount}</Typography>
+              </Box>
+              <Box sx={{ width: 1, height: 35, bgcolor: tokens.border.main }} />
+              <Box sx={{ textAlign: 'center', px: 1 }}>
+                <Typography variant="caption" sx={{ color: tokens.text.tertiary, textTransform: 'uppercase', fontWeight: 600 }}>Available</Typography>
+                <Typography variant="h6" sx={{ color: '#4caf50', fontWeight: 700, lineHeight: 1.2, mt: 0.5 }}>{availableCount}</Typography>
+              </Box>
+              <Box sx={{ width: 1, height: 35, bgcolor: tokens.border.main }} />
+              <Box sx={{ textAlign: 'center', px: 1 }}>
+                <Typography variant="caption" sx={{ color: tokens.text.tertiary, textTransform: 'uppercase', fontWeight: 600 }}>Missing</Typography>
+                <Typography variant="h6" sx={{ color: '#f44336', fontWeight: 700, lineHeight: 1.2, mt: 0.5 }}>{missingCount}</Typography>
+              </Box>
+              <Box sx={{ width: 1, height: 35, bgcolor: tokens.border.main }} />
+              <Box sx={{ textAlign: 'center', px: 1, minWidth: 'max-content' }}>
+                <Typography variant="caption" sx={{ color: tokens.text.tertiary, textTransform: 'uppercase', fontWeight: 600, whiteSpace: 'nowrap' }}>Data Size</Typography>
+                <Typography variant="h6" sx={{ color: tokens.primary.main, fontWeight: 700, lineHeight: 1.2, mt: 0.5, whiteSpace: 'nowrap' }}>{formatBytes(totalSizeBytes)}</Typography>
+              </Box>
             </Box>
           </Box>
         )}
       </Box>
-
-      <TextField
-        fullWidth
-        variant="outlined"
-        placeholder="Search stocks by ticker or name..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        sx={{
-          mb: 4,
-          '& .MuiOutlinedInput-root': {
-            bgcolor: tokens.background.card,
-            '& fieldset': { borderColor: tokens.border.main },
-            '&:hover fieldset': { borderColor: tokens.border.light },
-            '&.Mui-focused fieldset': { borderColor: tokens.primary.main },
-          },
-          input: { color: tokens.text.primary }
-        }}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon sx={{ color: tokens.text.tertiary }} />
-            </InputAdornment>
-          ),
-        }}
-      />
 
       {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
