@@ -50,6 +50,9 @@ def task_prerun_handler(task_id, task, *args, **kwargs):
 
 @task_success.connect
 def task_success_handler(sender, result, **kwargs):
+    if hasattr(sender, "name") and sender.name in IGNORED_TASKS:
+        return
+        
     task_id = sender.request.id
     db = SessionLocal()
     try:
@@ -77,6 +80,10 @@ def task_success_handler(sender, result, **kwargs):
 
 @task_failure.connect
 def task_failure_handler(task_id, exception, traceback, einfo, *args, **kwargs):
+    sender = kwargs.get('sender')
+    if sender and hasattr(sender, "name") and sender.name in IGNORED_TASKS:
+        return
+        
     db = SessionLocal()
     try:
         job = db.query(BackgroundJob).filter(BackgroundJob.celery_task_id == task_id).first()
