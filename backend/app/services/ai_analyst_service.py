@@ -540,11 +540,14 @@ You MUST output strictly valid JSON with the following exact keys:
                 if response.status_code == 200:
                     data = response.json()
                     text_resp = data['candidates'][0]['content']['parts'][0]['text']
-                    parsed = json.loads(text_resp.strip())
+                    text_resp = text_resp.strip().replace("```json", "").replace("```", "")
+                    parsed = json.loads(text_resp)
                     if parsed.get("name") and parsed.get("alpha_expression"):
                         return parsed
+                else:
+                    print(f"Gemini API returned status {response.status_code}: {response.text}")
             except Exception as e:
-                print(f"Gemini autonomous research generation failed: {e}, using deterministic quant repository.")
+                print(f"Gemini autonomous research generation failed: {e} | Text: {text_resp if 'text_resp' in locals() else 'N/A'}")
 
         # 2. Deterministic Quant Alpha Repository Fallback (Guaranteed Continuity)
         candidates = [
