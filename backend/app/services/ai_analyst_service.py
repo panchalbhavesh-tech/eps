@@ -461,6 +461,8 @@ Do NOT output any markdown around the JSON or any other text.
                         return {"score": float(res.get("catalyst_score", 50.0)), "summary": str(res.get("summary", "Neutral corporate catalyst"))}
                     except Exception as e2:
                         print(f"Gemini Phase 4 sentiment call failed for {ticker}: {e2}")
+            except Exception as outer_e:
+                print(f"Phase 4 sentiment outer exception: {outer_e}")
 
         # Deterministic analysis fallback for offline/development mode
         score = 65.0 if any(w in headline_context.lower() for w in ["profit", "surge", "growth", "dividend", "breakout"]) else 50.0
@@ -508,6 +510,8 @@ Do NOT output any markdown around the JSON or additional commentary.
                         return res
                     except Exception as e2:
                         print(f"Live Gemini multi-source sentiment evaluation fallback for {clean_ticker}: {e2}")
+            except Exception as outer_e:
+                print(f"Multi-source sentiment outer exception: {outer_e}")
 
         # High-Fidelity Deterministic Multi-Source Behavioral Synthesis Fallback
         # Custom tailored analytics based on sector & prominent Nifty / NSE characteristics
