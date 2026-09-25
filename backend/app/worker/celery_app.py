@@ -21,47 +21,47 @@ celery_app.conf.update(
     beat_schedule={
         'sync-nse-daily': {
             'task': 'app.worker.tasks.sync_nse_calendar_task',
-            'schedule': 86400.0, # Every 24 hours
+            'schedule': crontab(minute=0, hour=13, day_of_week='mon-fri'), # 13:00 UTC / 18:30 IST
         },
         'sync-nse-universe-daily': {
             'task': 'app.worker.tasks.sync_nse_universe_task',
-            'schedule': 86400.0, # Synchronizes and populates the NSE stock universe
-        },
-        'calculate-universe-health-daily': {
-            'task': 'app.worker.tasks.calculate_universe_health_task',
-            'schedule': 86400.0, # Calculates and updates the existing health metrics
+            'schedule': crontab(minute=0, hour=13, day_of_week='mon-fri'), # 13:00 UTC / 18:30 IST
         },
         'sync-nse-market-data-daily': {
             'task': 'app.worker.tasks.sync_nse_market_data_task',
-            'schedule': 86400.0, # Overnight Bhavcopy & Surveillance sync
-        },
-        'scan-nse-momentum-daily': {
-            'task': 'app.worker.tasks.run_nse_momentum_scan_task',
-            'schedule': 86400.0, # Every 24 hours post-market
-        },
-        'resolve-realized-forward-returns-daily': {
-            'task': 'app.worker.tasks.resolve_realized_forward_returns_task',
-            'schedule': 86400.0, # Daily backfill of realized returns and rolling IC calculation
-        },
-        'retrain-momentum-ml-model-weekly': {
-            'task': 'app.worker.tasks.retrain_momentum_ml_model_task',
-            'schedule': 604800.0, # Weekly scheduled walk-forward model retraining
-        },
-        'audit-shadow-model-probation-weekly': {
-            'task': 'app.worker.tasks.audit_shadow_model_performance_task',
-            'schedule': 604800.0, # Weekly review of 14-day shadow probation status
+            'schedule': crontab(minute=30, hour=13, day_of_week='mon-fri'), # 13:30 UTC / 19:00 IST
         },
         'sync-ohlcv-cache-daily': {
             'task': 'app.worker.tasks.sync_ohlcv_cache_task',
-            'schedule': 86400.0, # Nightly incremental OHLCV cache synchronization
+            'schedule': crontab(minute=0, hour=14, day_of_week='mon-fri'), # 14:00 UTC / 19:30 IST
+        },
+        'calculate-universe-health-daily': {
+            'task': 'app.worker.tasks.calculate_universe_health_task',
+            'schedule': crontab(minute=30, hour=14, day_of_week='mon-fri'), # 14:30 UTC / 20:00 IST
+        },
+        'resolve-realized-forward-returns-daily': {
+            'task': 'app.worker.tasks.resolve_realized_forward_returns_task',
+            'schedule': crontab(minute=0, hour=15, day_of_week='mon-fri'), # 15:00 UTC / 20:30 IST
+        },
+        'retrain-momentum-ml-model-weekly': {
+            'task': 'app.worker.tasks.retrain_momentum_ml_model_task',
+            'schedule': crontab(minute=30, hour=15, day_of_week='sat'), # 15:30 UTC Saturdays
+        },
+        'audit-shadow-model-probation-weekly': {
+            'task': 'app.worker.tasks.audit_shadow_model_performance_task',
+            'schedule': crontab(minute=30, hour=16, day_of_week='sat'), # 16:30 UTC Saturdays
         },
         'run-automated-hypothesis-research-daily': {
             'task': 'app.worker.tasks.run_automated_hypothesis_research_task',
-            'schedule': 86400.0, # Nightly QHLM FSM statistical evaluation and alpha decay retirement
+            'schedule': crontab(minute=30, hour=17, day_of_week='mon-fri'), # 17:30 UTC / 23:00 IST
+        },
+        'scan-nse-momentum-daily': {
+            'task': 'app.worker.tasks.run_nse_momentum_scan_task',
+            'schedule': crontab(minute=30, hour=18, day_of_week='mon-fri'), # 18:30 UTC / 00:00 IST
         },
         'cleanup-old-activity-logs-daily': {
             'task': 'app.worker.tasks.cleanup_old_activity_logs_task',
-            'schedule': 86400.0, # Daily cleanup of admin logs older than 15 days
+            'schedule': crontab(minute=0, hour=19), # 19:00 UTC Daily
         },
         'scan-nse-catalysts-live': {
             'task': 'app.worker.tasks.scan_nse_catalysts_live_task',
