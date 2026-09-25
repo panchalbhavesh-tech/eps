@@ -63,3 +63,25 @@ class DiscordNotifier:
             embed["url"] = url
             
         self.send_embed(embed, is_admin=False)
+
+    def send_cron_alert(self, task_name: str, status: str, details: str = ""):
+        """Sends a system administration alert for Cron Job execution results."""
+        is_success = status.upper() == "SUCCESS"
+        color = 3066993 if is_success else 15158332 # Green if success, Red if failure
+        emoji = "✅" if is_success else "❌"
+        
+        # Truncate details if they are too long (Discord embed limits)
+        safe_details = str(details)[:1000] + "..." if len(str(details)) > 1000 else str(details)
+        if not safe_details.strip():
+            safe_details = "No output provided."
+            
+        embed = {
+            "title": f"{emoji} System Cron: {status.upper()}",
+            "description": f"Background job execution report for `{task_name}`",
+            "color": color,
+            "fields": [
+                {"name": "⚙️ Task Name", "value": f"`{task_name}`", "inline": False},
+                {"name": "📝 Result / Output", "value": f"```\n{safe_details}\n```", "inline": False}
+            ]
+        }
+        self.send_embed(embed, is_admin=True)

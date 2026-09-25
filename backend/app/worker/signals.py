@@ -4,6 +4,7 @@ from app.infrastructure.models import BackgroundJob, AdminActivityLog
 from datetime import datetime
 from app.services.activity_logger import log_activity_finish, log_activity_start
 from app.worker.task_mappings import get_task_metadata
+from app.services.notifier import DiscordNotifier
 
 IGNORED_TASKS = {
     "app.worker.tasks.sync_single_ohlcv_task",
@@ -61,6 +62,12 @@ def task_success_handler(sender, result, **kwargs):
         
         # Finish AdminActivityLog
         log_activity_finish(db, task_id, "SUCCESS", metadata={"result": str(result)[:200]})
+        
+        try:
+            task_name = sender.name if hasattr(sender, "name") else f"Task {task_id}"
+            DiscordNotifier().send_cron_alert(task_name=task_name, status="SUCCESS", details=str(result))
+        except Exception as notify_e:
+            print(f"Failed to send success discord notification: {notify_e}")
 
     except Exception as e:
         db.rollback()
@@ -84,6 +91,12 @@ def task_failure_handler(task_id, exception, traceback, einfo, *args, **kwargs):
         import traceback as tb
         error_msg = "".join(tb.format_exception(type(exception), exception, traceback)) if traceback else str(exception)
         log_activity_finish(db, task_id, "FAILED", error_message=error_msg)
+        
+        try:
+            task_name = kwargs.get('sender').name if kwargs.get('sender') and hasattr(kwargs.get('sender'), 'name') else f"Task {task_id}"
+            DiscordNotifier().send_cron_alert(task_name=task_name, status="FAILURE", details=error_msg)
+        except Exception as notify_e:
+            print(f"Failed to send failure discord notification: {notify_e}")
 
     except Exception as e:
         db.rollback()
