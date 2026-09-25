@@ -410,7 +410,7 @@ class HypothesisService:
                 # Ensure we get enough benchmark history
                 nifty_df = dm.get_ohlcv("^NSEI", days=sample_length * 3) 
                 if not nifty_df.empty:
-                    nifty_df['nifty_ret'] = nifty_df['Close'].pct_change()
+                    nifty_df['nifty_ret'] = nifty_df['close'].pct_change()
                     nifty_df.index = pd.to_datetime(nifty_df.index).tz_localize(None)
                     
                     aligned = pd.concat([pd.Series(strategy_daily_returns, index=daily_returns.index, name='strat_ret'), nifty_df['nifty_ret']], axis=1).dropna()
