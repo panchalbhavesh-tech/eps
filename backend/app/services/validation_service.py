@@ -73,7 +73,7 @@ class ValidationService:
             ScorePredictionLog.realized_5d_return == None,
             ScorePredictionLog.date_evaluated <= (now - timedelta(days=7)),
             ScorePredictionLog.baseline_price != None
-        ).limit(200).all()
+        ).limit(5000).all()
 
         from app.services.data.data_manager import UnifiedDataManager
         dm = UnifiedDataManager()
