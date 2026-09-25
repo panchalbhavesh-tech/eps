@@ -29,6 +29,7 @@ class SafeASTEvaluator:
             'sqrt': np.sqrt,
             'rolling_mean': lambda x, w: x.groupby(level='Ticker').rolling(int(w)).mean().reset_index(level=0, drop=True).sort_index(),
             'rolling_std': lambda x, w: x.groupby(level='Ticker').rolling(int(w)).std().reset_index(level=0, drop=True).sort_index(),
+            'volatility': lambda x, w: x.groupby(level='Ticker').rolling(int(w)).std().reset_index(level=0, drop=True).sort_index(),
             'rank': lambda x: x.groupby(level='Date').rank(pct=True),
             'delta': lambda x, w: x.groupby(level='Ticker').diff(int(w))
         }
@@ -315,6 +316,7 @@ class HypothesisService:
             df['volume_5d'] = grouped['volume'].transform(lambda x: x.rolling(5).mean())
             df['volatility_20d'] = grouped['close'].transform(lambda x: x.pct_change().rolling(20).std())
             df['volatility_20'] = df['volatility_20d'] # alias
+            df['volatility'] = df['volatility_20d'] # generic alias
             df['high_low_spread_10d'] = (df['high'] - df['low']).groupby(level='Ticker').transform(lambda x: x.rolling(10).mean())
             df['adv_10'] = grouped['volume'].transform(lambda x: x.rolling(10).mean())
             
@@ -345,12 +347,10 @@ class HypothesisService:
             clean = df.dropna(subset=['factor', 'fwd_ret']).copy()
             
             # Factor Orthogonalization: Cross-sectional demeaning to remove the market factor proxy
-            def orthogonalize(group):
-                if len(group) > 5:
-                    group['factor'] = group['factor'] - group['factor'].mean()
-                return group
-                
-            clean = clean.groupby(level='Date').apply(orthogonalize)
+            def _demean(x):
+                return x - x.mean() if len(x) > 5 else x
+            
+            clean['factor'] = clean.groupby(level='Date')['factor'].transform(_demean)
             
             if len(clean) < 100:
                 failure_tag = "INSUFFICIENT_HISTORICAL_CACHE_BARS"
