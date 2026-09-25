@@ -536,16 +536,23 @@ You MUST output strictly valid JSON with the following exact keys:
                     "generationConfig": {"temperature": 0.4, "responseMimeType": "application/json"}
                 }
                 headers = {"Content-Type": "application/json"}
-                response = requests.post(self.model_url, headers=headers, json=payload, timeout=25)
-                if response.status_code == 200:
-                    data = response.json()
-                    text_resp = data['candidates'][0]['content']['parts'][0]['text']
-                    text_resp = text_resp.strip().replace("```json", "").replace("```", "")
-                    parsed = json.loads(text_resp)
-                    if parsed.get("name") and parsed.get("alpha_expression"):
-                        return parsed
-                else:
-                    print(f"Gemini API returned status {response.status_code}: {response.text}")
+                import time
+                max_retries = 3
+                for attempt in range(max_retries):
+                    response = requests.post(self.model_url, headers=headers, json=payload, timeout=25)
+                    if response.status_code == 200:
+                        data = response.json()
+                        text_resp = data['candidates'][0]['content']['parts'][0]['text']
+                        text_resp = text_resp.strip().replace("```json", "").replace("```", "")
+                        parsed = json.loads(text_resp)
+                        if parsed.get("name") and parsed.get("alpha_expression"):
+                            return parsed
+                    elif response.status_code == 429 and attempt < max_retries - 1:
+                        print(f"Gemini API rate limit hit (429). Sleeping for 60 seconds before retry {attempt + 1}/{max_retries}...")
+                        time.sleep(60)
+                    else:
+                        print(f"Gemini API returned status {response.status_code}: {response.text}")
+                        break
             except Exception as e:
                 print(f"Gemini autonomous research generation failed: {e} | Text: {text_resp if 'text_resp' in locals() else 'N/A'}")
 
