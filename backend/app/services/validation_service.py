@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from app.infrastructure.models import Company, ScorePredictionLog, MomentumSignal, DailyBhavcopy
+from app.infrastructure.models import Company, ScorePredictionLog, MomentumSignal
 
 logger = logging.getLogger(__name__)
 
@@ -75,25 +75,31 @@ class ValidationService:
             ScorePredictionLog.baseline_price != None
         ).limit(200).all()
 
+        from app.services.data.data_manager import UnifiedDataManager
+        dm = UnifiedDataManager()
+        
         for rec in unresolved:
             try:
                 base_p = float(rec.baseline_price)
                 if base_p <= 0:
                     continue
                     
-                # Look up actual closing price from OHLCV cache (DailyBhavcopy)
-                # Ensure exact 5th active trading session (skip holidays)
-                bhavs = self.db.query(DailyBhavcopy).filter(
-                    DailyBhavcopy.ticker == rec.ticker,
-                    DailyBhavcopy.trade_date > rec.date_evaluated
-                ).order_by(DailyBhavcopy.trade_date.asc()).limit(5).all()
+                # Look up actual closing price from Parquet Data Lake
+                eval_date = rec.date_evaluated
+                ohlcv = dm.get_ohlcv(rec.ticker, days=30)
+                if ohlcv.empty:
+                    continue
+                    
+                ohlcv.index = pd.to_datetime(ohlcv.index).tz_localize(None)
+                ohlcv.columns = [str(c).lower() for c in ohlcv.columns]
+                future_bars = ohlcv[ohlcv.index > eval_date].sort_index().head(5)
                 
-                bhav = bhavs[-1] if len(bhavs) == 5 else None
-
-                if bhav and bhav.close_price:
-                    ret_5d = ((float(bhav.close_price) - base_p) / base_p) * 100.0
-                    rec.realized_5d_return = round(min(50.0, max(-50.0, ret_5d)), 2)
-                    resolved_count += 1
+                if len(future_bars) == 5 and 'close' in future_bars.columns:
+                    close_5d = float(future_bars['close'].iloc[-1])
+                    if close_5d > 0:
+                        ret_5d = ((close_5d - base_p) / base_p) * 100.0
+                        rec.realized_5d_return = round(min(50.0, max(-50.0, ret_5d)), 2)
+                        resolved_count += 1
             except Exception:
                 continue
 

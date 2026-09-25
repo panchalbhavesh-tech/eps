@@ -6,7 +6,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
-from app.infrastructure.models import ResearchHypothesis, HypothesisExperiment, DailyBhavcopy, Company, TotalHypothesisTrials
+from app.infrastructure.models import ResearchHypothesis, HypothesisExperiment, Company, TotalHypothesisTrials
 
 logger = logging.getLogger(__name__)
 
@@ -278,24 +278,36 @@ class HypothesisService:
             else:
                 tickers = liquid_tickers
             
-            # Fetch all rows for these tickers
-            rows = self.db.query(DailyBhavcopy).filter(DailyBhavcopy.ticker.in_(tickers)).order_by(DailyBhavcopy.trade_date.asc()).all()
+            # Fetch OHLCV from Parquet Data Lake (not deprecated Postgres daily_bhavcopy)
+            from app.services.data.data_manager import UnifiedDataManager
+            dm = UnifiedDataManager()
             
-            if not rows:
-                raise ValueError("No historical cache bars available.")
-
-            df_data = [{
-                "Date": r.trade_date,
-                "Ticker": r.ticker,
-                "open": r.open_price,
-                "close": r.close_price,
-                "volume": r.volume,
-                "high": r.high_price,
-                "low": r.low_price
-            } for r in rows]
+            all_frames = []
+            for t in tickers:
+                try:
+                    t_df = dm.get_ohlcv(t, days=5*365)
+                    if t_df.empty:
+                        continue
+                    # Standardize columns to lowercase
+                    t_df.columns = [str(c).lower() for c in t_df.columns]
+                    # Ensure required columns exist
+                    required = {'open', 'close', 'volume', 'high', 'low'}
+                    if not required.issubset(set(t_df.columns)):
+                        continue
+                    t_df = t_df[['open', 'high', 'low', 'close', 'volume']].copy()
+                    t_df['Ticker'] = t
+                    t_df.index = pd.to_datetime(t_df.index).tz_localize(None)
+                    t_df.index.name = 'Date'
+                    all_frames.append(t_df)
+                except Exception as e:
+                    logger.debug(f"Skipping ticker {t} in hypothesis eval: {e}")
+                    continue
             
-            df = pd.DataFrame(df_data)
-            df.set_index(['Date', 'Ticker'], inplace=True)
+            if not all_frames:
+                raise ValueError("No historical OHLCV data available from Data Lake.")
+            
+            df = pd.concat(all_frames)
+            df = df.reset_index().set_index(['Date', 'Ticker'])
             df.sort_index(inplace=True)
             
             # Precompute required variables
@@ -497,10 +509,18 @@ class HypothesisService:
         counts = {"evaluated": 0, "promoted_live": 0, "decommissioned_decay": 0}
         try:
             drafts = self.db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage == "DRAFT_HYPOTHESIS").all()
+            logger.info(f"QHLM FSM: Found {len(drafts)} DRAFT hypotheses to evaluate.")
             for d in drafts:
-                res = self.evaluate_hypothesis(str(d.id))
-                if res.get("status") == "Success":
-                    counts["evaluated"] += 1
+                try:
+                    res = self.evaluate_hypothesis(str(d.id))
+                    logger.info(f"QHLM FSM: Evaluated '{d.name}' -> {res.get('status')}, stage={res.get('stage')}, failure={res.get('failure_mode')}")
+                    if res.get("status") == "Success":
+                        counts["evaluated"] += 1
+                    elif res.get("status") == "Error":
+                        logger.error(f"QHLM FSM: Hypothesis '{d.name}' evaluation error: {res.get('message')}")
+                except Exception as eval_err:
+                    logger.error(f"QHLM FSM: Exception evaluating hypothesis '{d.name}': {eval_err}", exc_info=True)
+                    self.db.rollback()
 
             now = datetime.utcnow()
             shadows = self.db.query(ResearchHypothesis).filter(ResearchHypothesis.current_stage == "OUT_OF_SAMPLE_SHADOW").all()
