@@ -45,6 +45,24 @@ class SafeASTEvaluator:
         elif isinstance(node, ast.Name):
             if node.id in self.df.columns:
                 return self.df[node.id]
+            
+            # Autoresolve AI-hallucinated time-series variables (e.g., volatility_10d, returns_5d)
+            import re
+            match = re.match(r'(volatility|returns|volume|close|open|high|low)_(\d+)[dDwWmMyY]', node.id)
+            if match:
+                metric = match.group(1)
+                window = int(match.group(2))
+                
+                # Base series to operate on
+                base_series = self.df[metric] if metric in self.df.columns else self.df['close']
+                
+                if metric == 'volatility':
+                    return base_series.groupby(level='Ticker').rolling(window).std().reset_index(level=0, drop=True).sort_index()
+                elif metric == 'returns':
+                    return base_series.groupby(level='Ticker').pct_change(window)
+                else:
+                    return base_series.groupby(level='Ticker').rolling(window).mean().reset_index(level=0, drop=True).sort_index()
+                    
             raise ValueError(f"Unknown variable: {node.id}")
         elif isinstance(node, ast.BinOp):
             left = self._eval(node.left)
