@@ -32,7 +32,11 @@ class SafeASTEvaluator:
             'volatility': lambda x, w: x.groupby(level='Ticker').rolling(int(w)).std().reset_index(level=0, drop=True).sort_index(),
             'rank': lambda x: x.groupby(level='Date').rank(pct=True),
             'delta': lambda x, w: x.groupby(level='Ticker').diff(int(w)),
-            'delay': lambda x, w: x.groupby(level='Ticker').shift(int(w))
+            'delay': lambda x, w: x.groupby(level='Ticker').shift(int(w)),
+            'max': lambda *args: np.maximum.reduce(args),
+            'min': lambda *args: np.minimum.reduce(args),
+            'rolling_max': lambda x, w: x.groupby(level='Ticker').rolling(int(w)).max().reset_index(level=0, drop=True).sort_index(),
+            'rolling_min': lambda x, w: x.groupby(level='Ticker').rolling(int(w)).min().reset_index(level=0, drop=True).sort_index()
         }
 
     def _eval(self, node):

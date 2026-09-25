@@ -527,7 +527,7 @@ You MUST output strictly valid JSON with the following exact keys:
   "name": "Concise Descriptive Alpha Name V1",
   "economic_mechanism": "MICROSTRUCTURE" | "BEHAVIORAL" | "RISK_PREMIUM",
   "economic_rationale_text": "Detailed institutional economic explanation of why this mispricing or risk premium exists and why it persists without instant arbitrage.",
-  "alpha_expression": "vector formula using keywords: close, volume, high, low, volatility, delta, rank, delay",
+  "alpha_expression": "vector formula using keywords: close, volume, high, low, volatility, delta, rank, delay, max, min, rolling_max, rolling_min",
   "holding_horizon_days": 5
 }}
 """
