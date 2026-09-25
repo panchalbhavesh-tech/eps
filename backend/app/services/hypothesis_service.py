@@ -585,6 +585,7 @@ class HypothesisService:
         """
         from app.services.ai_analyst_service import AIAnalystService
         import re
+        import time
         
         active_count = self.db.query(ResearchHypothesis).filter(
             ResearchHypothesis.current_stage.in_(["DRAFT_HYPOTHESIS", "OUT_OF_SAMPLE_SHADOW", "LIVE_ALPHA_STREAM"])
@@ -638,5 +639,8 @@ class HypothesisService:
                         ai_msg.append(f"Generated {proposal['name']}: {eval_res.get('stage')} (DSR: {eval_res.get('deflated_sharpe')})")
                     else:
                         ai_msg.append(f"Proposal skipped: {reg.get('message')}")
+                        
+                # Sleep to respect Gemini API Free Tier rate limits
+                time.sleep(16)
                         
         return ' | '.join(ai_msg) if ai_msg else "No AI action needed."
