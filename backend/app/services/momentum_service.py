@@ -368,7 +368,7 @@ class MomentumService:
                 active_recommended_signals.append({"ticker": comp.ticker, "sector": comp.sector, "signal": signal, "score": comp_score})
 
             # Send Discord alert for BUY or EXIT signals
-            if signal in ("BUY", "EXIT"):
+            if signal in ("BUY", "EXIT") and requires_attention:
                 try:
                     from app.services.notifier import DiscordNotifier
                     notifier = DiscordNotifier()
