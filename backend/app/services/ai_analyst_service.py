@@ -54,7 +54,6 @@ class AIAnalystService:
                 payload["response_format"] = {"type": "json_object"}
             
             if "gpt-oss" in model_id:
-                payload["include_reasoning"] = True
                 payload["reasoning_format"] = "parsed"
                 payload["reasoning_effort"] = "high"
                 
