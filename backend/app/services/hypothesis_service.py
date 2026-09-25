@@ -46,6 +46,9 @@ class SafeASTEvaluator:
             if node.id in self.df.columns:
                 return self.df[node.id]
             
+            if node.id == 'returns':
+                return self.df['close'].groupby(level='Ticker').pct_change()
+                
             # Autoresolve AI-hallucinated time-series variables (e.g., volatility_10d, returns_5d)
             import re
             match = re.match(r'(volatility|returns|volume|close|open|high|low)_(\d+)[dDwWmMyY]', node.id)

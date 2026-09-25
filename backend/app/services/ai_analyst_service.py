@@ -563,7 +563,7 @@ Do NOT output any markdown around the JSON or additional commentary.
         # 1. Attemptcalling Gemini AI if API key is present
         if self.gemini_api_key and len(self.gemini_api_key) > 5:
             try:
-                failed_summary = json.dumps([{"name": h.get("name"), "expression": h.get("alpha_expression"), "failure": h.get("decommission_reason")} for h in failed_hypotheses], indent=2)
+                failed_summary = json.dumps([{"name": h.get("name"), "expression": h.get("alpha_expression"), "failure": h.get("decommission_reason")} for h in failed_hypotheses[-30:]], indent=2)
                 active_summary = json.dumps([{"name": h.get("name"), "expression": h.get("alpha_expression")} for h in active_hypotheses], indent=2)
                 prompt = f"""
 You are an autonomous institutional quantitative researcher designing multi-factor equity trading strategies for the Indian Stock Market (NSE).
