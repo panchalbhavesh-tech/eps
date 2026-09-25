@@ -31,7 +31,8 @@ class SafeASTEvaluator:
             'rolling_std': lambda x, w: x.groupby(level='Ticker').rolling(int(w)).std().reset_index(level=0, drop=True).sort_index(),
             'volatility': lambda x, w: x.groupby(level='Ticker').rolling(int(w)).std().reset_index(level=0, drop=True).sort_index(),
             'rank': lambda x: x.groupby(level='Date').rank(pct=True),
-            'delta': lambda x, w: x.groupby(level='Ticker').diff(int(w))
+            'delta': lambda x, w: x.groupby(level='Ticker').diff(int(w)),
+            'delay': lambda x, w: x.groupby(level='Ticker').shift(int(w))
         }
 
     def _eval(self, node):
