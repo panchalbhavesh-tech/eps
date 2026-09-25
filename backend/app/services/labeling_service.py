@@ -30,7 +30,7 @@ class TripleBarrierLabeler:
                 labels.loc[idx] = 0
                 continue
                 
-            entry_price = df['Open'].iloc[idx + 1]
+            entry_price = df['open'].iloc[idx + 1]
             if pd.isna(entry_price) or entry_price <= 0:
                 labels.loc[idx] = 0
                 continue
@@ -42,9 +42,9 @@ class TripleBarrierLabeler:
             label = 0 # Default timeout
             
             for i in range(len(window)):
-                high = window['High'].iloc[i]
-                low = window['Low'].iloc[i]
-                close = window['Close'].iloc[i]
+                high = window['high'].iloc[i]
+                low = window['low'].iloc[i]
+                close = window['close'].iloc[i]
                 
                 # Check Stop Loss (Lower Barrier)
                 if (low - entry_price) / entry_price <= self.sl_pct:
