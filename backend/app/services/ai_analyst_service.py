@@ -33,6 +33,63 @@ class AIAnalystService:
         self.gemini_api_key = settings.GEMINI_API_KEY
         self.model_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key={self.gemini_api_key}"
 
+    def _call_unified_api(self, prompt: str, provider: str, model_id: str, temperature: float = 0.4, max_tokens: int = None, is_json: bool = True) -> dict:
+        import os, json, requests
+        groq_api_key = os.environ.get("GROQ_API_KEY")
+        
+        if provider == "groq":
+            if not groq_api_key:
+                raise ValueError("GROQ_API_KEY environment variable is not set.")
+                
+            headers = {
+                "Authorization": f"Bearer {groq_api_key}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": model_id,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": temperature
+            }
+            if is_json:
+                payload["response_format"] = {"type": "json_object"}
+            
+            if "gpt-oss" in model_id:
+                payload["include_reasoning"] = True
+                payload["reasoning_format"] = "parsed"
+                payload["reasoning_effort"] = "high"
+                
+            response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=45)
+            response.raise_for_status()
+            text = response.json()['choices'][0]['message']['content']
+            if is_json:
+                return json.loads(text)
+            return text
+            
+        elif provider == "gemini":
+            if not self.gemini_api_key:
+                raise ValueError("GEMINI_API_KEY is not set.")
+                
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={self.gemini_api_key}"
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"temperature": temperature}
+            }
+            if is_json:
+                payload["generationConfig"]["responseMimeType"] = "application/json"
+            if max_tokens:
+                payload["generationConfig"]["maxOutputTokens"] = max_tokens
+                
+            response = requests.post(url, headers={"Content-Type": "application/json"}, json=payload, timeout=25)
+            response.raise_for_status()
+            
+            text = response.json()['candidates'][0]['content']['parts'][0]['text']
+            text = text.strip().replace("```json", "").replace("```", "")
+            if is_json:
+                return json.loads(text)
+            return text
+            
+        raise ValueError(f"Unknown provider: {provider}")
+
     def generate_analysis_report(self, ticker: str, quantitative_data: dict) -> dict:
         # 1. Attempt calling Gemini AI if API key is present
         if self.gemini_api_key and len(self.gemini_api_key) > 5:
@@ -394,19 +451,16 @@ Return ONE JSON object with EXACTLY two fields:
 - "summary": a crisp 1-sentence analytical summary of the catalyst impact.
 Do NOT output any markdown around the JSON or any other text.
 """
-                payload = {
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.1, "maxOutputTokens": 100}
-                }
-                headers = {"Content-Type": "application/json"}
-                response = requests.post(self.model_url, headers=headers, json=payload, timeout=10)
-                if response.status_code == 200:
-                    data = response.json()
-                    text = data['candidates'][0]['content']['parts'][0]['text'].strip().replace("```json", "").replace("```", "")
-                    res = json.loads(text)
+                try:
+                    res = self._call_unified_api(prompt, provider="groq", model_id="openai/gpt-oss-20b", temperature=0.1)
                     return {"score": float(res.get("catalyst_score", 50.0)), "summary": str(res.get("summary", "Neutral corporate catalyst"))}
-            except Exception as e:
-                print(f"Gemini Phase 4 sentiment call failed for {ticker}: {e}")
+                except Exception as e:
+                    print(f"Groq Phase 4 sentiment failed: {e}. Falling back to Gemini.")
+                    try:
+                        res = self._call_unified_api(prompt, provider="gemini", model_id="gemini-3.5-flash-lite", temperature=0.1, max_tokens=100)
+                        return {"score": float(res.get("catalyst_score", 50.0)), "summary": str(res.get("summary", "Neutral corporate catalyst"))}
+                    except Exception as e2:
+                        print(f"Gemini Phase 4 sentiment call failed for {ticker}: {e2}")
 
         # Deterministic analysis fallback for offline/development mode
         score = 65.0 if any(w in headline_context.lower() for w in ["profit", "surge", "growth", "dividend", "breakout"]) else 50.0
@@ -444,19 +498,16 @@ Return ONE valid JSON object with EXACTLY these fields:
 
 Do NOT output any markdown around the JSON or additional commentary.
 """
-                payload = {
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.2, "maxOutputTokens": 450}
-                }
-                headers = {"Content-Type": "application/json"}
-                response = requests.post(self.model_url, headers=headers, json=payload, timeout=12)
-                if response.status_code == 200:
-                    data = response.json()
-                    text = data['candidates'][0]['content']['parts'][0]['text'].strip().replace("```json", "").replace("```", "")
-                    res = json.loads(text)
+                try:
+                    res = self._call_unified_api(prompt, provider="groq", model_id="qwen/qwen3.8-27b", temperature=0.2)
                     return res
-            except Exception as e:
-                print(f"Live Gemini multi-source sentiment evaluation fallback for {clean_ticker}: {e}")
+                except Exception as e:
+                    print(f"Groq multi-source sentiment failed: {e}. Falling back to Gemini.")
+                    try:
+                        res = self._call_unified_api(prompt, provider="gemini", model_id="gemini-3.5-flash-lite", temperature=0.2, max_tokens=450)
+                        return res
+                    except Exception as e2:
+                        print(f"Live Gemini multi-source sentiment evaluation fallback for {clean_ticker}: {e2}")
 
         # High-Fidelity Deterministic Multi-Source Behavioral Synthesis Fallback
         # Custom tailored analytics based on sector & prominent Nifty / NSE characteristics
@@ -531,30 +582,29 @@ You MUST output strictly valid JSON with the following exact keys:
   "holding_horizon_days": 5
 }}
 """
-                payload = {
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.4, "responseMimeType": "application/json"}
-                }
-                headers = {"Content-Type": "application/json"}
                 import time
                 max_retries = 3
                 for attempt in range(max_retries):
-                    response = requests.post(self.model_url, headers=headers, json=payload, timeout=25)
-                    if response.status_code == 200:
-                        data = response.json()
-                        text_resp = data['candidates'][0]['content']['parts'][0]['text']
-                        text_resp = text_resp.strip().replace("```json", "").replace("```", "")
-                        parsed = json.loads(text_resp)
+                    try:
+                        parsed = self._call_unified_api(prompt, provider="groq", model_id="openai/gpt-oss-120b", temperature=0.4)
                         if parsed.get("name") and parsed.get("alpha_expression"):
                             return parsed
-                    elif response.status_code == 429 and attempt < max_retries - 1:
-                        print(f"Gemini API rate limit hit (429). Sleeping for 60 seconds before retry {attempt + 1}/{max_retries}...")
-                        time.sleep(60)
-                    else:
-                        print(f"Gemini API returned status {response.status_code}: {response.text}")
-                        break
-            except Exception as e:
-                print(f"Gemini autonomous research generation failed: {e} | Text: {text_resp if 'text_resp' in locals() else 'N/A'}")
+                    except Exception as e:
+                        if hasattr(e, 'response') and e.response is not None and e.response.status_code == 429 and attempt < max_retries - 1:
+                            print(f"Groq API rate limit hit (429). Sleeping for 60 seconds before retry {attempt + 1}/{max_retries}...")
+                            time.sleep(60)
+                            continue
+                        else:
+                            print(f"Groq hypothesis generation failed: {e}. Falling back to Gemini.")
+                            try:
+                                parsed = self._call_unified_api(prompt, provider="gemini", model_id="gemini-3.5-flash-lite", temperature=0.4)
+                                if parsed.get("name") and parsed.get("alpha_expression"):
+                                    return parsed
+                            except Exception as e2:
+                                print(f"Gemini hypothesis generation failed: {e2}")
+                            break
+            except Exception as outer_e:
+                print(f"Automated orthogonal hypothesis generation failed: {outer_e}")
 
         # 2. Deterministic Quant Alpha Repository Fallback (Guaranteed Continuity)
         candidates = [
