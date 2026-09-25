@@ -31,7 +31,7 @@ def format_lakh_cr(val):
 class AIAnalystService:
     def __init__(self):
         self.gemini_api_key = settings.GEMINI_API_KEY
-        self.model_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={self.gemini_api_key}"
+        self.model_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key={self.gemini_api_key}"
 
     def generate_analysis_report(self, ticker: str, quantitative_data: dict) -> dict:
         # 1. Attempt calling Gemini AI if API key is present
