@@ -55,7 +55,7 @@ def run_eod(days: int):
             
             # Update data health metadata in Postgres
             try:
-                from datetime import datetime
+                from datetime import datetime, timezone
                 from sqlalchemy import text
                 
                 # Fetch full data to get accurate history metrics
@@ -78,7 +78,7 @@ def run_eod(days: int):
                                     historical_years_available = :years
                                 WHERE ticker = :ticker
                             """),
-                            {"now": datetime.now(datetime.UTC), "earliest": earliest, "latest": latest, "total_bars": total_bars, "years": years_available, "ticker": ticker}
+                            {"now": datetime.now(timezone.utc), "earliest": earliest, "latest": latest, "total_bars": total_bars, "years": years_available, "ticker": ticker}
                         )
                         conn.commit()
             except Exception as e:
