@@ -477,6 +477,12 @@ class CatalystEvent(Base):
     reaction_3d = Column(Float, nullable=True)
     reaction_5d = Column(Float, nullable=True)
     pre_event_price = Column(Float, nullable=True)         # Close price strictly before publication
+    # Catalyst intelligence (classifier + measured evidence)
+    subtype = Column(String, nullable=True, index=True)
+    direction = Column(String, nullable=True)              # BULLISH / BEARISH / MIXED
+    alert_grade = Column(String, nullable=True)            # INSTANT / DIGEST / NONE
+    alerted_at = Column(DateTime, nullable=True)
+    details_json = Column(Text, nullable=True)
     market_cap_at_event = Column(Float, nullable=True)     # Company market cap at time of catalyst
     sector_at_event = Column(String, nullable=True)        # Sector at time of catalyst
     published_at = Column(DateTime, nullable=True)
@@ -487,6 +493,37 @@ class CatalystEvent(Base):
     
     company = relationship("Company")
     sources = relationship("CatalystSource", back_populates="event", cascade="all, delete-orphan")
+
+class CatalystEvidenceEvent(Base):
+    """Historical classified filing + measured price reaction; the evidence base for catalyst alert quality."""
+    __tablename__ = "catalyst_evidence_events"
+    from sqlalchemy import UniqueConstraint
+    __table_args__ = (UniqueConstraint('ticker', 'published_at', 'subtype', name='uq_catalyst_evidence'),)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=True, index=True)
+    ticker = Column(String, index=True, nullable=False)
+    published_at = Column(DateTime, nullable=False, index=True)
+    nse_category = Column(String, nullable=True)
+    subtype = Column(String, index=True, nullable=False)
+    hint = Column(String, nullable=True)
+    session = Column(String, nullable=True)
+    amount_cr = Column(Float, nullable=True)
+    size_rev_pct = Column(Float, nullable=True)
+    size_mcap_pct = Column(Float, nullable=True)
+    size_bucket = Column(String, nullable=True)
+    rating_action = Column(String, nullable=True)
+    pdf_parsed = Column(Boolean, default=False)
+    results_overlap = Column(Boolean, default=False)
+    turnover_cr = Column(Float, nullable=True)
+    mcap_cr = Column(Float, nullable=True)
+    gap_pct = Column(Float, nullable=True)
+    ar_1d = Column(Float, nullable=True)
+    ar_3d = Column(Float, nullable=True)
+    ar_5d = Column(Float, nullable=True)
+    runup_ar_5d = Column(Float, nullable=True)
+    text = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 
 class CatalystSource(Base):
     __tablename__ = "catalyst_sources"

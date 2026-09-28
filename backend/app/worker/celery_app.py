@@ -65,8 +65,8 @@ celery_app.conf.update(
         },
         'scan-nse-catalysts-live': {
             'task': 'app.worker.tasks.scan_nse_catalysts_live_task',
-            # P2.1 Session-Aware Scheduling: Mon-Fri, 3:00 AM - 11:59 AM UTC (8:30 AM - 5:29 PM IST)
-            'schedule': crontab(minute='*/15', hour='3-11', day_of_week='mon-fri'),
+            # Mon-Fri 07:30-23:29 IST: most filings land after the 15:30 close, so evening coverage gives an earlier heads-up
+            'schedule': crontab(minute='*/15', hour='2-17', day_of_week='mon-fri'),
         },
         'update-catalyst-outcomes-daily': {
             'task': 'app.worker.tasks.update_catalyst_outcomes_task',
@@ -82,6 +82,18 @@ celery_app.conf.update(
             'task': 'app.worker.tasks.scan_insider_trades_task',
             # P2.5 Insider Trading: Mon-Fri at 12:30 PM UTC (18:00 IST - post market)
             'schedule': crontab(minute=30, hour=12, day_of_week='mon-fri'),
+        },
+        'catalyst-digest-premarket': {
+            'task': 'app.worker.tasks.send_catalyst_digest_task',
+            'schedule': crontab(minute=15, hour=3, day_of_week='mon-fri'),  # 08:45 IST, before the 09:15 open
+        },
+        'catalyst-scorecard-weekly': {
+            'task': 'app.worker.tasks.send_catalyst_scorecard_task',
+            'schedule': crontab(minute=30, hour=4, day_of_week='sat'),  # Saturday 10:00 IST
+        },
+        'build-catalyst-evidence-weekly': {
+            'task': 'app.worker.tasks.build_catalyst_evidence_task',
+            'schedule': crontab(minute=0, hour=20, day_of_week='sat'),  # Sunday 01:30 IST
         },
         'pre-release-edge-daily': {
             'task': 'app.worker.tasks.run_pre_release_edge_pipeline_task',

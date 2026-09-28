@@ -705,6 +705,21 @@ class Query:
                 'category': 'CATALYST',
                 'description': 'Monitors the NSE for major promoter buying and insider transactions.'
             },
+            'catalyst-digest-premarket': {
+                'cron_title': 'CATALYST: Pre-Market Watchlist',
+                'category': 'CATALYST',
+                'description': 'Sends one Discord digest at 08:45 IST with every graded catalyst since the last digest.'
+            },
+            'catalyst-scorecard-weekly': {
+                'cron_title': 'CATALYST: Weekly Scorecard',
+                'category': 'CATALYST',
+                'description': 'Reports how last week\'s instant catalyst alerts actually moved.'
+            },
+            'build-catalyst-evidence-weekly': {
+                'cron_title': 'CATALYST: Build Evidence',
+                'category': 'CATALYST',
+                'description': 'Measures how each filing type moved prices historically; alerts only fire on proven types.'
+            },
             'pre-release-edge-daily': {
                 'cron_title': 'EVENT: Pre-Release Edge Forecasts',
                 'category': 'EVENT',

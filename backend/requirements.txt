@@ -30,4 +30,5 @@ pytz
 pyarrow
 fastparquet
 curl_cffi==0.16.3
+pypdf==5.1.0
 pandas_market_calendars

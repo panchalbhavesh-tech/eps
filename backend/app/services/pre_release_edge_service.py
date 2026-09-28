@@ -729,9 +729,10 @@ def live_price(db, ticker: str) -> Optional[float]:
     """Latest intraday quote from the harvester's live_quotes table, if it is from the last day."""
     from sqlalchemy import text
     try:
-        row = db.execute(text("SELECT price, timestamp FROM live_quotes WHERE ticker = :t"), {"t": ticker}).first()
+        # Own connection: a missing table or failed read must never roll back the caller's session.
+        with db.get_bind().connect() as conn:
+            row = conn.execute(text("SELECT price, timestamp FROM live_quotes WHERE ticker = :t"), {"t": ticker}).first()
     except Exception:
-        db.rollback()
         return None
     if not row or row[0] is None:
         return None

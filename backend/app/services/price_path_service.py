@@ -223,8 +223,9 @@ def plan_from_paths(paths: np.ndarray, horizon: int, levels: List[Dict[str, Any]
 
     stop = float(np.quantile(mins, STOP_TOUCH_PROB))
     stop_basis = f"only {int(STOP_TOUCH_PROB * 100)}% of simulated paths dip this low before the exit"
-    # Snap just below a nearby support: a close below support is a real signal, a dip above it is noise.
-    supports = [lv for lv in levels if lv.get("kind") == "support" and stop < lv["price"] < price and lv["price"] - stop <= 0.75 * atr]
+    # If a support level sits just below the statistical stop, move the stop under it: a close below support is a
+    # real signal. Never *tighten* the stop above the statistical level - that would get stopped out by normal noise.
+    supports = [lv for lv in levels if lv.get("kind") == "support" and lv["price"] <= stop and stop - lv["price"] <= 0.75 * atr]
     if supports:
         sup = max(supports, key=lambda lv: lv["price"])
         stop = sup["price"] - 0.25 * atr

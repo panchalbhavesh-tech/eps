@@ -67,7 +67,10 @@ const PAGE_WORKER_MAPPING: Record<string, string[]> = {
     'app.worker.tasks.scan_nse_catalysts_live_task',
     'app.worker.tasks.update_catalyst_outcomes_task',
     'app.worker.tasks.scan_pre_catalyst_anomalies_task',
-    'app.worker.tasks.scan_insider_trades_task'
+    'app.worker.tasks.scan_insider_trades_task',
+    'app.worker.tasks.send_catalyst_digest_task',
+    'app.worker.tasks.send_catalyst_scorecard_task',
+    'app.worker.tasks.build_catalyst_evidence_task'
   ]
 };
 

@@ -114,6 +114,11 @@ def upgrade_db():
         ("event_studies", "runup_ar_10d", "FLOAT"),
         ("event_studies", "pre_volume_ratio", "FLOAT"),
         ("event_studies", "features_json", "TEXT"),
+        ("catalyst_events", "subtype", "VARCHAR"),
+        ("catalyst_events", "direction", "VARCHAR"),
+        ("catalyst_events", "alert_grade", "VARCHAR"),
+        ("catalyst_events", "alerted_at", "TIMESTAMP"),
+        ("catalyst_events", "details_json", "TEXT"),
     ]
 
     for table, column, datatype in columns_to_add:

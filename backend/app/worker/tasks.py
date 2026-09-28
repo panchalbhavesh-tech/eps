@@ -1164,3 +1164,94 @@ def run_pre_release_edge_pipeline_task(self):
         return f"Pre-release edge pipeline: history={counts} training={training and training.get('status')} predictions={predictions} grading={graded}"
     finally:
         db.close()
+
+
+# ─── Catalyst Radar evidence ───────────────────────────────────────────────────
+
+@shared_task(bind=True, name="app.worker.tasks.build_catalyst_evidence_task", time_limit=8 * 3600)
+def build_catalyst_evidence_task(self, years: int = 2, limit: int = None):
+    """Builds/refreshes the historical filing -> price-reaction evidence base used to grade live catalyst alerts."""
+    from app.services.catalyst_evidence_service import CatalystEvidenceService
+    obs = TaskObserver(self.request.id if self.request and self.request.id else "catalyst_evidence_local")
+    db = SessionLocal()
+    try:
+        companies = [c for c in db.query(Company).all() if not (c.ticker.endswith((".BO", ".NS")) or c.ticker.isdigit())]
+        companies.sort(key=lambda c: -(c.market_cap or 0))
+        if limit:
+            companies = companies[:limit]
+        svc = CatalystEvidenceService(db)
+        total, saved, failed = len(companies), 0, 0
+        obs.update(log_msg=f"Building catalyst evidence for {total} companies ({years}y of filings).",
+                   progress={"total": total, "processed": 0, "saved": 0, "failed": 0, "percentage": 0, "current_step": "Filings"}, force=True)
+        for i, c in enumerate(companies, start=1):
+            try:
+                res = svc.build_company(c, years=years)
+                saved += res.get("saved", 0)
+            except Exception as e:
+                db.rollback()
+                failed += 1
+                obs.update(log_msg=f"{c.ticker}: {e}", log_level="WARNING")
+            if i % 10 == 0 or i == total:
+                obs.update(progress={"total": total, "processed": i, "saved": saved, "failed": failed,
+                                     "percentage": round(100.0 * i / max(total, 1), 1), "current_step": f"Filings {c.ticker}"})
+        return f"Catalyst evidence: {total} companies, {saved} events saved, {failed} failed, PDFs {svc.pdf_used}"
+    finally:
+        db.close()
+
+
+@shared_task(name="app.worker.tasks.send_catalyst_digest_task")
+def send_catalyst_digest_task():
+    """Pre-market watchlist (08:45 IST): every graded catalyst since the last digest, strongest first."""
+    import json
+    from datetime import timedelta
+    from app.infrastructure.models import CatalystEvent
+    from app.services.catalyst_intel_service import digest_line
+    from app.services.notifier import DiscordNotifier
+    db = SessionLocal()
+    try:
+        since = datetime.utcnow() - timedelta(hours=24)
+        rows = db.query(CatalystEvent).filter(CatalystEvent.created_at >= since,
+                                              CatalystEvent.alert_grade.in_(["INSTANT", "DIGEST"])).all()
+        if not rows:
+            return "No graded catalysts in the last 24h; digest skipped."
+        rows.sort(key=lambda r: (r.alert_grade != "INSTANT", -(r.impact_score or 0)))
+        bull = [r for r in rows if r.direction == "BULLISH"]
+        bear = [r for r in rows if r.direction == "BEARISH"]
+        other = [r for r in rows if r.direction not in ("BULLISH", "BEARISH")]
+        parts = []
+        for title, group in (("Bullish", bull), ("Bearish", bear), ("Other", other)):
+            if group:
+                parts.append(f"**{title}**\n" + "\n".join(("• " if r.alert_grade == "DIGEST" else "• [alerted] ") + digest_line(r) for r in group[:15]))
+        embed = {"title": f"Catalyst watchlist · {len(rows)} events before the open",
+                 "description": "\n\n".join(parts)[:4000], "color": 0x3B82F6,
+                 "footer": {"text": "hist = average move vs Nifty in 3 days after similar past filings"}}
+        DiscordNotifier().send_embed(embed)
+        return f"Digest sent: {len(rows)} events ({len(bull)} bullish, {len(bear)} bearish)."
+    finally:
+        db.close()
+
+
+@shared_task(name="app.worker.tasks.send_catalyst_scorecard_task")
+def send_catalyst_scorecard_task():
+    """Weekly honesty check: how last week's instant alerts actually played out."""
+    from datetime import timedelta
+    from app.infrastructure.models import CatalystEvent
+    from app.services.notifier import DiscordNotifier
+    db = SessionLocal()
+    try:
+        since = datetime.utcnow() - timedelta(days=8)
+        rows = db.query(CatalystEvent).filter(CatalystEvent.alerted_at >= since, CatalystEvent.alert_grade == "INSTANT").all()
+        scored = [r for r in rows if r.reaction_3d is not None and r.direction in ("BULLISH", "BEARISH")]
+        if not rows:
+            return "No instant alerts last week."
+        right = [r for r in scored if (r.reaction_3d > 0) == (r.direction == "BULLISH")]
+        signed = [r.reaction_3d if r.direction == "BULLISH" else -r.reaction_3d for r in scored]
+        avg = sum(signed) / len(signed) if signed else 0.0
+        lines = [f"Alerts: {len(rows)} · scored so far: {len(scored)} · right direction: **{len(right)}/{len(scored) or 0}** · "
+                 f"avg move in the alert's direction: **{avg:+.1f}%** (3 days)"]
+        for r in sorted(scored, key=lambda r: -(r.reaction_3d if r.direction == 'BULLISH' else -r.reaction_3d))[:10]:
+            lines.append(f"{'✓' if r in right else '✕'} {r.ticker} · {r.direction.title()} {r.subtype or r.category} · {r.reaction_3d:+.1f}%")
+        DiscordNotifier().send_embed({"title": "Catalyst Radar · last week's scorecard", "description": "\n".join(lines)[:4000], "color": 0x8B949E})
+        return lines[0]
+    finally:
+        db.close()

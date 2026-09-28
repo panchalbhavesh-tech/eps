@@ -16,6 +16,9 @@ TASK_MAP = {
     "app.worker.tasks.run_pre_release_edge_pipeline_task": {"event_name": "Pre-Release Edge Forecasts", "event_type": "ML"},
     "app.worker.tasks.backfill_earnings_history_task": {"event_name": "Backfill Results History", "event_type": "DATA_SYNC"},
     "app.worker.tasks.retrain_pre_release_model_task": {"event_name": "Retrain Pre-Release Model", "event_type": "ML"},
+    "app.worker.tasks.build_catalyst_evidence_task": {"event_name": "Build Catalyst Evidence", "event_type": "DATA_SYNC"},
+    "app.worker.tasks.send_catalyst_digest_task": {"event_name": "Catalyst Pre-Market Digest", "event_type": "CATALYST"},
+    "app.worker.tasks.send_catalyst_scorecard_task": {"event_name": "Catalyst Weekly Scorecard", "event_type": "CATALYST"},
 }
 
 def get_task_metadata(task_name: str) -> dict:
