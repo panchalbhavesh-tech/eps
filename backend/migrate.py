@@ -100,6 +100,20 @@ def upgrade_db():
         ("companies", "system_added_date", "TIMESTAMP"),
         ("companies", "last_harvested_at", "TIMESTAMP"),
         ("companies", "last_error_log", "VARCHAR"),
+        ("companies", "industry", "VARCHAR"),
+        ("earnings_reports", "announced_at", "TIMESTAMP"),
+        ("earnings_reports", "announcement_session", "VARCHAR"),
+        ("earnings_reports", "date_source", "VARCHAR"),
+        ("event_studies", "announcement_session", "VARCHAR"),
+        ("event_studies", "baseline_date", "TIMESTAMP"),
+        ("event_studies", "beta", "FLOAT"),
+        ("event_studies", "ar_3d", "FLOAT"),
+        ("event_studies", "runup_ar_3d", "FLOAT"),
+        ("event_studies", "runup_ar_5d", "FLOAT"),
+        ("event_studies", "runup_ar_7d", "FLOAT"),
+        ("event_studies", "runup_ar_10d", "FLOAT"),
+        ("event_studies", "pre_volume_ratio", "FLOAT"),
+        ("event_studies", "features_json", "TEXT"),
     ]
 
     for table, column, datatype in columns_to_add:

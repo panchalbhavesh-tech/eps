@@ -22,6 +22,7 @@ class Company(Base):
     isin = Column(String, index=True, nullable=True)
     name = Column(String, nullable=False)
     sector = Column(String)
+    industry = Column(String, nullable=True, index=True)
     purpose = Column(String, nullable=True)
     upcoming_date = Column(String, nullable=True)
     
@@ -118,6 +119,10 @@ class EarningsReport(Base):
     overall_rating = Column(String, nullable=True)
     known_at = Column(DateTime, default=datetime.utcnow, nullable=True)
     period_end = Column(DateTime, nullable=True)
+    # Exact exchange broadcast time (IST, naive) and trading session it fell in: PRE / MARKET / POST / UNKNOWN
+    announced_at = Column(DateTime, nullable=True)
+    announcement_session = Column(String, nullable=True)
+    date_source = Column(String, nullable=True)
 
     company = relationship("Company", back_populates="earnings_reports")
 
@@ -163,6 +168,17 @@ class EventStudyResult(Base):
     car_pvalue = Column(Float, nullable=True)
     max_gain = Column(Float, nullable=True)
     max_drawdown = Column(Float, nullable=True)
+    # Pre-release edge fields: baseline = last close before the information reached the market
+    announcement_session = Column(String, nullable=True)
+    baseline_date = Column(DateTime, nullable=True)
+    beta = Column(Float, nullable=True)
+    ar_3d = Column(Float, nullable=True)
+    runup_ar_3d = Column(Float, nullable=True)
+    runup_ar_5d = Column(Float, nullable=True)
+    runup_ar_7d = Column(Float, nullable=True)
+    runup_ar_10d = Column(Float, nullable=True)
+    pre_volume_ratio = Column(Float, nullable=True)
+    features_json = Column(Text, nullable=True)
     company = relationship("Company", back_populates="event_studies")
 
 class StrategyBacktest(Base):
@@ -504,3 +520,59 @@ class CatalystPipelineRun(Base):
     saved = Column(Integer, default=0)
     execution_time_ms = Column(Integer, nullable=True)
     error_message = Column(Text, nullable=True)
+
+
+class PreReleasePrediction(Base):
+    """One pre-release edge forecast per company per upcoming results event, refreshed daily until the event and graded afterwards."""
+    __tablename__ = "pre_release_predictions"
+    from sqlalchemy import UniqueConstraint
+    __table_args__ = (UniqueConstraint('company_id', 'event_date', name='uq_pre_release_company_event'),)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    ticker = Column(String, index=True, nullable=False)
+    event_date = Column(DateTime, nullable=False, index=True)
+    event_session = Column(String, nullable=True)
+    as_of_date = Column(DateTime, nullable=True)
+    first_predicted_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    engine = Column(String, nullable=True)            # ML or SCORECARD
+    model_version = Column(String, nullable=True)
+    n_prior_events = Column(Integer, nullable=True)
+
+    p_runup = Column(Float, nullable=True)
+    runup_p10 = Column(Float, nullable=True)
+    runup_p50 = Column(Float, nullable=True)
+    runup_p90 = Column(Float, nullable=True)
+    p_reaction = Column(Float, nullable=True)
+    reaction_p10 = Column(Float, nullable=True)
+    reaction_p50 = Column(Float, nullable=True)
+    reaction_p90 = Column(Float, nullable=True)
+
+    verdict = Column(String, nullable=True)           # RUN-UP PLAY / HOLD-THROUGH PLAY / AVOID / NO EDGE
+    strategy = Column(String, nullable=True)          # RUNUP / HOLD / NONE
+    confidence = Column(String, nullable=True)        # HIGH / MEDIUM / LOW
+    conviction_score = Column(Float, nullable=True)
+
+    entry_date = Column(DateTime, nullable=True)
+    exit_date = Column(DateTime, nullable=True)
+    entry_price_ref = Column(Float, nullable=True)
+    stop_price = Column(Float, nullable=True)
+    target_price = Column(Float, nullable=True)
+    stretch_target = Column(Float, nullable=True)
+    position_size_pct = Column(Float, nullable=True)
+
+    implied_move_pct = Column(Float, nullable=True)
+    hist_avg_move_pct = Column(Float, nullable=True)
+    put_call_ratio = Column(Float, nullable=True)
+
+    drivers_json = Column(Text, nullable=True)
+    details_json = Column(Text, nullable=True)
+    history_json = Column(Text, nullable=True)
+
+    graded = Column(Boolean, default=False, index=True)
+    graded_at = Column(DateTime, nullable=True)
+    realized_runup = Column(Float, nullable=True)
+    realized_reaction_3d = Column(Float, nullable=True)
+    realized_reaction_5d = Column(Float, nullable=True)
+    realized_trade_return = Column(Float, nullable=True)
+    hit = Column(Boolean, nullable=True)

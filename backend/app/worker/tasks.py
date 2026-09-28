@@ -1083,3 +1083,84 @@ def enrich_external_market_cap_task(tickers: list):
         except Exception as e:
             logger.error(f"[MARKET_CAP] External lookup exception for {ticker}: {e}")
 
+
+
+# ─── Pre-Release Edge ──────────────────────────────────────────────────────────
+
+def _refresh_earnings_history(db, mode: str, obs: TaskObserver, limit: int = None) -> dict:
+    from app.services.earnings_events_service import EarningsEventsService, select_companies_for_refresh, mark_refreshed
+    from app.worker.observability import get_redis_client
+    redis_client = get_redis_client()
+    companies = select_companies_for_refresh(db, mode, redis_client)
+    if limit:
+        companies = companies[:limit]
+    svc = EarningsEventsService(db)
+    total = len(companies)
+    counts = {"OK": 0, "NO_EVENTS": 0, "NO_PRICES": 0, "FAILED": 0}
+    obs.update(log_msg=f"Refreshing results history for {total} companies (mode={mode}).",
+               progress={"total": total, "processed": 0, "saved": 0, "failed": 0, "percentage": 0,
+                         "current_step": "Backfilling results events"}, force=True)
+    for i, company in enumerate(companies, start=1):
+        try:
+            res = svc.backfill_company(company)
+            counts[res["status"]] = counts.get(res["status"], 0) + 1
+            mark_refreshed(redis_client, company.ticker)
+        except Exception as e:
+            db.rollback()
+            counts["FAILED"] += 1
+            obs.update(log_msg=f"{company.ticker}: {e}", log_level="WARNING")
+        if i % 10 == 0 or i == total:
+            obs.update(progress={"total": total, "processed": i, "saved": counts["OK"], "failed": counts["FAILED"],
+                                 "percentage": round(100.0 * i / max(total, 1), 1), "current_step": f"Backfilling {company.ticker}"})
+    return counts
+
+
+@shared_task(bind=True, name="app.worker.tasks.backfill_earnings_history_task", time_limit=6 * 3600)
+def backfill_earnings_history_task(self, mode: str = "full", limit: int = None):
+    """Builds/refreshes the historical results-event panel (dates, broadcast times, event studies)."""
+    obs = TaskObserver(self.request.id if self.request and self.request.id else "backfill_earnings_local")
+    db = SessionLocal()
+    try:
+        counts = _refresh_earnings_history(db, mode, obs, limit)
+        return f"Results history refresh ({mode}) complete: {counts}"
+    finally:
+        db.close()
+
+
+@shared_task(bind=True, name="app.worker.tasks.retrain_pre_release_model_task", time_limit=3600)
+def retrain_pre_release_model_task(self):
+    from app.services.pre_release_edge_service import train_models
+    obs = TaskObserver(self.request.id if self.request and self.request.id else "retrain_pre_release_local")
+    db = SessionLocal()
+    try:
+        obs.update(log_msg="Training pre-release edge models (walk-forward validated)...")
+        result = train_models(db)
+        obs.update(log_msg=f"Training result: {result}")
+        return f"Pre-release model training: {result}"
+    finally:
+        db.close()
+
+
+@shared_task(bind=True, name="app.worker.tasks.run_pre_release_edge_pipeline_task", time_limit=3 * 3600)
+def run_pre_release_edge_pipeline_task(self):
+    """Daily: refresh recent/upcoming results history -> (re)train if stale -> predict upcoming -> grade past calls."""
+    import os
+    from app.services.pre_release_edge_service import PreReleaseEdgeService, train_models, MODEL_PATH
+    obs = TaskObserver(self.request.id if self.request and self.request.id else "pre_release_pipeline_local")
+    db = SessionLocal()
+    try:
+        counts = _refresh_earnings_history(db, "recent", obs)
+        model_age_days = (time.time() - os.path.getmtime(MODEL_PATH)) / 86400 if os.path.exists(MODEL_PATH) else None
+        training = None
+        if model_age_days is None or model_age_days > 7:
+            obs.update(log_msg="Model missing or older than 7 days - retraining.")
+            training = train_models(db)
+            obs.update(log_msg=f"Training result: {training.get('status')}")
+        svc = PreReleaseEdgeService(db)
+        obs.update(log_msg="Generating pre-release forecasts for upcoming results...", progress={"current_step": "Predicting", "percentage": 80})
+        predictions = svc.predict_all()
+        graded = svc.grade()
+        obs.update(log_msg=f"Predictions: {predictions} | Grading: {graded}", progress={"current_step": "Done", "percentage": 100})
+        return f"Pre-release edge pipeline: history={counts} training={training and training.get('status')} predictions={predictions} grading={graded}"
+    finally:
+        db.close()

@@ -83,6 +83,20 @@ celery_app.conf.update(
             # P2.5 Insider Trading: Mon-Fri at 12:30 PM UTC (18:00 IST - post market)
             'schedule': crontab(minute=30, hour=12, day_of_week='mon-fri'),
         },
+        'pre-release-edge-daily': {
+            'task': 'app.worker.tasks.run_pre_release_edge_pipeline_task',
+            # After calendar (13:00) and OHLCV (14:00) syncs: 15:15 UTC / 20:45 IST
+            'schedule': crontab(minute=15, hour=15, day_of_week='mon-fri'),
+        },
+        'backfill-earnings-history-weekly': {
+            'task': 'app.worker.tasks.backfill_earnings_history_task',
+            # Sundays 02:00 UTC: refreshes any company whose results history is older than 20 days
+            'schedule': crontab(minute=0, hour=2, day_of_week='sun'),
+        },
+        'retrain-pre-release-model-weekly': {
+            'task': 'app.worker.tasks.retrain_pre_release_model_task',
+            'schedule': crontab(minute=0, hour=16, day_of_week='sat'), # 16:00 UTC Saturdays
+        },
     }
 )
 

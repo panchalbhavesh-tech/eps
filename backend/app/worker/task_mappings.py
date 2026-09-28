@@ -13,6 +13,9 @@ TASK_MAP = {
     "app.worker.tasks.audit_shadow_model_performance_task": {"event_name": "Audit Shadow Model Performance", "event_type": "ML"},
     "app.worker.tasks.sync_ohlcv_cache_task": {"event_name": "Sync OHLCV Cache", "event_type": "DATABASE"},
     "app.worker.tasks.cleanup_old_activity_logs_task": {"event_name": "Cleanup Old Admin Logs", "event_type": "SYSTEM"},
+    "app.worker.tasks.run_pre_release_edge_pipeline_task": {"event_name": "Pre-Release Edge Forecasts", "event_type": "ML"},
+    "app.worker.tasks.backfill_earnings_history_task": {"event_name": "Backfill Results History", "event_type": "DATA_SYNC"},
+    "app.worker.tasks.retrain_pre_release_model_task": {"event_name": "Retrain Pre-Release Model", "event_type": "ML"},
 }
 
 def get_task_metadata(task_name: str) -> dict:

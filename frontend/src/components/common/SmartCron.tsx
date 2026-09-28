@@ -49,7 +49,10 @@ const PAGE_WORKER_MAPPING: Record<string, string[]> = {
   events: [
     'app.worker.tasks.sync_nse_calendar_task',
     'app.worker.tasks.sync_nse_universe_task',
-    'app.worker.tasks.calculate_universe_health_task'
+    'app.worker.tasks.calculate_universe_health_task',
+    'app.worker.tasks.run_pre_release_edge_pipeline_task',
+    'app.worker.tasks.backfill_earnings_history_task',
+    'app.worker.tasks.retrain_pre_release_model_task'
   ],
   momentum: [
     'app.worker.tasks.run_nse_momentum_scan_task',

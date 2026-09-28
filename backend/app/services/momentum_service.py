@@ -452,17 +452,9 @@ class MomentumService:
                 self.db.add(sig_record)
                 
                 comp.current_price = cur_price
-                try:
-                    q_dates = [getattr(comp, 'q1_date', None), getattr(comp, 'q2_date', None), getattr(comp, 'q3_date', None), getattr(comp, 'q4_date', None)]
-                    prob_val, avg_val = self.quant.calculate_post_earnings_momentum_stats(comp.ticker, q_dates, df)
-                    if prob_val is not None and avg_val is not None:
-                        comp.momentum_probability = prob_val
-                        comp.avg_post_earnings_momentum = avg_val
-                    pr_ret = self.quant.calculate_latest_post_release_return(comp.ticker, getattr(comp, 'upcoming_date', None), df)
-                    if pr_ret is not None:
-                        comp.post_release_return = pr_ret
-                except Exception as ex:
-                    print(f"Post-earnings momentum calc failed for {comp.ticker}: {ex}")
+                # Results-reaction stats (momentum_probability / avg_post_earnings_momentum / post_release_return)
+                # are owned by the results event-study pipeline (earnings_events_service), keyed on true
+                # announcement dates, so they are intentionally not recomputed here.
                 
                 processed_count += 1
             except Exception as e:

@@ -120,3 +120,6 @@ data_harvester/data_lake/
 backend/data_lake/
 *.parquet
 *.dump
+
+# Pre-release edge model is trained per environment by the daily pipeline
+backend/models/pre_release_edge.joblib
