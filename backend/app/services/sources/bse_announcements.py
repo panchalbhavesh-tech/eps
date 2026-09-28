@@ -22,76 +22,51 @@ class BseAnnouncementsService:
             "Referer": "https://www.bseindia.com/",
         }
 
-    def fetch_latest_announcements(self, pages_to_fetch: int = 1) -> Dict[str, Any]:
+    def fetch_latest_announcements(self, pages_to_fetch: int = 3) -> Dict[str, Any]:
         """
-        Fetches corporate announcements from BSE.
-        Since BSE data often serves dual-listed NSE companies, this is a highly reliable fallback.
+        Latest BSE corporate announcements (today and yesterday).
+        BSE blocks plain HTTP clients (403), so a browser-impersonating session with a homepage warm-up is used.
+        Keeps BSE's own category/sub-category and the PDF link so filings can be classified properly.
         """
+        from datetime import datetime, timedelta
+        from curl_cffi import requests as curl_requests
         all_announcements = []
-        
         try:
-            for page in range(1, pages_to_fetch + 1):
-                # BSE requires specific URL parameters.
-                # strCat=-1 (All Categories)
-                # strType=C (Corporate)
-                url = f"{self.BASE_URL}?pageno={page}&strCat=-1&strPrevDate=&strScrip=&strSearch=P&strToDate=&strType=C"
-                
-                logger.info(f"Fetching BSE announcements page {page} via {url}")
-                
-                response = requests.get(
-                    url, 
-                    headers=self.headers, 
-                    timeout=15
-                )
-                
-                if response.status_code != 200:
-                    logger.error(f"BSE API returned status {response.status_code}. Response: {response.text[:200]}")
-                    return {
-                        "status": "source_error",
-                        "source": "BSE",
-                        "status_code": response.status_code,
-                        "data": [],
-                        "error": f"HTTP {response.status_code}"
-                    }
-                
-                data = response.json()
-                
-                if "Table" in data and isinstance(data["Table"], list):
-                    all_announcements.extend(data["Table"])
-                else:
-                    logger.warning(f"Unexpected JSON structure from BSE: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
-                
-                time.sleep(1) # Be polite
-                
-            logger.info(f"Successfully fetched {len(all_announcements)} announcements from BSE")
-            
-            # Normalize to match NSE structure as much as possible
-            normalized_announcements = []
+            session = curl_requests.Session(impersonate="chrome110")
+            session.get("https://www.bseindia.com/", timeout=20)
+            ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
+            # BSE only accepts single-day ranges: query today, then yesterday (covers overnight filings).
+            for day in (ist, ist - timedelta(days=1)):
+                d = day.strftime("%Y%m%d")
+                for page in range(1, pages_to_fetch + 1):
+                    url = (f"{self.BASE_URL}?pageno={page}&strCat=-1&strPrevDate={d}&strScrip=&strSearch=P"
+                           f"&strToDate={d}&strType=C&subcategory=-1")
+                    response = session.get(url, headers={k: v for k, v in self.headers.items() if k != "User-Agent"}, timeout=20)
+                    if response.status_code != 200:
+                        logger.error(f"BSE API returned status {response.status_code}")
+                        break
+                    rows = (response.json() or {}).get("Table") or []
+                    all_announcements.extend(rows)
+                    if len(rows) < 50:
+                        break
+                    time.sleep(1)
+            if not all_announcements:
+                return {"status": "source_error", "source": "BSE", "status_code": 0, "data": [], "error": "no rows"}
+
+            normalized = []
             for ann in all_announcements:
-                normalized = {
-                    "symbol": str(ann.get("SCRIP_CD", "")), # BSE uses Scrip Code as the primary identifier in this feed
+                attachment = ann.get("ATTACHMENTNAME") or ""
+                normalized.append({
+                    "symbol": str(ann.get("SCRIP_CD", "")),
                     "companyName": ann.get("SLONGNAME", ""),
+                    "desc": ann.get("SUBCATNAME") or ann.get("CATEGORYNAME") or "",
                     "subject": ann.get("NEWSSUB", ""),
-                    "details": ann.get("HEADLINE", ""),
-                    "anndate": ann.get("NEWS_DT", ""),
-                    "attchmntText": ann.get("ATTACHMENTNAME", ""),
-                    "source": "BSE"
-                }
-                normalized_announcements.append(normalized)
-                
-            return {
-                "status": "success",
-                "source": "BSE",
-                "status_code": 200,
-                "data": normalized_announcements
-            }
-                
+                    "attchmntText": f"{ann.get('NEWSSUB', '')} {ann.get('HEADLINE', '')}".strip(),
+                    "an_dt": ann.get("NEWS_DT", ""),
+                    "attchmntFile": f"https://www.bseindia.com/xml-data/corpfiling/AttachLive/{attachment}" if attachment else "",
+                    "source": "BSE",
+                })
+            return {"status": "success", "source": "BSE", "status_code": 200, "data": normalized}
         except Exception as e:
             logger.error(f"Exception fetching from BSE: {e}", exc_info=True)
-            return {
-                "status": "source_error",
-                "source": "BSE",
-                "status_code": 0,
-                "data": [],
-                "error": str(e)
-            }
+            return {"status": "source_error", "source": "BSE", "status_code": 0, "data": [], "error": str(e)}

@@ -49,11 +49,16 @@ const PAGE_WORKER_MAPPING: Record<string, string[]> = {
   events: [
     'app.worker.tasks.sync_nse_calendar_task',
     'app.worker.tasks.sync_nse_universe_task',
-    'app.worker.tasks.calculate_universe_health_task'
+    'app.worker.tasks.calculate_universe_health_task',
+    'app.worker.tasks.run_pre_release_edge_pipeline_task',
+    'app.worker.tasks.backfill_earnings_history_task',
+    'app.worker.tasks.retrain_pre_release_model_task'
   ],
   momentum: [
     'app.worker.tasks.run_nse_momentum_scan_task',
-    'app.worker.tasks.resolve_realized_forward_returns_task'
+    'app.worker.tasks.resolve_realized_forward_returns_task',
+    'app.worker.tasks.monitor_momentum_trades_task',
+    'app.worker.tasks.send_momentum_scorecard_task'
   ],
   hypothesis: [
     'app.worker.tasks.run_automated_hypothesis_research_task',
@@ -64,7 +69,10 @@ const PAGE_WORKER_MAPPING: Record<string, string[]> = {
     'app.worker.tasks.scan_nse_catalysts_live_task',
     'app.worker.tasks.update_catalyst_outcomes_task',
     'app.worker.tasks.scan_pre_catalyst_anomalies_task',
-    'app.worker.tasks.scan_insider_trades_task'
+    'app.worker.tasks.scan_insider_trades_task',
+    'app.worker.tasks.send_catalyst_digest_task',
+    'app.worker.tasks.send_catalyst_scorecard_task',
+    'app.worker.tasks.build_catalyst_evidence_task'
   ]
 };
 

@@ -22,6 +22,7 @@ class Company(Base):
     isin = Column(String, index=True, nullable=True)
     name = Column(String, nullable=False)
     sector = Column(String)
+    industry = Column(String, nullable=True, index=True)
     purpose = Column(String, nullable=True)
     upcoming_date = Column(String, nullable=True)
     
@@ -118,6 +119,10 @@ class EarningsReport(Base):
     overall_rating = Column(String, nullable=True)
     known_at = Column(DateTime, default=datetime.utcnow, nullable=True)
     period_end = Column(DateTime, nullable=True)
+    # Exact exchange broadcast time (IST, naive) and trading session it fell in: PRE / MARKET / POST / UNKNOWN
+    announced_at = Column(DateTime, nullable=True)
+    announcement_session = Column(String, nullable=True)
+    date_source = Column(String, nullable=True)
 
     company = relationship("Company", back_populates="earnings_reports")
 
@@ -163,6 +168,17 @@ class EventStudyResult(Base):
     car_pvalue = Column(Float, nullable=True)
     max_gain = Column(Float, nullable=True)
     max_drawdown = Column(Float, nullable=True)
+    # Pre-release edge fields: baseline = last close before the information reached the market
+    announcement_session = Column(String, nullable=True)
+    baseline_date = Column(DateTime, nullable=True)
+    beta = Column(Float, nullable=True)
+    ar_3d = Column(Float, nullable=True)
+    runup_ar_3d = Column(Float, nullable=True)
+    runup_ar_5d = Column(Float, nullable=True)
+    runup_ar_7d = Column(Float, nullable=True)
+    runup_ar_10d = Column(Float, nullable=True)
+    pre_volume_ratio = Column(Float, nullable=True)
+    features_json = Column(Text, nullable=True)
     company = relationship("Company", back_populates="event_studies")
 
 class StrategyBacktest(Base):
@@ -461,6 +477,12 @@ class CatalystEvent(Base):
     reaction_3d = Column(Float, nullable=True)
     reaction_5d = Column(Float, nullable=True)
     pre_event_price = Column(Float, nullable=True)         # Close price strictly before publication
+    # Catalyst intelligence (classifier + measured evidence)
+    subtype = Column(String, nullable=True, index=True)
+    direction = Column(String, nullable=True)              # BULLISH / BEARISH / MIXED
+    alert_grade = Column(String, nullable=True)            # INSTANT / DIGEST / NONE
+    alerted_at = Column(DateTime, nullable=True)
+    details_json = Column(Text, nullable=True)
     market_cap_at_event = Column(Float, nullable=True)     # Company market cap at time of catalyst
     sector_at_event = Column(String, nullable=True)        # Sector at time of catalyst
     published_at = Column(DateTime, nullable=True)
@@ -471,6 +493,37 @@ class CatalystEvent(Base):
     
     company = relationship("Company")
     sources = relationship("CatalystSource", back_populates="event", cascade="all, delete-orphan")
+
+class CatalystEvidenceEvent(Base):
+    """Historical classified filing + measured price reaction; the evidence base for catalyst alert quality."""
+    __tablename__ = "catalyst_evidence_events"
+    from sqlalchemy import UniqueConstraint
+    __table_args__ = (UniqueConstraint('ticker', 'published_at', 'subtype', name='uq_catalyst_evidence'),)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=True, index=True)
+    ticker = Column(String, index=True, nullable=False)
+    published_at = Column(DateTime, nullable=False, index=True)
+    nse_category = Column(String, nullable=True)
+    subtype = Column(String, index=True, nullable=False)
+    hint = Column(String, nullable=True)
+    session = Column(String, nullable=True)
+    amount_cr = Column(Float, nullable=True)
+    size_rev_pct = Column(Float, nullable=True)
+    size_mcap_pct = Column(Float, nullable=True)
+    size_bucket = Column(String, nullable=True)
+    rating_action = Column(String, nullable=True)
+    pdf_parsed = Column(Boolean, default=False)
+    results_overlap = Column(Boolean, default=False)
+    turnover_cr = Column(Float, nullable=True)
+    mcap_cr = Column(Float, nullable=True)
+    gap_pct = Column(Float, nullable=True)
+    ar_1d = Column(Float, nullable=True)
+    ar_3d = Column(Float, nullable=True)
+    ar_5d = Column(Float, nullable=True)
+    runup_ar_5d = Column(Float, nullable=True)
+    text = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 
 class CatalystSource(Base):
     __tablename__ = "catalyst_sources"
@@ -504,3 +557,83 @@ class CatalystPipelineRun(Base):
     saved = Column(Integer, default=0)
     execution_time_ms = Column(Integer, nullable=True)
     error_message = Column(Text, nullable=True)
+
+
+class PreReleasePrediction(Base):
+    """One pre-release edge forecast per company per upcoming results event, refreshed daily until the event and graded afterwards."""
+    __tablename__ = "pre_release_predictions"
+    from sqlalchemy import UniqueConstraint
+    __table_args__ = (UniqueConstraint('company_id', 'event_date', name='uq_pre_release_company_event'),)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    ticker = Column(String, index=True, nullable=False)
+    event_date = Column(DateTime, nullable=False, index=True)
+    event_session = Column(String, nullable=True)
+    as_of_date = Column(DateTime, nullable=True)
+    first_predicted_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    engine = Column(String, nullable=True)            # ML or SCORECARD
+    model_version = Column(String, nullable=True)
+    n_prior_events = Column(Integer, nullable=True)
+
+    p_runup = Column(Float, nullable=True)
+    runup_p10 = Column(Float, nullable=True)
+    runup_p50 = Column(Float, nullable=True)
+    runup_p90 = Column(Float, nullable=True)
+    p_reaction = Column(Float, nullable=True)
+    reaction_p10 = Column(Float, nullable=True)
+    reaction_p50 = Column(Float, nullable=True)
+    reaction_p90 = Column(Float, nullable=True)
+
+    verdict = Column(String, nullable=True)           # RUN-UP PLAY / HOLD-THROUGH PLAY / AVOID / NO EDGE
+    strategy = Column(String, nullable=True)          # RUNUP / HOLD / NONE
+    confidence = Column(String, nullable=True)        # HIGH / MEDIUM / LOW
+    conviction_score = Column(Float, nullable=True)
+
+    entry_date = Column(DateTime, nullable=True)
+    exit_date = Column(DateTime, nullable=True)
+    entry_price_ref = Column(Float, nullable=True)
+    stop_price = Column(Float, nullable=True)
+    target_price = Column(Float, nullable=True)
+    stretch_target = Column(Float, nullable=True)
+    position_size_pct = Column(Float, nullable=True)
+
+    implied_move_pct = Column(Float, nullable=True)
+    hist_avg_move_pct = Column(Float, nullable=True)
+    put_call_ratio = Column(Float, nullable=True)
+
+    drivers_json = Column(Text, nullable=True)
+    details_json = Column(Text, nullable=True)
+    history_json = Column(Text, nullable=True)
+
+    graded = Column(Boolean, default=False, index=True)
+    graded_at = Column(DateTime, nullable=True)
+    realized_runup = Column(Float, nullable=True)
+    realized_reaction_3d = Column(Float, nullable=True)
+    realized_reaction_5d = Column(Float, nullable=True)
+    realized_trade_return = Column(Float, nullable=True)
+    hit = Column(Boolean, nullable=True)
+
+
+class MomentumTradeAlert(Base):
+    """A BUY alert sent to Discord and its lifecycle (Target 1 / Target 2 / stop / momentum break / time stop)."""
+    __tablename__ = "momentum_trade_alerts"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=True, index=True)
+    ticker = Column(String, index=True, nullable=False)
+    status = Column(String, index=True, nullable=False, default="OPEN")    # OPEN / CLOSED
+    opened_at = Column(DateTime, default=datetime.utcnow, index=True)
+    entry_price = Column(Float, nullable=False)
+    initial_stop = Column(Float, nullable=False)
+    stop_price = Column(Float, nullable=False)
+    target1 = Column(Float, nullable=False)
+    target2 = Column(Float, nullable=False)
+    t1_hit_at = Column(DateTime, nullable=True)
+    max_price = Column(Float, nullable=True)
+    composite_score = Column(Float, nullable=True)
+    prob_gain_5d = Column(Float, nullable=True)
+    triggers = Column(Text, nullable=True)
+    closed_at = Column(DateTime, nullable=True)
+    exit_price = Column(Float, nullable=True)
+    exit_reason = Column(String, nullable=True)
+    return_pct = Column(Float, nullable=True)

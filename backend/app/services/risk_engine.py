@@ -6,6 +6,31 @@ from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from app.infrastructure.models import Company, MomentumSignal, StrategyBacktest
 
+def portfolio_drawdown(buy_returns, min_days: int = 5):
+    """
+    Maximum drawdown of an equal-weight book of BUY recommendations.
+
+    Each day's BUY picks are averaged into one portfolio return; a 5-day return held in a rolling book
+    contributes ~1/5 per day. (Chaining every stock's overlapping 5-day return as if they were sequential
+    trades - the old method - drives any equity curve to ~0 and always read "-100%".)
+    Returns (mdd_pct, win_rate_pct) or (None, None) when there are fewer than `min_days` days of history.
+    """
+    by_day = {}
+    for when, ret in buy_returns:
+        if when is None or ret is None:
+            continue
+        by_day.setdefault(when.date() if hasattr(when, "date") else when, []).append(float(ret))
+    if len(by_day) < min_days:
+        return None, None
+    days = sorted(by_day)
+    daily = np.array([np.mean(by_day[d]) / 100.0 / 5.0 for d in days])
+    equity = np.cumprod(1 + daily)
+    peak = np.maximum.accumulate(np.concatenate([[1.0], equity]))[1:]
+    mdd = float(np.min((equity - peak) / peak) * 100.0)
+    all_rets = np.array([r for d in days for r in by_day[d]])
+    return round(min(0.0, mdd), 2), round(float(np.mean(all_rets > 0) * 100.0), 1)
+
+
 class RiskEngine:
     """
     Portfolio-Level Risk Management & Emergency Kill Switch Engine.
@@ -21,6 +46,7 @@ class RiskEngine:
         self.max_gross_leverage = 1.0        # No margin allowed (100% max)
         self.mdd_kill_switch_threshold = -15.0  # -15% drawdown limit
         self._kill_switch_active = None
+        self.last_drawdown = (None, None)
 
     def is_kill_switch_active(self) -> Tuple[bool, str]:
         """
@@ -34,20 +60,15 @@ class RiskEngine:
             # Evaluate trailing performance of live recommendations
             from app.infrastructure.models import ScorePredictionLog
             cutoff = datetime.utcnow() - timedelta(days=30)
-            logs = self.db.query(ScorePredictionLog).filter(
+            logs = self.db.query(ScorePredictionLog.date_evaluated, ScorePredictionLog.realized_5d_return).filter(
                 ScorePredictionLog.is_shadow == False,
+                ScorePredictionLog.signal_emitted == "BUY",
                 ScorePredictionLog.date_evaluated >= cutoff,
                 ScorePredictionLog.realized_5d_return != None
             ).all()
-            if logs:
-                returns = np.array([float(l.realized_5d_return) / 100.0 for l in logs])
-                # Compute true portfolio MDD instead of average trade expectancy
-                equity_curve = np.cumprod(1 + returns)
-                peak = np.maximum.accumulate(equity_curve)
-                drawdown_pct = ((equity_curve - peak) / peak) * 100.0
-                mdd = float(np.min(drawdown_pct)) if len(drawdown_pct) > 0 else 0.0
-                win_rate = np.mean(returns > 0) * 100.0 if len(returns) > 0 else 0.0
-
+            mdd, win_rate = portfolio_drawdown([(d, r) for d, r in logs])
+            self.last_drawdown = (mdd, win_rate)
+            if mdd is not None:
                 # Determine dynamic threshold using regime
                 from app.services.momentum_service import MomentumService
                 ml_svc = MomentumService(self.db)

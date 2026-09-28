@@ -44,8 +44,12 @@ class QuantService:
                 
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
+            # Providers return lowercase OHLCV columns; this method reads 'Close'/'Open'/'Volume'.
+            df = df.rename(columns=lambda c: str(c).capitalize())
                 
-            df.index = pd.to_datetime(df.index).tz_localize(None)
+            df.index = pd.to_datetime(df.index)
+            if df.index.tz is not None:
+                df.index = df.index.tz_localize(None)
             
             if published_at is None:
                 published_at = datetime.utcnow()

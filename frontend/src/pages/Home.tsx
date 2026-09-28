@@ -14,6 +14,9 @@ import { SmartCron } from '../components/common/SmartCron';
 import { sentimentCache, SentimentData } from '../store/sentimentCache';
 import { useThemeMode } from '../theme/ThemeContext';
 import { apiUrl } from '../utils/api';
+import { PreReleaseEdgeCell } from '../components/events/PreReleaseEdgeCell';
+import { PreReleaseEdgeDialog } from '../components/events/PreReleaseEdgeDialog';
+import { GET_PRE_RELEASE_EDGES, PreReleaseEdge, isTradeVerdict } from '../components/events/preReleaseTypes';
 
 // ─── Standalone News Cell ──────────────────────────────────────────────────────
 interface NewsItem { title: string; summary: string; url: string; source: string; published: string; }
@@ -519,9 +522,20 @@ const HomeContent: React.FC = () => {
   const [selectedRowIds, setSelectedRowIds] = useState<GridRowSelectionModel>([]);
   const [detailModalRow, setDetailModalRow] = useState<any>(null);
   const [search, setSearch] = useState('');
-  const [filterMode, setFilterMode] = useState<'ALL' | 'RECENT_EVENTS' | 'HIGH_HEALTH'>('ALL');
+  const [filterMode, setFilterMode] = useState<'ALL' | 'RECENT_EVENTS' | 'HIGH_HEALTH' | 'EDGE_SETUPS'>('ALL');
+  const [edgeDialog, setEdgeDialog] = useState<{ companyId: string; name: string } | null>(null);
 
   const { loading, error, data } = useQuery(GET_COMPANIES, { fetchPolicy: 'network-only' });
+  const { data: edgeData } = useQuery(GET_PRE_RELEASE_EDGES, { fetchPolicy: 'network-only' });
+  const edgeMap = useMemo(() => {
+    const m = new Map<string, PreReleaseEdge>();
+    (edgeData?.preReleaseEdges || []).forEach((e: PreReleaseEdge) => m.set(e.companyId, e));
+    return m;
+  }, [edgeData]);
+  const isEdgeSetup = useCallback((id: string) => {
+    const e = edgeMap.get(id);
+    return Boolean(e && !e.graded && isTradeVerdict(e.verdict));
+  }, [edgeMap]);
     const [massCalculate] = useMutation(MASS_CALCULATE_HEALTH, {
     onCompleted: () => {
       alert("Mass financial health analysis queued for all stocks! Check Tasks page for progress and refresh to view scores.");
@@ -566,6 +580,8 @@ const HomeContent: React.FC = () => {
     }).length || 0;
   }, [data?.companies]);
 
+  const edgeSetupCount = useMemo(() => baseRows.filter((c: any) => isEdgeSetup(c.id)).length, [baseRows, isEdgeSetup]);
+
   const highHealthCount = useMemo(() => {
     if (!Array.isArray(data?.companies)) return 0;
     return data.companies.filter((c: any) => (c.financialHealthScore || 0) >= 70).length || 0;
@@ -585,9 +601,12 @@ const HomeContent: React.FC = () => {
       if (filterMode === 'HIGH_HEALTH') {
         return (c.financialHealthScore || 0) >= 70;
       }
+      if (filterMode === 'EDGE_SETUPS') {
+        return isEdgeSetup(c.id);
+      }
       return true;
     });
-  }, [baseRows, filterMode]);
+  }, [baseRows, filterMode, isEdgeSetup]);
 
   const sampleRow = useMemo(() => {
     if (!Array.isArray(data?.companies)) return {};
@@ -720,6 +739,30 @@ const HomeContent: React.FC = () => {
             {p.row?.ticker || '—'} {p.row?.exchange || 'NSE'}
           </Typography>
         </Box>
+      )
+    },
+    {
+      field: 'preReleaseEdge',
+      headerName: 'PRE-RELEASE EDGE',
+      width: 235,
+      minWidth: 235,
+      type: 'number',
+      headerAlign: 'left',
+      align: 'left',
+      sortable: true,
+      description: 'Forecast for results due in the next 30 days: probability and expected move vs Nifty for the recommended strategy (run-up before results, or holding through results). Click VIEW for the full plan.',
+      valueGetter: (_v: any, row: any) => {
+        const e = edgeMap.get(row?.id);
+        if (!e) return -Infinity;
+        if (e.graded) return -1;
+        return isTradeVerdict(e.verdict) ? 1000 + (e.convictionScore || 0) : e.verdict === 'AVOID' ? 500 + (e.convictionScore || 0) : e.convictionScore || 0;
+      },
+      renderCell: (p) => (
+        <PreReleaseEdgeCell
+          edge={edgeMap.get(p.row?.id)}
+          upcomingDate={p.row?.upcomingDate}
+          onOpen={() => setEdgeDialog({ companyId: p.row?.id, name: p.row?.name || p.row?.ticker })}
+        />
       )
     },
     {
@@ -923,7 +966,7 @@ const HomeContent: React.FC = () => {
           return (
             <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', py: 0.5, gap: '4px' }}>
               <Typography sx={{ fontSize: '11px', color: tokens.text.secondary, fontWeight: 500 }}>Post-Release: Pending</Typography>
-              {renderSignalBadge(upcoming ? `Due: ${formatRelativeDate(upcoming)}` : 'HOLD VALIDATED')}
+              {renderSignalBadge(upcoming ? `Due: ${formatRelativeDate(upcoming)}` : 'No recent release')}
             </Box>
           );
         }
@@ -1051,7 +1094,7 @@ const HomeContent: React.FC = () => {
         );
       }
     }
-  ], [expandQuarters, tokens, dateSortComparator]);
+  ], [expandQuarters, tokens, dateSortComparator, edgeMap]);
 
   const bulkActions = useMemo(() => [
     {
@@ -1118,9 +1161,10 @@ const HomeContent: React.FC = () => {
               { label: 'All Stocks', value: 'ALL', count: baseRows.length },
               { label: 'Events in 2-3 Days', value: 'RECENT_EVENTS', count: recentEventsCount },
               { label: 'High Health >70', value: 'HIGH_HEALTH', count: highHealthCount },
+              { label: 'Edge Setups', value: 'EDGE_SETUPS', count: edgeSetupCount },
             ]}
             selectedValue={filterMode}
-            onChange={(val) => setFilterMode(val as 'ALL' | 'RECENT_EVENTS' | 'HIGH_HEALTH')}
+            onChange={(val) => setFilterMode(val as 'ALL' | 'RECENT_EVENTS' | 'HIGH_HEALTH' | 'EDGE_SETUPS')}
           />
         </Box>
 
@@ -1167,6 +1211,9 @@ const HomeContent: React.FC = () => {
               pagination: {
                 paginationModel: { pageSize: 50, page: 0 },
               },
+              sorting: {
+                sortModel: [{ field: 'preReleaseEdge', sort: 'desc' }],
+              },
             }}
             getRowClassName={(params) => {
               const prRet = params.row?.postReleaseReturn;
@@ -1189,6 +1236,15 @@ const HomeContent: React.FC = () => {
           />
         </ErrorBoundary>
       </Box>
+
+      <ErrorBoundary fallbackTitle="Pre-Release Edge Error">
+        <PreReleaseEdgeDialog
+          open={Boolean(edgeDialog)}
+          onClose={() => setEdgeDialog(null)}
+          companyId={edgeDialog?.companyId || null}
+          companyName={edgeDialog?.name}
+        />
+      </ErrorBoundary>
 
       {/* Detail View Modal Dialog */}
       <Dialog open={Boolean(detailModalRow)} onClose={() => setDetailModalRow(null)} maxWidth="md" fullWidth PaperProps={{ sx: { backgroundColor: tokens.background.paper, border: `1px solid ${tokens.border.main}`, borderRadius: '12px', boxShadow: tokens.shadows.dropdown } }}>

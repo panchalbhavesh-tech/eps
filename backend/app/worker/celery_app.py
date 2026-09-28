@@ -65,8 +65,8 @@ celery_app.conf.update(
         },
         'scan-nse-catalysts-live': {
             'task': 'app.worker.tasks.scan_nse_catalysts_live_task',
-            # P2.1 Session-Aware Scheduling: Mon-Fri, 3:00 AM - 11:59 AM UTC (8:30 AM - 5:29 PM IST)
-            'schedule': crontab(minute='*/15', hour='3-11', day_of_week='mon-fri'),
+            # Mon-Fri 07:30-23:29 IST: most filings land after the 15:30 close, so evening coverage gives an earlier heads-up
+            'schedule': crontab(minute='*/15', hour='2-17', day_of_week='mon-fri'),
         },
         'update-catalyst-outcomes-daily': {
             'task': 'app.worker.tasks.update_catalyst_outcomes_task',
@@ -82,6 +82,41 @@ celery_app.conf.update(
             'task': 'app.worker.tasks.scan_insider_trades_task',
             # P2.5 Insider Trading: Mon-Fri at 12:30 PM UTC (18:00 IST - post market)
             'schedule': crontab(minute=30, hour=12, day_of_week='mon-fri'),
+        },
+        'monitor-momentum-trades': {
+            'task': 'app.worker.tasks.monitor_momentum_trades_task',
+            # 09:15-15:44 IST every 15 min: targets intraday; the 15:30+ runs apply stop/time-stop on the close
+            'schedule': crontab(minute='*/15', hour='3-10', day_of_week='mon-fri'),
+        },
+        'momentum-scorecard-weekly': {
+            'task': 'app.worker.tasks.send_momentum_scorecard_task',
+            'schedule': crontab(minute=35, hour=4, day_of_week='sat'),  # Saturday 10:05 IST
+        },
+        'catalyst-digest-premarket': {
+            'task': 'app.worker.tasks.send_catalyst_digest_task',
+            'schedule': crontab(minute=15, hour=3, day_of_week='mon-fri'),  # 08:45 IST, before the 09:15 open
+        },
+        'catalyst-scorecard-weekly': {
+            'task': 'app.worker.tasks.send_catalyst_scorecard_task',
+            'schedule': crontab(minute=30, hour=4, day_of_week='sat'),  # Saturday 10:00 IST
+        },
+        'build-catalyst-evidence-weekly': {
+            'task': 'app.worker.tasks.build_catalyst_evidence_task',
+            'schedule': crontab(minute=0, hour=20, day_of_week='sat'),  # Sunday 01:30 IST
+        },
+        'pre-release-edge-daily': {
+            'task': 'app.worker.tasks.run_pre_release_edge_pipeline_task',
+            # After calendar (13:00) and OHLCV (14:00) syncs: 15:15 UTC / 20:45 IST
+            'schedule': crontab(minute=15, hour=15, day_of_week='mon-fri'),
+        },
+        'backfill-earnings-history-weekly': {
+            'task': 'app.worker.tasks.backfill_earnings_history_task',
+            # Sundays 02:00 UTC: refreshes any company whose results history is older than 20 days
+            'schedule': crontab(minute=0, hour=2, day_of_week='sun'),
+        },
+        'retrain-pre-release-model-weekly': {
+            'task': 'app.worker.tasks.retrain_pre_release_model_task',
+            'schedule': crontab(minute=0, hour=16, day_of_week='sat'), # 16:00 UTC Saturdays
         },
     }
 )

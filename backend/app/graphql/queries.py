@@ -1,7 +1,7 @@
 import strawberry
 from typing import List, Optional
 from strawberry.types import Info
-from app.graphql.types import BackgroundJobLiveStatusType, CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType, HypothesisSignalType, AdminActivityLogType, CatalystEventType, CatalystSourceType, CatalystPipelineRunType, EventAnalogStatsType, WorkerExecutionHistoryType, PortfolioSimulationResultType, DataLakeStockType
+from app.graphql.types import BackgroundJobLiveStatusType, CompanyType, UserType, BackgroundJobType, HistoricalPriceType, MomentumSignalType, MarketRegimeType, IntensiveBacktestReportType, MomentumPerformanceType, StrategyBacktestType, ResearchHypothesisType, HypothesisExperimentType, CeleryScheduleType, HypothesisSignalType, AdminActivityLogType, CatalystEventType, CatalystSourceType, CatalystPipelineRunType, EventAnalogStatsType, WorkerExecutionHistoryType, PortfolioSimulationResultType, DataLakeStockType, PreReleaseEdgeType
 from app.services.company_service import CompanyService
 from app.graphql.context import Context
 import uuid
@@ -34,60 +34,51 @@ def get_latest_momentum_type(c):
 
 
 def get_company_momentum_stats(c):
+    """
+    Historical results-reaction stats, maintained by the results event-study pipeline
+    (share of the last 8 results with a positive 3-day abnormal return, and the mean reaction).
+    Returns (None, None) when a company has no measured results history, never a synthetic value.
+    """
     prob = getattr(c, "momentum_probability", None)
     avg_mom = getattr(c, "avg_post_earnings_momentum", None)
-    if prob is not None and avg_mom is not None:
-        return float(prob), float(avg_mom)
-
-    momentums = []
-    if hasattr(c, "event_studies") and c.event_studies:
-        for es in c.event_studies:
-            ret = getattr(es, "ret_5d", None) or getattr(es, "ret_3d", None) or getattr(es, "gap_pct", None)
-            if ret is not None:
-                try:
-                    momentums.append(float(ret))
-                except (ValueError, TypeError):
-                    pass
-
-    if len(momentums) < 4:
-        momentums = []
-        pairs = [
-            (getattr(c, "q0_eps", None), getattr(c, "q1_eps", None), getattr(c, "q0_profit", None), getattr(c, "q1_profit", None)),
-            (getattr(c, "q1_eps", None), getattr(c, "q2_eps", None), getattr(c, "q1_profit", None), getattr(c, "q2_profit", None)),
-            (getattr(c, "q2_eps", None), getattr(c, "q3_eps", None), getattr(c, "q2_profit", None), getattr(c, "q3_profit", None)),
-            (getattr(c, "q3_eps", None), getattr(c, "q4_eps", None), getattr(c, "q3_profit", None), getattr(c, "q4_profit", None))
-        ]
-        trends = getattr(c, "historical_trend", "UP,UP,UP,UP")
-        trend_list = trends.split(",") if trends and trends != "N/A" else ["UP", "UP", "UP", "UP"]
-
-        def is_valid(num):
-            return num is not None and not (isinstance(num, float) and (num != num or num == float('inf') or num == float('-inf')))
-
-        for idx, (p_eps, c_eps, p_prof, c_prof) in enumerate(pairs):
-            pct_change = 0.0
-            has_data = False
-            if is_valid(p_eps) and is_valid(c_eps) and p_eps != 0:
-                pct_change = ((c_eps - p_eps) / abs(p_eps)) * 100
-                has_data = True
-            elif is_valid(p_prof) and is_valid(c_prof) and p_prof != 0:
-                pct_change = ((c_prof - p_prof) / abs(p_prof)) * 100
-                has_data = True
-
-            if has_data:
-                mom = max(-18.0, min(18.0, round(pct_change * 0.35, 2)))
-            else:
-                tr = trend_list[idx] if idx < len(trend_list) else "UP"
-                mom = 4.2 if tr == "UP" else (-2.8 if tr == "DOWN" else 0.5)
-            momentums.append(mom)
-
-    if not momentums:
-        return 0.0, 0.0
-
-    last_4 = momentums[-4:]
-    pos_count = sum(1 for m in last_4 if m >= 0)
-    prob = round((pos_count / len(last_4)) * 100, 1)
-    avg_mom = round(sum(last_4) / len(last_4), 2)
+    if prob is None or avg_mom is None:
+        return None, None
     return float(prob), float(avg_mom)
+
+def _pre_release_to_type(p, include_details: bool = False, track_record: Optional[dict] = None) -> PreReleaseEdgeType:
+    import json
+    from datetime import datetime
+
+    def d(v):
+        return v.date().isoformat() if v else None
+    return PreReleaseEdgeType(
+        company_id=str(p.company_id), ticker=p.ticker, event_date=d(p.event_date), event_session=p.event_session,
+        days_to_event=(p.event_date.date() - datetime.utcnow().date()).days if p.event_date else None,
+        as_of_date=d(p.as_of_date), engine=p.engine, n_prior_events=p.n_prior_events,
+        verdict=p.verdict, strategy=p.strategy, confidence=p.confidence, conviction_score=p.conviction_score,
+        p_runup=p.p_runup, runup_p10=p.runup_p10, runup_p50=p.runup_p50, runup_p90=p.runup_p90,
+        p_reaction=p.p_reaction, reaction_p10=p.reaction_p10, reaction_p50=p.reaction_p50, reaction_p90=p.reaction_p90,
+        entry_date=d(p.entry_date), exit_date=d(p.exit_date), entry_price_ref=p.entry_price_ref, stop_price=p.stop_price,
+        target_price=p.target_price, stretch_target=p.stretch_target, position_size_pct=p.position_size_pct,
+        implied_move_pct=p.implied_move_pct, hist_avg_move_pct=p.hist_avg_move_pct, put_call_ratio=p.put_call_ratio,
+        graded=bool(p.graded), hit=p.hit, realized_runup=p.realized_runup, realized_reaction_3d=p.realized_reaction_3d,
+        realized_reaction_5d=p.realized_reaction_5d, realized_trade_return=p.realized_trade_return,
+        drivers_json=p.drivers_json if include_details else None,
+        details_json=p.details_json if include_details else None,
+        history_json=p.history_json if include_details else None,
+        track_record_json=json.dumps(track_record) if track_record is not None else None,
+    )
+
+
+def _pick_current_prediction(rows):
+    """Prefer the nearest upcoming event; otherwise the most recent past one."""
+    from datetime import datetime
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    upcoming = [r for r in rows if r.event_date >= today]
+    if upcoming:
+        return min(upcoming, key=lambda r: r.event_date)
+    return max(rows, key=lambda r: r.event_date) if rows else None
+
 
 @strawberry.type
 class Query:
@@ -565,6 +556,74 @@ class Query:
         return result
 
     @strawberry.field
+    def pre_release_edges(self, info: Info[Context, None]) -> List[PreReleaseEdgeType]:
+        from datetime import datetime, timedelta
+        from app.infrastructure.models import PreReleasePrediction
+        db = info.context.db
+        since = datetime.utcnow() - timedelta(days=10)
+        by_company = {}
+        for p in db.query(PreReleasePrediction).filter(PreReleasePrediction.event_date >= since).all():
+            by_company.setdefault(p.company_id, []).append(p)
+        return [_pre_release_to_type(_pick_current_prediction(rows)) for rows in by_company.values()]
+
+    @strawberry.field
+    def pre_release_price_path(self, info: Info[Context, None], company_id: str) -> Optional[str]:
+        """Live re-simulation of the forecast price cone from the latest price (cached 5 minutes)."""
+        import json
+        from app.infrastructure.models import PreReleasePrediction, Company
+        from app.services.pre_release_edge_service import compute_price_path, plan_from_path, exit_rules, parse_upcoming_date
+        from app.services.earnings_events_service import EarningsEventsService
+        from app.worker.observability import get_redis_client
+        db = info.context.db
+        try:
+            cid = uuid.UUID(company_id)
+        except ValueError:
+            return None
+        cache_key = f"pre_release:path:{cid}"
+        try:
+            cached = get_redis_client().get(cache_key)
+            if cached:
+                return cached.decode()
+        except Exception:
+            pass
+        p = _pick_current_prediction(db.query(PreReleasePrediction).filter(PreReleasePrediction.company_id == cid).all())
+        company = db.query(Company).filter(Company.id == cid).first()
+        if p is None or company is None or p.graded:
+            return None
+        details = json.loads(p.details_json or "{}")
+        prices = EarningsEventsService(db, nse=object()).load_prices(company.ticker)
+        path = compute_price_path(db, company, prices, details, p.strategy or "NONE", p.implied_move_pct, use_live=True)
+        if not path:
+            return None
+        plan = plan_from_path(path, p.strategy or "NONE", p.confidence or "MEDIUM",
+                              p.entry_date.date() if p.entry_date else None, p.exit_date.date() if p.exit_date else None)
+        path["trade_plan"] = {k: (str(v) if hasattr(v, "isoformat") else v) for k, v in plan.items()}
+        path["rules"] = exit_rules(plan, p.strategy or "NONE", path["levels"], (details.get("positioning") or {}).get("atr_pct"))
+        path["calibration"] = (details.get("model") or {}).get("path_calibration") or {}
+        out = json.dumps(path, default=str)
+        try:
+            get_redis_client().setex(cache_key, 300, out)
+        except Exception:
+            pass
+        return out
+
+    @strawberry.field
+    def pre_release_edge_detail(self, info: Info[Context, None], company_id: str) -> Optional[PreReleaseEdgeType]:
+        from app.infrastructure.models import PreReleasePrediction
+        from app.services.pre_release_edge_service import track_record
+        db = info.context.db
+        try:
+            cid = uuid.UUID(company_id)
+        except ValueError:
+            return None
+        rows = db.query(PreReleasePrediction).filter(PreReleasePrediction.company_id == cid).all()
+        p = _pick_current_prediction(rows)
+        if p is None:
+            return None
+        record = {"company": track_record(db, cid), "global": track_record(db)}
+        return _pre_release_to_type(p, include_details=True, track_record=record)
+
+    @strawberry.field
     def celery_schedules(self, info: Info[Context, None]) -> List[CeleryScheduleType]:
         from app.worker.celery_app import celery_app
         from app.infrastructure.models import BackgroundJob
@@ -645,6 +704,46 @@ class Query:
                 'cron_title': 'CATALYST: Scan Insider Trades',
                 'category': 'CATALYST',
                 'description': 'Monitors the NSE for major promoter buying and insider transactions.'
+            },
+            'monitor-momentum-trades': {
+                'cron_title': 'MOMENTUM: Monitor Alerted Trades',
+                'category': 'MOMENTUM',
+                'description': 'Tracks every BUY alert: Target 1 / Target 2 intraday, stop and time-stop on the close, with one Discord message per event.'
+            },
+            'momentum-scorecard-weekly': {
+                'cron_title': 'MOMENTUM: Weekly Scorecard',
+                'category': 'MOMENTUM',
+                'description': 'Reports last week\'s closed momentum trades and their returns.'
+            },
+            'catalyst-digest-premarket': {
+                'cron_title': 'CATALYST: Pre-Market Watchlist',
+                'category': 'CATALYST',
+                'description': 'Sends one Discord digest at 08:45 IST with every graded catalyst since the last digest.'
+            },
+            'catalyst-scorecard-weekly': {
+                'cron_title': 'CATALYST: Weekly Scorecard',
+                'category': 'CATALYST',
+                'description': 'Reports how last week\'s instant catalyst alerts actually moved.'
+            },
+            'build-catalyst-evidence-weekly': {
+                'cron_title': 'CATALYST: Build Evidence',
+                'category': 'CATALYST',
+                'description': 'Measures how each filing type moved prices historically; alerts only fire on proven types.'
+            },
+            'pre-release-edge-daily': {
+                'cron_title': 'EVENT: Pre-Release Edge Forecasts',
+                'category': 'EVENT',
+                'description': 'Refreshes recent results history, forecasts run-up and post-results reaction for upcoming reporters, and grades past calls.'
+            },
+            'backfill-earnings-history-weekly': {
+                'cron_title': 'EVENT: Backfill Results History',
+                'category': 'EVENT',
+                'description': 'Rebuilds 4 years of results dates, broadcast times and event studies for stale companies.'
+            },
+            'retrain-pre-release-model-weekly': {
+                'cron_title': 'ML: Retrain Pre-Release Model',
+                'category': 'ML',
+                'description': 'Walk-forward retrains and recalibrates the pre-release run-up and reaction models.'
             },
         }
         

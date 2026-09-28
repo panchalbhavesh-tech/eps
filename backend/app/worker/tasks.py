@@ -1083,3 +1083,198 @@ def enrich_external_market_cap_task(tickers: list):
         except Exception as e:
             logger.error(f"[MARKET_CAP] External lookup exception for {ticker}: {e}")
 
+
+
+# ─── Pre-Release Edge ──────────────────────────────────────────────────────────
+
+def _refresh_earnings_history(db, mode: str, obs: TaskObserver, limit: int = None) -> dict:
+    from app.services.earnings_events_service import EarningsEventsService, select_companies_for_refresh, mark_refreshed
+    from app.worker.observability import get_redis_client
+    redis_client = get_redis_client()
+    companies = select_companies_for_refresh(db, mode, redis_client)
+    if limit:
+        companies = companies[:limit]
+    svc = EarningsEventsService(db)
+    total = len(companies)
+    counts = {"OK": 0, "NO_EVENTS": 0, "NO_PRICES": 0, "FAILED": 0}
+    obs.update(log_msg=f"Refreshing results history for {total} companies (mode={mode}).",
+               progress={"total": total, "processed": 0, "saved": 0, "failed": 0, "percentage": 0,
+                         "current_step": "Backfilling results events"}, force=True)
+    for i, company in enumerate(companies, start=1):
+        try:
+            res = svc.backfill_company(company)
+            counts[res["status"]] = counts.get(res["status"], 0) + 1
+            mark_refreshed(redis_client, company.ticker)
+        except Exception as e:
+            db.rollback()
+            counts["FAILED"] += 1
+            obs.update(log_msg=f"{company.ticker}: {e}", log_level="WARNING")
+        if i % 10 == 0 or i == total:
+            obs.update(progress={"total": total, "processed": i, "saved": counts["OK"], "failed": counts["FAILED"],
+                                 "percentage": round(100.0 * i / max(total, 1), 1), "current_step": f"Backfilling {company.ticker}"})
+    return counts
+
+
+@shared_task(bind=True, name="app.worker.tasks.backfill_earnings_history_task", time_limit=6 * 3600)
+def backfill_earnings_history_task(self, mode: str = "full", limit: int = None):
+    """Builds/refreshes the historical results-event panel (dates, broadcast times, event studies)."""
+    obs = TaskObserver(self.request.id if self.request and self.request.id else "backfill_earnings_local")
+    db = SessionLocal()
+    try:
+        counts = _refresh_earnings_history(db, mode, obs, limit)
+        return f"Results history refresh ({mode}) complete: {counts}"
+    finally:
+        db.close()
+
+
+@shared_task(bind=True, name="app.worker.tasks.retrain_pre_release_model_task", time_limit=3600)
+def retrain_pre_release_model_task(self):
+    from app.services.pre_release_edge_service import train_models
+    obs = TaskObserver(self.request.id if self.request and self.request.id else "retrain_pre_release_local")
+    db = SessionLocal()
+    try:
+        obs.update(log_msg="Training pre-release edge models (walk-forward validated)...")
+        result = train_models(db)
+        obs.update(log_msg=f"Training result: {result}")
+        return f"Pre-release model training: {result}"
+    finally:
+        db.close()
+
+
+@shared_task(bind=True, name="app.worker.tasks.run_pre_release_edge_pipeline_task", time_limit=3 * 3600)
+def run_pre_release_edge_pipeline_task(self):
+    """Daily: refresh recent/upcoming results history -> (re)train if stale -> predict upcoming -> grade past calls."""
+    import os
+    from app.services.pre_release_edge_service import PreReleaseEdgeService, train_models, MODEL_PATH
+    obs = TaskObserver(self.request.id if self.request and self.request.id else "pre_release_pipeline_local")
+    db = SessionLocal()
+    try:
+        counts = _refresh_earnings_history(db, "recent", obs)
+        model_age_days = (time.time() - os.path.getmtime(MODEL_PATH)) / 86400 if os.path.exists(MODEL_PATH) else None
+        training = None
+        if model_age_days is None or model_age_days > 7:
+            obs.update(log_msg="Model missing or older than 7 days - retraining.")
+            training = train_models(db)
+            obs.update(log_msg=f"Training result: {training.get('status')}")
+        svc = PreReleaseEdgeService(db)
+        obs.update(log_msg="Generating pre-release forecasts for upcoming results...", progress={"current_step": "Predicting", "percentage": 80})
+        predictions = svc.predict_all()
+        graded = svc.grade()
+        obs.update(log_msg=f"Predictions: {predictions} | Grading: {graded}", progress={"current_step": "Done", "percentage": 100})
+        return f"Pre-release edge pipeline: history={counts} training={training and training.get('status')} predictions={predictions} grading={graded}"
+    finally:
+        db.close()
+
+
+# ─── Catalyst Radar evidence ───────────────────────────────────────────────────
+
+@shared_task(bind=True, name="app.worker.tasks.build_catalyst_evidence_task", time_limit=8 * 3600)
+def build_catalyst_evidence_task(self, years: int = 2, limit: int = None):
+    """Builds/refreshes the historical filing -> price-reaction evidence base used to grade live catalyst alerts."""
+    from app.services.catalyst_evidence_service import CatalystEvidenceService
+    obs = TaskObserver(self.request.id if self.request and self.request.id else "catalyst_evidence_local")
+    db = SessionLocal()
+    try:
+        companies = [c for c in db.query(Company).all() if not (c.ticker.endswith((".BO", ".NS")) or c.ticker.isdigit())]
+        companies.sort(key=lambda c: -(c.market_cap or 0))
+        if limit:
+            companies = companies[:limit]
+        svc = CatalystEvidenceService(db)
+        total, saved, failed = len(companies), 0, 0
+        obs.update(log_msg=f"Building catalyst evidence for {total} companies ({years}y of filings).",
+                   progress={"total": total, "processed": 0, "saved": 0, "failed": 0, "percentage": 0, "current_step": "Filings"}, force=True)
+        for i, c in enumerate(companies, start=1):
+            try:
+                res = svc.build_company(c, years=years)
+                saved += res.get("saved", 0)
+            except Exception as e:
+                db.rollback()
+                failed += 1
+                obs.update(log_msg=f"{c.ticker}: {e}", log_level="WARNING")
+            if i % 10 == 0 or i == total:
+                obs.update(progress={"total": total, "processed": i, "saved": saved, "failed": failed,
+                                     "percentage": round(100.0 * i / max(total, 1), 1), "current_step": f"Filings {c.ticker}"})
+        return f"Catalyst evidence: {total} companies, {saved} events saved, {failed} failed, PDFs {svc.pdf_used}"
+    finally:
+        db.close()
+
+
+@shared_task(name="app.worker.tasks.send_catalyst_digest_task")
+def send_catalyst_digest_task():
+    """Pre-market watchlist (08:45 IST): every graded catalyst since the last digest, strongest first."""
+    import json
+    from datetime import timedelta
+    from app.infrastructure.models import CatalystEvent
+    from app.services.catalyst_intel_service import digest_line
+    from app.services.notifier import DiscordNotifier
+    db = SessionLocal()
+    try:
+        since = datetime.utcnow() - timedelta(hours=24)
+        rows = db.query(CatalystEvent).filter(CatalystEvent.created_at >= since,
+                                              CatalystEvent.alert_grade.in_(["INSTANT", "DIGEST"])).all()
+        if not rows:
+            return "No graded catalysts in the last 24h; digest skipped."
+        rows.sort(key=lambda r: (r.alert_grade != "INSTANT", -(r.impact_score or 0)))
+        bull = [r for r in rows if r.direction == "BULLISH"]
+        bear = [r for r in rows if r.direction == "BEARISH"]
+        other = [r for r in rows if r.direction not in ("BULLISH", "BEARISH")]
+        parts = []
+        for title, group in (("Bullish", bull), ("Bearish", bear), ("Other", other)):
+            if group:
+                parts.append(f"**{title}**\n" + "\n".join(("• " if r.alert_grade == "DIGEST" else "• [alerted] ") + digest_line(r) for r in group[:15]))
+        embed = {"title": f"Catalyst watchlist · {len(rows)} events before the open",
+                 "description": "\n\n".join(parts)[:4000], "color": 0x3B82F6,
+                 "footer": {"text": "hist = average move vs Nifty in 3 days after similar past filings"}}
+        DiscordNotifier().send_embed(embed)
+        return f"Digest sent: {len(rows)} events ({len(bull)} bullish, {len(bear)} bearish)."
+    finally:
+        db.close()
+
+
+@shared_task(name="app.worker.tasks.send_catalyst_scorecard_task")
+def send_catalyst_scorecard_task():
+    """Weekly honesty check: how last week's instant alerts actually played out."""
+    from datetime import timedelta
+    from app.infrastructure.models import CatalystEvent
+    from app.services.notifier import DiscordNotifier
+    db = SessionLocal()
+    try:
+        since = datetime.utcnow() - timedelta(days=8)
+        rows = db.query(CatalystEvent).filter(CatalystEvent.alerted_at >= since, CatalystEvent.alert_grade == "INSTANT").all()
+        scored = [r for r in rows if r.reaction_3d is not None and r.direction in ("BULLISH", "BEARISH")]
+        if not rows:
+            return "No instant alerts last week."
+        right = [r for r in scored if (r.reaction_3d > 0) == (r.direction == "BULLISH")]
+        signed = [r.reaction_3d if r.direction == "BULLISH" else -r.reaction_3d for r in scored]
+        avg = sum(signed) / len(signed) if signed else 0.0
+        lines = [f"Alerts: {len(rows)} · scored so far: {len(scored)} · right direction: **{len(right)}/{len(scored) or 0}** · "
+                 f"avg move in the alert's direction: **{avg:+.1f}%** (3 days)"]
+        for r in sorted(scored, key=lambda r: -(r.reaction_3d if r.direction == 'BULLISH' else -r.reaction_3d))[:10]:
+            lines.append(f"{'✓' if r in right else '✕'} {r.ticker} · {r.direction.title()} {r.subtype or r.category} · {r.reaction_3d:+.1f}%")
+        DiscordNotifier().send_embed({"title": "Catalyst Radar · last week's scorecard", "description": "\n".join(lines)[:4000], "color": 0x8B949E})
+        return lines[0]
+    finally:
+        db.close()
+
+
+# ─── Momentum trade alerts ─────────────────────────────────────────────────────
+
+@shared_task(name="app.worker.tasks.monitor_momentum_trades_task", time_limit=600)
+def monitor_momentum_trades_task():
+    """Every 15 min in market hours: Target 1 / Target 2 alerts; after 15:30 IST: stop and time-stop on the close."""
+    from app.services.momentum_alerts import monitor_open_trades
+    db = SessionLocal()
+    try:
+        return f"Momentum trades monitored: {monitor_open_trades(db)}"
+    finally:
+        db.close()
+
+
+@shared_task(name="app.worker.tasks.send_momentum_scorecard_task")
+def send_momentum_scorecard_task():
+    from app.services.momentum_alerts import weekly_scorecard
+    db = SessionLocal()
+    try:
+        return weekly_scorecard(db)
+    finally:
+        db.close()

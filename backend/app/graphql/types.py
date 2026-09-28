@@ -434,3 +434,46 @@ class DataLakeStockType:
     missing_days: Optional[int] = None
     last_updated: Optional[str] = None
 
+
+@strawberry.type
+class PreReleaseEdgeType:
+    company_id: str
+    ticker: str
+    event_date: str
+    event_session: Optional[str] = None
+    days_to_event: Optional[int] = None
+    as_of_date: Optional[str] = None
+    engine: Optional[str] = None
+    n_prior_events: Optional[int] = None
+    verdict: Optional[str] = None
+    strategy: Optional[str] = None
+    confidence: Optional[str] = None
+    conviction_score: Optional[float] = None
+    p_runup: Optional[float] = None
+    runup_p10: Optional[float] = None
+    runup_p50: Optional[float] = None
+    runup_p90: Optional[float] = None
+    p_reaction: Optional[float] = None
+    reaction_p10: Optional[float] = None
+    reaction_p50: Optional[float] = None
+    reaction_p90: Optional[float] = None
+    entry_date: Optional[str] = None
+    exit_date: Optional[str] = None
+    entry_price_ref: Optional[float] = None
+    stop_price: Optional[float] = None
+    target_price: Optional[float] = None
+    stretch_target: Optional[float] = None
+    position_size_pct: Optional[float] = None
+    implied_move_pct: Optional[float] = None
+    hist_avg_move_pct: Optional[float] = None
+    put_call_ratio: Optional[float] = None
+    graded: bool = False
+    hit: Optional[bool] = None
+    realized_runup: Optional[float] = None
+    realized_reaction_3d: Optional[float] = None
+    realized_reaction_5d: Optional[float] = None
+    realized_trade_return: Optional[float] = None
+    drivers_json: Optional[str] = None
+    details_json: Optional[str] = None
+    history_json: Optional[str] = None
+    track_record_json: Optional[str] = None

@@ -1,6 +1,7 @@
 import json
 import math
 import requests
+from typing import Optional
 from app.core.config import settings
 
 def safe_float(val, default=0.0):
@@ -752,3 +753,58 @@ Respond ONLY with valid JSON. Do not include markdown formatting like ```json.
             return {"is_material": True, "impact_score": 75, "category": "CREDIT_RATING", "event_type": "RATING_CHANGE", "tier": "B-TIER", "why_it_matters": "Credit rating action."}
         
         return {"is_material": False, "impact_score": 10, "category": "NOISE", "event_type": "ROUTINE", "tier": "NOISE", "why_it_matters": "Routine filing with low expected impact."}
+
+
+# ─── Catalyst enrichment (optional; alerts never depend on it) ─────────────────
+
+_CATALYST_AI_DISABLED_UNTIL = {"t": None}
+
+
+def summarize_catalyst(ticker: str, company_name: str, category: str, text: str, pdf_excerpt: str,
+                       revenue_cr: Optional[float], mcap_cr: Optional[float]) -> Optional[dict]:
+    """
+    One short, factual 'why' line for a catalyst alert, plus an estimated deal value in ₹ crore when the filing
+    states capacity/units instead of money (e.g. "400 MW"). Returns None if the AI is unavailable.
+    After an auth/quota failure the AI is skipped for an hour so the pipeline never slows down.
+    """
+    import json as _json
+    from datetime import datetime as _dt, timedelta as _td
+    until = _CATALYST_AI_DISABLED_UNTIL["t"]
+    if until and _dt.utcnow() < until:
+        return None
+    key = settings.GEMINI_API_KEY
+    if not key or len(key) < 5:
+        return None
+    prompt = f"""You summarise Indian stock-exchange filings for swing traders. Be factual and brief.
+Company: {company_name} ({ticker}). Annual revenue: {f'₹{revenue_cr:,.0f} Cr' if revenue_cr else 'unknown'}. Market cap: {f'₹{mcap_cr:,.0f} Cr' if mcap_cr else 'unknown'}.
+Filing category: {category}
+Filing text: {text[:600]}
+Filing document excerpt: {pdf_excerpt[:2500]}
+
+Return strict JSON with exactly these keys:
+- "why": one or two short sentences (max 220 characters) stating what happened and why it matters for the share price, citing size relative to revenue or market cap when numbers exist. No hype.
+- "estimated_value_cr": number or null. The deal/order value in ₹ crore if stated, or a conservative estimate if only capacity/quantity is given (e.g. MW, units, tonnes); null if it cannot be estimated.
+- "value_is_estimate": true if you estimated the value, false if it is stated in the filing.
+"""
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key={key}"
+        payload = {"contents": [{"parts": [{"text": prompt}]}],
+                   "generationConfig": {"temperature": 0.0, "responseMimeType": "application/json", "maxOutputTokens": 300}}
+        r = requests.post(url, json=payload, timeout=15)
+        if r.status_code in (400, 401, 403, 429):
+            _CATALYST_AI_DISABLED_UNTIL["t"] = _dt.utcnow() + _td(hours=1)
+            return None
+        if r.status_code != 200:
+            return None
+        text_out = r.json()["candidates"][0]["content"]["parts"][0]["text"].replace("```json", "").replace("```", "").strip()
+        data = _json.loads(text_out)
+        why = str(data.get("why") or "").strip()[:240]
+        val = data.get("estimated_value_cr")
+        try:
+            val = float(val) if val is not None else None
+        except (TypeError, ValueError):
+            val = None
+        return {"why": why or None, "estimated_value_cr": val if val and val > 0 else None,
+                "value_is_estimate": bool(data.get("value_is_estimate"))}
+    except Exception:
+        return None
