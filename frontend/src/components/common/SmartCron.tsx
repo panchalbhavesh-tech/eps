@@ -56,7 +56,9 @@ const PAGE_WORKER_MAPPING: Record<string, string[]> = {
   ],
   momentum: [
     'app.worker.tasks.run_nse_momentum_scan_task',
-    'app.worker.tasks.resolve_realized_forward_returns_task'
+    'app.worker.tasks.resolve_realized_forward_returns_task',
+    'app.worker.tasks.monitor_momentum_trades_task',
+    'app.worker.tasks.send_momentum_scorecard_task'
   ],
   hypothesis: [
     'app.worker.tasks.run_automated_hypothesis_research_task',

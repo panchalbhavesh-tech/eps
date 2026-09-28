@@ -613,3 +613,27 @@ class PreReleasePrediction(Base):
     realized_reaction_5d = Column(Float, nullable=True)
     realized_trade_return = Column(Float, nullable=True)
     hit = Column(Boolean, nullable=True)
+
+
+class MomentumTradeAlert(Base):
+    """A BUY alert sent to Discord and its lifecycle (Target 1 / Target 2 / stop / momentum break / time stop)."""
+    __tablename__ = "momentum_trade_alerts"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=True, index=True)
+    ticker = Column(String, index=True, nullable=False)
+    status = Column(String, index=True, nullable=False, default="OPEN")    # OPEN / CLOSED
+    opened_at = Column(DateTime, default=datetime.utcnow, index=True)
+    entry_price = Column(Float, nullable=False)
+    initial_stop = Column(Float, nullable=False)
+    stop_price = Column(Float, nullable=False)
+    target1 = Column(Float, nullable=False)
+    target2 = Column(Float, nullable=False)
+    t1_hit_at = Column(DateTime, nullable=True)
+    max_price = Column(Float, nullable=True)
+    composite_score = Column(Float, nullable=True)
+    prob_gain_5d = Column(Float, nullable=True)
+    triggers = Column(Text, nullable=True)
+    closed_at = Column(DateTime, nullable=True)
+    exit_price = Column(Float, nullable=True)
+    exit_reason = Column(String, nullable=True)
+    return_pct = Column(Float, nullable=True)

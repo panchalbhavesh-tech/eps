@@ -83,6 +83,15 @@ celery_app.conf.update(
             # P2.5 Insider Trading: Mon-Fri at 12:30 PM UTC (18:00 IST - post market)
             'schedule': crontab(minute=30, hour=12, day_of_week='mon-fri'),
         },
+        'monitor-momentum-trades': {
+            'task': 'app.worker.tasks.monitor_momentum_trades_task',
+            # 09:15-15:44 IST every 15 min: targets intraday; the 15:30+ runs apply stop/time-stop on the close
+            'schedule': crontab(minute='*/15', hour='3-10', day_of_week='mon-fri'),
+        },
+        'momentum-scorecard-weekly': {
+            'task': 'app.worker.tasks.send_momentum_scorecard_task',
+            'schedule': crontab(minute=35, hour=4, day_of_week='sat'),  # Saturday 10:05 IST
+        },
         'catalyst-digest-premarket': {
             'task': 'app.worker.tasks.send_catalyst_digest_task',
             'schedule': crontab(minute=15, hour=3, day_of_week='mon-fri'),  # 08:45 IST, before the 09:15 open

@@ -705,6 +705,16 @@ class Query:
                 'category': 'CATALYST',
                 'description': 'Monitors the NSE for major promoter buying and insider transactions.'
             },
+            'monitor-momentum-trades': {
+                'cron_title': 'MOMENTUM: Monitor Alerted Trades',
+                'category': 'MOMENTUM',
+                'description': 'Tracks every BUY alert: Target 1 / Target 2 intraday, stop and time-stop on the close, with one Discord message per event.'
+            },
+            'momentum-scorecard-weekly': {
+                'cron_title': 'MOMENTUM: Weekly Scorecard',
+                'category': 'MOMENTUM',
+                'description': 'Reports last week\'s closed momentum trades and their returns.'
+            },
             'catalyst-digest-premarket': {
                 'cron_title': 'CATALYST: Pre-Market Watchlist',
                 'category': 'CATALYST',

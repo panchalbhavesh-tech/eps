@@ -259,6 +259,7 @@ class MomentumService:
         processed_count = 0
         attention_count = 0
         active_recommended_signals = []
+        watchlist_rows = []
 
         # Phase 3 & 4: Instantiate ML and AI Catalyst Engines
         from app.services.ml_service import MomentumMLService
@@ -367,21 +368,19 @@ class MomentumService:
             if signal == "BUY":
                 active_recommended_signals.append({"ticker": comp.ticker, "sector": comp.sector, "signal": signal, "score": comp_score})
 
-            # Send Discord alert for BUY or EXIT signals
-            if signal in ("BUY", "EXIT") and requires_attention:
-                try:
-                    from app.services.notifier import DiscordNotifier
-                    notifier = DiscordNotifier()
-                    notifier.send_momentum_alert(
-                        ticker=comp.ticker,
-                        comp_score=comp_score,
-                        signal=signal,
-                        price=cur_price,
-                        stop_loss=stop_loss,
-                        reasons=" | ".join(reasons) if reasons else None
-                    )
-                except Exception as alert_ex:
-                    print(f"Failed to dispatch Discord signal alert: {alert_ex}")
+            # Discord: trade lifecycle only (BUY with a real trigger -> T1 / T2 / stop / momentum-break exits),
+            # see momentum_alerts. Portfolio risk notes are not stock triggers. Stored attention flags are unchanged.
+            triggers = reasons[len(risk_eval["risk_reasons"]):]
+            try:
+                from app.services import momentum_alerts as MA
+                if signal == "BUY" and triggers and MA.can_alert_buy(self.db, comp.ticker):
+                    MA.open_trade(self.db, comp, cur_price, stop_loss, triggers, comp_score, prob_gain_5d, regime_status)
+                elif signal == "EXIT":
+                    MA.on_scan_signal(self.db, comp, signal, cur_price)
+                elif signal == "WATCHLIST" and any(k in " ".join(triggers) for k in ("Breakout", "Volume Spike", "Golden Cross")):
+                    watchlist_rows.append({"ticker": comp.ticker, "price": cur_price, "score": comp_score, "triggers": triggers})
+            except Exception as alert_ex:
+                print(f"Failed to dispatch momentum trade alert: {alert_ex}")
 
             # Section 9 Point-in-Time Prediction Snapshot Logging for IC tracking
             val_service.log_prediction_snapshot(
@@ -462,6 +461,17 @@ class MomentumService:
                 print(f"Failed to save momentum signal for {comp.ticker}: {e}")
 
         self.db.commit()
+
+        # One watchlist message and (only on change) one kill-switch message - never per stock.
+        try:
+            from app.services import momentum_alerts as MA
+            MA.send_watchlist(watchlist_rows)
+            killed, _msg = risk_engine.is_kill_switch_active()
+            mdd, _wr = getattr(risk_engine, "last_drawdown", (None, None))
+            limit = -10.0 if "Bearish" in regime_status else risk_engine.mdd_kill_switch_threshold
+            MA.notify_kill_switch_change(killed, mdd, limit)
+        except Exception as alert_ex:
+            print(f"Failed to send momentum summary alerts: {alert_ex}")
         
         # Apply HRP position sizing to newly generated BUY signals
         self._apply_hrp_post_processing()

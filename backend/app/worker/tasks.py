@@ -1255,3 +1255,26 @@ def send_catalyst_scorecard_task():
         return lines[0]
     finally:
         db.close()
+
+
+# ─── Momentum trade alerts ─────────────────────────────────────────────────────
+
+@shared_task(name="app.worker.tasks.monitor_momentum_trades_task", time_limit=600)
+def monitor_momentum_trades_task():
+    """Every 15 min in market hours: Target 1 / Target 2 alerts; after 15:30 IST: stop and time-stop on the close."""
+    from app.services.momentum_alerts import monitor_open_trades
+    db = SessionLocal()
+    try:
+        return f"Momentum trades monitored: {monitor_open_trades(db)}"
+    finally:
+        db.close()
+
+
+@shared_task(name="app.worker.tasks.send_momentum_scorecard_task")
+def send_momentum_scorecard_task():
+    from app.services.momentum_alerts import weekly_scorecard
+    db = SessionLocal()
+    try:
+        return weekly_scorecard(db)
+    finally:
+        db.close()
