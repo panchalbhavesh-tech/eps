@@ -9,18 +9,12 @@ class DataLakeStorage:
     and PostgreSQL database (Intraday State).
     """
     def __init__(self):
-        # Automatically detect if running inside Docker or on independent host
-        default_path = "/app/data_lake" if os.path.exists("/.dockerenv") else os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data_lake")
-        self.data_lake_path = os.environ.get("DATA_LAKE_PATH", default_path)
+        self.data_lake_path = os.environ.get("DATA_LAKE_PATH", "/app/data_lake")
         self.ohlcv_path = os.path.join(self.data_lake_path, "ohlcv/daily")
         os.makedirs(self.ohlcv_path, exist_ok=True)
         
         # Connect to existing Postgres for the 15-min snapshot state
         db_url = os.environ.get("DATABASE_URL", "postgresql://qeps_user:qeps_password@localhost:5432/qeps_db")
-        if not os.path.exists("/.dockerenv"):
-            # When running independently on host, translate docker hostname to localhost
-            db_url = db_url.replace("@postgres:5432", "@127.0.0.1:5432")
-            
         self.engine = create_engine(db_url)
         self._init_db()
         
