@@ -73,6 +73,10 @@ const PAGE_WORKER_MAPPING: Record<string, string[]> = {
     'app.worker.tasks.send_catalyst_digest_task',
     'app.worker.tasks.send_catalyst_scorecard_task',
     'app.worker.tasks.build_catalyst_evidence_task'
+  ],
+  impactful: [
+    'app.worker.tasks.refresh_impactful_events_task',
+    'app.worker.tasks.build_corporate_action_evidence_task'
   ]
 };
 

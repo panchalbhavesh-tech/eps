@@ -8,7 +8,8 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import CloseIcon from '@mui/icons-material/Close';
 import InfoIcon from '@mui/icons-material/Info';
 
-import { StatusBadge, FilterChipGroup, SearchInput } from '../components/common';
+import { StatusBadge, FilterChipGroup, SearchInput, MobileCardList } from '../components/common';
+import { useIsMobile } from '../hooks/useResponsive';
 import { useThemeMode } from '../theme/ThemeContext';
 import TaskManager from './TaskManager';
 
@@ -84,6 +85,7 @@ export interface WorkerExecutionHistory {
 
 const Schedules: React.FC = () => {
   const { tokens } = useThemeMode();
+  const isMobile = useIsMobile();
 
 
   const { loading, error, data, refetch } = useQuery(GET_CELERY_SCHEDULES, {
@@ -408,6 +410,54 @@ const Schedules: React.FC = () => {
     }
   ];
 
+  // ── Phone card: job + status → schedule & next run → purpose → last run → Inspect / Run now ──
+  const renderScheduleCard = (row: any) => {
+    const parts = (row.cronTitle || '').split(': ');
+    const st = (row.lastRunStatus || 'NEVER RUN').toUpperCase().replace('_', ' ');
+    let next = '—', overdue = false;
+    if (row.nextRunAt) {
+      const diff = new Date(row.nextRunAt).getTime() - Date.now();
+      overdue = diff <= 0;
+      const m = Math.floor(Math.max(diff, 0) / 60000), h = Math.floor(m / 60);
+      next = overdue ? 'overdue' : h > 24 ? `in ${Math.floor(h / 24)}d ${h % 24}h` : h > 0 ? `in ${h}h ${m % 60}m` : `in ${m}m`;
+    }
+    const last = row.lastRunAt ? new Date(row.lastRunAt + 'Z').toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }) : null;
+    const res = row.lastRunError || row.lastRunResult;
+    const isRunning = activeTrigger === row.taskName;
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
+          <Box sx={{ minWidth: 0 }}>
+            {parts.length === 2 && <Typography sx={{ fontSize: '11px', fontWeight: 800, color: tokens.primary.main, textTransform: 'uppercase' }}>{parts[0]}</Typography>}
+            <Typography sx={{ fontSize: '14px', fontWeight: 700, color: tokens.text.primary, lineHeight: '19px' }}>{parts.length === 2 ? parts[1] : (row.cronTitle || row.name)}</Typography>
+          </Box>
+          <Box sx={{ flexShrink: 0 }}>{st === 'NEVER RUN'
+            ? <Typography sx={{ fontSize: '11px', color: tokens.text.disabled, fontWeight: 700 }}>NEVER RUN</Typography>
+            : <StatusBadge status={st} size="small" />}</Box>
+        </Box>
+        <Typography sx={{ fontSize: '12px', color: tokens.text.secondary }}>
+          <b style={{ color: tokens.text.primary }}>{row.humanReadableInterval}</b> · next run <b style={{ color: overdue ? tokens.status.error.main : tokens.text.primary }}>{next}</b>
+        </Typography>
+        {row.description && (
+          <Typography sx={{ fontSize: '12px', color: tokens.text.secondary, lineHeight: '17px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{row.description}</Typography>
+        )}
+        {last && (
+          <Typography noWrap sx={{ fontSize: '12px', color: row.lastRunError ? tokens.status.error.main : tokens.text.secondary }}>
+            Last {last} IST{row.lastRunDuration ? ` · ${row.lastRunDuration.toFixed(1)}s` : ''}{res ? ` · ${res}` : ''}
+          </Typography>
+        )}
+        <Box sx={{ display: 'flex', gap: 1, mt: 0.25 }} onClick={(e) => e.stopPropagation()}>
+          <Button onClick={() => handleInspect(row)} sx={{ flex: 1, height: 38, fontSize: '13px', fontWeight: 600, textTransform: 'none', color: tokens.text.primary, border: `1px solid ${tokens.border.main}` }}>Inspect</Button>
+          <Button variant="contained" disabled={triggering && isRunning} onClick={() => handleRunNow(row.taskName, row.name)}
+            startIcon={isRunning ? <CircularProgress size={14} color="inherit" /> : <PlayArrowIcon sx={{ fontSize: '18px !important' }} />}
+            sx={{ flex: 1, height: 38, fontSize: '13px', fontWeight: 700, textTransform: 'none', bgcolor: tokens.primary.main, color: '#ffffff', boxShadow: 'none' }}>
+            {isRunning ? 'Running…' : 'Run now'}
+          </Button>
+        </Box>
+      </Box>
+    );
+  };
+
   if (loading && !data) {
     return (
       <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="70vh" gap={2}>
@@ -443,20 +493,24 @@ const Schedules: React.FC = () => {
           />
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: { xs: 'nowrap', md: 'wrap' }, width: { xs: '100%', md: 'auto' } }}>
           <SearchInput
             value={searchQuery}
             onChange={(val) => setSearchQuery(val)}
             placeholder="Search schedules, symbols, or purpose..."
-            width={290}
+            width={{ xs: '100%', sm: 290 }}
           />
 
           <Button
             variant="outlined"
             onClick={handleRefresh}
+            aria-label="Refresh timers"
             startIcon={<AutorenewIcon sx={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none', fontSize: '17px !important' }} />}
             sx={{
-              height: '36px',
+              height: { xs: '38px', md: '36px' },
+              minWidth: { xs: 44, md: 64 },
+              flexShrink: 0,
+              '& .MuiButton-startIcon': { mr: { xs: 0, md: 1 } },
               borderColor: tokens.border.main,
               color: tokens.text.primary,
               bgcolor: tokens.background.card,
@@ -468,7 +522,7 @@ const Schedules: React.FC = () => {
               '&:hover': { bgcolor: tokens.background.cardHover }
             }}
           >
-            Refresh Timers
+            {isMobile ? '' : 'Refresh Timers'}
           </Button>
         </Box>
       </Box>
@@ -485,7 +539,10 @@ const Schedules: React.FC = () => {
       ) : (
         <>
           {/* Main Schedule DataGrid Table */}
-          <Box sx={{ height: 'calc(100vh - 120px)', minHeight: 520, width: '100%', bgcolor: tokens.background.paper, borderBottom: `1px solid ${tokens.border.main}`, overflow: 'hidden' }}>
+          <Box sx={{ height: { xs: 'auto', sm: 'calc(100vh - 120px)' }, minHeight: { xs: 0, sm: 520 }, width: '100%', bgcolor: tokens.background.paper, borderBottom: `1px solid ${tokens.border.main}`, overflow: 'hidden' }}>
+        {isMobile ? (
+          <MobileCardList rows={filteredRows} renderCard={renderScheduleCard} getRowId={(r) => r.name} emptyText="No schedules match." />
+        ) : (
         <DataGrid
           rows={filteredRows}
           columns={columns}
@@ -536,6 +593,7 @@ const Schedules: React.FC = () => {
             },
           }}
         />
+        )}
       </Box>
 
       <Snackbar

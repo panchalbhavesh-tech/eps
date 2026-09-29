@@ -5,7 +5,9 @@ import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
-import { StatusBadge, FilterChipGroup, SearchInput } from '../components/common';
+import { StatusBadge, FilterChipGroup, SearchInput, MobileCardList } from '../components/common';
+import type { MobileSortOption } from '../components/common';
+import { useIsMobile } from '../hooks/useResponsive';
 import { TaskDetailDrawer, BackgroundJob } from '../components/tasks/TaskDetailDrawer';
 import { useThemeMode } from '../theme/ThemeContext';
 
@@ -28,6 +30,7 @@ const GET_BACKGROUND_JOBS = gql`
 
 const TaskManager: React.FC = () => {
   const { mode, tokens } = useThemeMode();
+  const isMobile = useIsMobile();
   const isDark = mode === 'dark';
 
   const { loading, error, data, refetch } = useQuery(GET_BACKGROUND_JOBS, { 
@@ -226,6 +229,35 @@ const TaskManager: React.FC = () => {
     }
   ];
 
+  // ── Phone card: task + status → timings → output (errors highlighted); tap = Inspect ──
+  const mobileSortOptions: MobileSortOption[] = [
+    { key: 'queued', label: 'Newest first', get: (r) => new Date((r.queuedAt || '') + 'Z').getTime() },
+    { key: 'duration', label: 'Slowest first', get: (r) => (r.duration ? parseFloat(r.duration) : null) },
+    { key: 'name', label: 'Task (A–Z)', desc: false, get: (r) => r.taskName },
+  ];
+  const renderTaskCard = (row: any) => {
+    const msg = row.errorMessage || row.result;
+    const isError = row.status === 'FAILURE';
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
+          <Typography sx={{ fontSize: '13px', fontWeight: 600, color: tokens.text.primary, fontFamily: 'monospace', wordBreak: 'break-all', minWidth: 0 }}>{row.taskName}</Typography>
+          <Box sx={{ flexShrink: 0 }}><StatusBadge status={row.status} size="small" /></Box>
+        </Box>
+        <Typography sx={{ fontSize: '12px', color: tokens.text.secondary, fontVariantNumeric: 'tabular-nums' }}>
+          {row.queuedAt ? new Date(row.queuedAt + 'Z').toLocaleString() : '—'} · {row.duration ? `${parseFloat(row.duration).toFixed(2)}s` : 'In progress…'}
+        </Typography>
+        {msg && (
+          <Typography sx={{ fontSize: '12px', lineHeight: '17px', color: isError ? tokens.status.error.main : tokens.text.secondary, fontFamily: isError ? 'monospace' : 'inherit',
+            bgcolor: isError ? tokens.status.error.wash : 'transparent', px: isError ? 1 : 0, py: isError ? 0.5 : 0, borderRadius: 1,
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-word' }}>
+            {msg}
+          </Typography>
+        )}
+      </Box>
+    );
+  };
+
   if (loading && !data) {
     return (
       <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="70vh" gap={2}>
@@ -250,7 +282,7 @@ const TaskManager: React.FC = () => {
     <Box sx={{ minHeight: '100vh', bgcolor: tokens.background.default, pb: 4, fontFamily: tokens.typography.fontFamily, width: '100%', overflowX: 'hidden' }}>
       {/* Sleek Top Controls & Filter Bar */}
       <Box sx={{ px: { xs: 2, md: 3.5 }, pt: 2, pb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, borderBottom: `1px solid ${tokens.border.main}`, bgcolor: tokens.background.header }}>
-        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', minWidth: 0, maxWidth: '100%' }}>
           <FilterChipGroup
             options={filterOptions}
             selectedValue={statusFilter}
@@ -258,19 +290,19 @@ const TaskManager: React.FC = () => {
           />
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', width: { xs: '100%', md: 'auto' } }}>
           <SearchInput
             value={searchQuery}
             onChange={(val) => setSearchQuery(val)}
             placeholder="Search tasks, UUIDs, or errors..."
-            width={280}
+            width={{ xs: '100%', sm: 280 }}
           />
 
           <Tooltip title="Polling GraphQL server automatically every 5000ms" placement="bottom">
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.6, borderRadius: 2, bgcolor: tokens.background.card, border: `1px solid ${tokens.border.main}`, height: '36px' }}>
               <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: tokens.status.success.main }} />
               <Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary, fontWeight: 700 }}>
-                Polling Interval: 5s
+                {isMobile ? 'Live · 5s' : 'Polling Interval: 5s'}
               </Typography>
             </Box>
           </Tooltip>
@@ -298,7 +330,11 @@ const TaskManager: React.FC = () => {
       </Box>
 
       {/* Main Edge-to-Edge DataGrid Table */}
-      <Box sx={{ height: 'calc(100vh - 130px)', minHeight: 500, width: '100%', bgcolor: tokens.background.paper, borderBottom: `1px solid ${tokens.border.main}`, overflow: 'hidden' }}>
+      <Box sx={{ height: { xs: 'auto', sm: 'calc(100vh - 130px)' }, minHeight: { xs: 0, sm: 500 }, width: '100%', bgcolor: tokens.background.paper, borderBottom: `1px solid ${tokens.border.main}`, overflow: 'hidden' }}>
+        {isMobile ? (
+          <MobileCardList rows={filteredRows} renderCard={renderTaskCard} sortOptions={mobileSortOptions} loading={loading}
+            emptyText="No tasks match." onRowClick={(p: any) => handleOpenDetails(p.row)} />
+        ) : (
         <DataGrid 
           rows={filteredRows} 
           columns={columns} 
@@ -359,6 +395,7 @@ const TaskManager: React.FC = () => {
             '& .MuiDataGrid-overlay': { bgcolor: tokens.background.paper }
           }}
         />
+        )}
       </Box>
 
       {/* Right-Side Task Detail Drawer */}

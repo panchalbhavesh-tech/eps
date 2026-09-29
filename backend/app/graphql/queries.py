@@ -272,10 +272,14 @@ class Query:
         from app.graphql.types import PredictionType, EarningsReportType, EventStudyResultType, StrategyBacktestType, TechnicalSnapshotType, AIAnalysisReportType
         predictions = [PredictionType(id=str(p.id), target_quarter=p.target_quarter, predicted_eps=p.predicted_eps, confidence_score=p.confidence_score or 0, created_at=str(p.created_at)) for p in c.predictions]
         earnings = [EarningsReportType(id=str(e.id), fiscal_quarter=e.fiscal_quarter, report_date=str(e.report_date)) for e in c.earnings_reports]
-        event_studies = [EventStudyResultType(**{k: v for k, v in e.__dict__.items() if not k.startswith('_') and k not in ('company_id', 'company', 'earnings_report_id')}) for e in c.event_studies]
-        backtests = [StrategyBacktestType(**{k: v for k, v in b.__dict__.items() if not k.startswith('_') and k not in ('company_id', 'company')}) for b in c.backtests]
-        techs = [TechnicalSnapshotType(**{k: v for k, v in t.__dict__.items() if not k.startswith('_') and k not in ('company_id', 'company')}) for t in c.technical_snapshots]
-        ai_reports = [AIAnalysisReportType(**{k: v for k, v in a.__dict__.items() if not k.startswith('_') and k not in ('company_id', 'company')}) for a in c.ai_reports]
+        def as_type(type_cls, row):
+            # Copy only the fields the GraphQL type declares, so new DB columns can't break this page.
+            fields = getattr(type_cls, "__annotations__", {})
+            return type_cls(**{k: v for k, v in row.__dict__.items() if k in fields})
+        event_studies = [as_type(EventStudyResultType, e) for e in c.event_studies]
+        backtests = [as_type(StrategyBacktestType, b) for b in c.backtests]
+        techs = [as_type(TechnicalSnapshotType, t) for t in c.technical_snapshots]
+        ai_reports = [as_type(AIAnalysisReportType, a) for a in c.ai_reports]
         prob, avg_mom = get_company_momentum_stats(c)
         
         return CompanyType(
@@ -608,6 +612,46 @@ class Query:
         return out
 
     @strawberry.field
+    def impactful_events(self, info: Info[Context, None]) -> str:
+        """Live Impactful Events snapshot (JSON). Built by a scheduled job; the first request queues a build."""
+        import json
+        from app.services.corporate_actions_service import load_snapshot
+        snap = load_snapshot()
+        if snap:
+            return json.dumps(snap, default=str)
+        try:
+            from app.worker.observability import get_redis_client
+            from app.worker.celery_app import celery_app
+            if get_redis_client().set("impactful_events:build_lock", "1", nx=True, ex=900):
+                celery_app.send_task("app.worker.tasks.refresh_impactful_events_task")
+        except Exception:
+            pass
+        return json.dumps({"built_at": None, "building": True, "items": [], "tabs": {}, "evidence": {}, "evidence_events": 0})
+
+    @strawberry.field
+    def impactful_event_detail(self, info: Info[Context, None], key: str) -> Optional[str]:
+        """Popup data for one Impactful Event: evidence breakdown, this stock's past events and the price cone (cached 5 min)."""
+        import json
+        from app.services.corporate_actions_service import event_detail
+        from app.worker.observability import get_redis_client
+        cache_key = f"impactful:detail:{key}"
+        try:
+            cached = get_redis_client().get(cache_key)
+            if cached:
+                return cached.decode()
+        except Exception:
+            pass
+        out = event_detail(info.context.db, key)
+        if out is None:
+            return None
+        data = json.dumps(out, default=str)
+        try:
+            get_redis_client().setex(cache_key, 300, data)
+        except Exception:
+            pass
+        return data
+
+    @strawberry.field
     def pre_release_edge_detail(self, info: Info[Context, None], company_id: str) -> Optional[PreReleaseEdgeType]:
         from app.infrastructure.models import PreReleasePrediction
         from app.services.pre_release_edge_service import track_record
@@ -739,6 +783,16 @@ class Query:
                 'cron_title': 'EVENT: Backfill Results History',
                 'category': 'EVENT',
                 'description': 'Rebuilds 4 years of results dates, broadcast times and event studies for stale companies.'
+            },
+            'refresh-impactful-events': {
+                'cron_title': 'IMPACTFUL: Refresh Live Events',
+                'category': 'IMPACTFUL EVENTS',
+                'description': 'Pulls board-meeting notices, declarations and ex-dates from NSE and grades each against 5 years of evidence.'
+            },
+            'build-corporate-action-evidence-weekly': {
+                'cron_title': 'IMPACTFUL: Build Evidence',
+                'category': 'IMPACTFUL EVENTS',
+                'description': 'Measures how every past dividend, bonus, split, buyback, rights issue, demerger and fund raise moved the stock vs Nifty.'
             },
             'retrain-pre-release-model-weekly': {
                 'cron_title': 'ML: Retrain Pre-Release Model',

@@ -6,6 +6,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { useThemeMode } from '../theme/ThemeContext';
 import HistoricalDataChart from '../components/HistoricalDataChart';
+import { useIsMobile } from '../hooks/useResponsive';
 import { useQuery } from '@apollo/client';
 import { DATA_LAKE_STOCKS_QUERY } from '../graphql/operations';
 
@@ -49,6 +50,7 @@ const getCompletenessColor = (stock: StockInfo, tokens: any) => {
 
 const DataLakePage: React.FC = () => {
   const { tokens } = useThemeMode();
+  const isMobile = useIsMobile();
   const [search, setSearch] = useState('');
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(60);
@@ -127,34 +129,34 @@ const DataLakePage: React.FC = () => {
   }, [stocks, search, filterStatus, sortBy, sortDir, visibleCount]);
 
   return (
-    <Box sx={{ p: 4, maxWidth: 1400, margin: '0 auto' }}>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 4 }}>
-        <Box sx={{ flex: 1, minWidth: { xs: '100%', md: 600 } }}>
-          <Typography variant="h4" sx={{ color: tokens.text.primary, fontWeight: 700, mb: 1 }}>
+    <Box sx={{ p: { xs: 1.5, sm: 3, md: 4 }, maxWidth: 1400, margin: '0 auto' }}>
+      <Box sx={{ mb: { xs: 2, md: 4 }, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: { xs: 2, md: 4 } }}>
+        <Box sx={{ flex: 1, minWidth: { xs: '100%', md: 600 }, maxWidth: '100%' }}>
+          <Typography variant="h4" sx={{ color: tokens.text.primary, fontWeight: 700, mb: 1, fontSize: { xs: '20px', md: undefined } }}>
             Parquet Data Lake
           </Typography>
-          <Typography sx={{ color: tokens.text.secondary, mb: 4 }}>
+          <Typography sx={{ color: tokens.text.secondary, mb: { xs: 2, md: 4 }, fontSize: { xs: '13px', md: undefined } }}>
             Explore historical OHLCV data availability and visualize cross-sectional records.
           </Typography>
 
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', gap: { xs: 1.25, md: 2 }, flexWrap: 'wrap', alignItems: 'center' }}>
             <TextField
               fullWidth
               size="small"
               variant="outlined"
-              placeholder="Search stocks by ticker or name..."
+              placeholder={isMobile ? 'Search stocks' : 'Search stocks by ticker or name...'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               sx={{
                 flex: 1,
-                minWidth: 300,
+                minWidth: { xs: '100%', sm: 300 },
                 '& .MuiOutlinedInput-root': {
                   bgcolor: tokens.background.card,
                   '& fieldset': { borderColor: tokens.border.main },
                   '&:hover fieldset': { borderColor: tokens.border.light },
                   '&.Mui-focused fieldset': { borderColor: tokens.primary.main },
                 },
-                input: { color: tokens.text.primary }
+                input: { color: tokens.text.primary, fontSize: { xs: '16px', sm: undefined } }
               }}
               InputProps={{
                 startAdornment: (
@@ -165,7 +167,7 @@ const DataLakePage: React.FC = () => {
               }}
             />
 
-            <FormControl size="small" sx={{ minWidth: 160 }}>
+            <FormControl size="small" sx={{ minWidth: 160, flex: { xs: '1 1 140px', sm: '0 0 auto' } }}>
               <InputLabel sx={{ color: tokens.text.secondary }}>Sort By</InputLabel>
               <Select
                 value={sortBy}
@@ -209,7 +211,7 @@ const DataLakePage: React.FC = () => {
               <ToggleButton value="desc">DESC</ToggleButton>
             </ToggleButtonGroup>
 
-            <FormControl size="small" sx={{ minWidth: 150 }}>
+            <FormControl size="small" sx={{ minWidth: 150, flex: { xs: '1 1 100%', sm: '0 0 auto' } }}>
               <InputLabel sx={{ color: tokens.text.secondary }}>Filter</InputLabel>
               <Select
                 value={filterStatus}
@@ -238,28 +240,29 @@ const DataLakePage: React.FC = () => {
             borderRadius: 2, 
             border: `1px solid ${tokens.border.main}`,
             p: 2,
+            width: { xs: '100%', md: 'auto' },
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
           }}>
             <Typography variant="subtitle2" sx={{ color: tokens.text.secondary, mb: 1.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: `1px solid ${tokens.border.light}`, pb: 1 }}>
               Data Lake Summary
             </Typography>
-            <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-              <Box sx={{ textAlign: 'center', px: 1 }}>
+            <Box sx={{ display: 'flex', gap: { xs: 0.5, sm: 3 }, alignItems: 'center', justifyContent: { xs: 'space-between', sm: 'flex-start' } }}>
+              <Box sx={{ textAlign: 'center', px: { xs: 0, sm: 1 } }}>
                 <Typography variant="caption" sx={{ color: tokens.text.tertiary, textTransform: 'uppercase', fontWeight: 600 }}>Total</Typography>
                 <Typography variant="h6" sx={{ color: tokens.text.primary, fontWeight: 700, lineHeight: 1.2, mt: 0.5 }}>{totalCount}</Typography>
               </Box>
-              <Box sx={{ width: 1, height: 35, bgcolor: tokens.border.main }} />
-              <Box sx={{ textAlign: 'center', px: 1 }}>
+              <Box sx={{ width: { xs: '1px', md: 1 }, flexShrink: 0, height: 35, bgcolor: tokens.border.main }} />
+              <Box sx={{ textAlign: 'center', px: { xs: 0, sm: 1 } }}>
                 <Typography variant="caption" sx={{ color: tokens.text.tertiary, textTransform: 'uppercase', fontWeight: 600 }}>Available</Typography>
                 <Typography variant="h6" sx={{ color: '#4caf50', fontWeight: 700, lineHeight: 1.2, mt: 0.5 }}>{availableCount}</Typography>
               </Box>
-              <Box sx={{ width: 1, height: 35, bgcolor: tokens.border.main }} />
-              <Box sx={{ textAlign: 'center', px: 1 }}>
+              <Box sx={{ width: { xs: '1px', md: 1 }, flexShrink: 0, height: 35, bgcolor: tokens.border.main }} />
+              <Box sx={{ textAlign: 'center', px: { xs: 0, sm: 1 } }}>
                 <Typography variant="caption" sx={{ color: tokens.text.tertiary, textTransform: 'uppercase', fontWeight: 600 }}>Missing</Typography>
                 <Typography variant="h6" sx={{ color: '#f44336', fontWeight: 700, lineHeight: 1.2, mt: 0.5 }}>{missingCount}</Typography>
               </Box>
-              <Box sx={{ width: 1, height: 35, bgcolor: tokens.border.main }} />
-              <Box sx={{ textAlign: 'center', px: 1, minWidth: 'max-content' }}>
+              <Box sx={{ width: { xs: '1px', md: 1 }, flexShrink: 0, height: 35, bgcolor: tokens.border.main }} />
+              <Box sx={{ textAlign: 'center', px: { xs: 0, sm: 1 }, minWidth: 'max-content' }}>
                 <Typography variant="caption" sx={{ color: tokens.text.tertiary, textTransform: 'uppercase', fontWeight: 600, whiteSpace: 'nowrap' }}>Data Size</Typography>
                 <Typography variant="h6" sx={{ color: tokens.primary.main, fontWeight: 700, lineHeight: 1.2, mt: 0.5, whiteSpace: 'nowrap' }}>{formatBytes(totalSizeBytes)}</Typography>
               </Box>
@@ -281,7 +284,7 @@ const DataLakePage: React.FC = () => {
       )}
 
       {!loading && !error && (
-        <Grid container spacing={3}>
+        <Grid container spacing={{ xs: 1.25, md: 3 }}>
           {filteredStocks.map((stock) => (
             <Grid item xs={12} sm={6} md={4} lg={3} key={stock.ticker}>
               <Card 
@@ -356,7 +359,7 @@ const DataLakePage: React.FC = () => {
                           </Typography>
                         </Tooltip>
                         
-                        <Typography variant="caption" sx={{ color: tokens.text.tertiary, fontSize: '0.65rem' }}>
+                        <Typography variant="caption" sx={{ color: tokens.text.tertiary, fontSize: { xs: '11px', md: '0.65rem' } }}>
                           Updated: {stock.lastUpdated ? new Date(stock.lastUpdated).toLocaleDateString() : 'N/A'}
                         </Typography>
                       </Box>
@@ -375,6 +378,7 @@ const DataLakePage: React.FC = () => {
         onClose={() => setSelectedTicker(null)}
         maxWidth="lg"
         fullWidth
+        fullScreen={isMobile}
         PaperProps={{
           sx: {
             bgcolor: tokens.background.paper,
@@ -393,7 +397,7 @@ const DataLakePage: React.FC = () => {
             <CloseIcon />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ p: 3 }}>
+        <DialogContent sx={{ p: { xs: 1, md: 3 } }}>
           {selectedTicker && <HistoricalDataChart ticker={selectedTicker} />}
         </DialogContent>
       </Dialog>

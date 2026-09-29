@@ -637,3 +637,43 @@ class MomentumTradeAlert(Base):
     exit_price = Column(Float, nullable=True)
     exit_reason = Column(String, nullable=True)
     return_pct = Column(Float, nullable=True)
+
+
+class CorporateActionEvent(Base):
+    """
+    One past corporate action (dividend, bonus, split, buyback, rights, demerger) or fund-raising board meeting,
+    with its measured abnormal returns (vs Nifty) around the notice, declaration and ex-date.
+    The evidence base behind the Impactful Events page; live lists are computed on the fly, not stored.
+    """
+    __tablename__ = "corporate_action_events"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_key = Column(String, unique=True, nullable=False)          # TICKER|KIND|date
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=True, index=True)
+    ticker = Column(String, index=True, nullable=False)
+    kind = Column(String, index=True, nullable=False)                # DIVIDEND BONUS SPLIT BUYBACK RIGHTS DEMERGER FUNDRAISE
+    subject = Column(String, nullable=True)
+    ex_date = Column(DateTime, nullable=True, index=True)
+    record_date = Column(DateTime, nullable=True)
+    meeting_date = Column(DateTime, nullable=True)
+    notice_at = Column(DateTime, nullable=True)
+    with_results = Column(Boolean, default=False)
+    amount = Column(Float, nullable=True)                            # dividend Rs per share (at the time)
+    split_factor = Column(Float, nullable=True)                      # bonus / split share multiplier
+    yield_pct = Column(Float, nullable=True)
+    surprise_pct = Column(Float, nullable=True)                      # vs the same dividend ~1 year earlier (split-adjusted)
+    price = Column(Float, nullable=True)                             # actual (unadjusted) close before the ex-date / meeting
+    adv_cr = Column(Float, nullable=True)                            # 20-session average traded value, Rs crore
+    sessions_decl_to_ex = Column(Integer, nullable=True)
+    ret_notice = Column(Float, nullable=True)                         # notice -> day before meeting
+    ret_decl = Column(Float, nullable=True)                           # day before meeting -> day after meeting
+    ret_runup = Column(Float, nullable=True)                          # day after declaration -> day before ex-date
+    ret_pre10 = Column(Float, nullable=True)                          # 10 sessions before the ex-date
+    ret_exday = Column(Float, nullable=True)                          # ex-date session (total return)
+    ret_post5 = Column(Float, nullable=True)                          # ex-date -> 5 sessions later
+    # month before the key date as closes / close on the exit day (session before), oldest first - lets the page
+    # answer "if I had bought N sessions before the ex-date / meeting, what happened?" for any N
+    path_ex = Column(String, nullable=True)
+    path_mtg = Column(String, nullable=True)
+    sessions_notice_to_mtg = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)

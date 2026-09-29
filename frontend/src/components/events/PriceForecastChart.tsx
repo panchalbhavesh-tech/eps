@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Box, Typography } from '@mui/material';
 import { useThemeMode } from '../../theme/ThemeContext';
 import { fmtDate, fmtPrice } from './preReleaseTypes';
+import { useIsMobile } from '../../hooks/useResponsive';
 
 type Dict = Record<string, any>;
 
@@ -33,16 +34,19 @@ interface Props {
   path: PricePath;
   entryLabel?: string;         // "BUY" for trade calls, otherwise a neutral "cheapest price" marker
   exitLabel?: string;
+  eventLabel?: string;         // marker at results_index ("RESULTS" on the Events page)
 }
 
-const W = 760;
-const H = 360;
-const PAD = { l: 8, r: 150, t: 22, b: 30 };
+// Drawing size: phones get a narrower canvas so labels stay readable when scaled to the screen.
+const DESKTOP = { W: 760, H: 360, PAD: { l: 8, r: 150, t: 22, b: 30 } };
+const PHONE = { W: 400, H: 300, PAD: { l: 6, r: 118, t: 22, b: 28 } };
 
 /** Real closes flowing into the simulated forecast cone, with plan levels on top. */
-export const PriceForecastChart: React.FC<Props> = ({ path, exitLabel, entryLabel = 'CHEAPEST' }) => {
+export const PriceForecastChart: React.FC<Props> = ({ path, exitLabel, entryLabel = 'CHEAPEST', eventLabel = 'RESULTS' }) => {
   const { tokens } = useThemeMode();
   const [hover, setHover] = useState<number | null>(null);
+  const isMobile = useIsMobile();
+  const { W, H, PAD } = isMobile ? PHONE : DESKTOP;
   const green = tokens.status.success.main;
   const red = tokens.status.error.main;
   const amber = tokens.status.warning.main;
@@ -61,10 +65,12 @@ export const PriceForecastChart: React.FC<Props> = ({ path, exitLabel, entryLabe
       ? PAD.l + (nH ? i / nH : 0) * (split - PAD.l)
       : split + ((i - nH) / Math.max(1, nF)) * (W - PAD.r - split);
     // Keep it simple: only the prices you act on - two targets and the stop-loss.
+    // Phones: short labels (T1 ₹1,569) so they fit beside the plot.
+    const px = (v: number) => (isMobile ? `₹${Math.round(v).toLocaleString('en-IN')}` : fmtPrice(v));
     const lines: { price: number; label: string; color: string; dash: string; strong: boolean }[] = [
-      { price: path.plan.targets[1].price, label: `Target 2 ${fmtPrice(path.plan.targets[1].price)}`, color: green, dash: '5 4', strong: true },
-      { price: path.plan.targets[0].price, label: `Target 1 ${fmtPrice(path.plan.targets[0].price)}`, color: green, dash: '5 4', strong: true },
-      { price: path.plan.stop, label: `Stop ${fmtPrice(path.plan.stop)}`, color: red, dash: '', strong: true },
+      { price: path.plan.targets[1].price, label: `${isMobile ? 'T2' : 'Target 2'} ${px(path.plan.targets[1].price)}`, color: green, dash: '5 4', strong: true },
+      { price: path.plan.targets[0].price, label: `${isMobile ? 'T1' : 'Target 1'} ${px(path.plan.targets[0].price)}`, color: green, dash: '5 4', strong: true },
+      { price: path.plan.stop, label: `Stop ${px(path.plan.stop)}`, color: red, dash: '', strong: true },
     ];
     const vals = [...hist.map((h) => h.close), ...path.bands.flatMap((b) => [b.p10, b.p90]), ...lines.map((l) => l.price)];
     const lo = Math.min(...vals) * 0.995;
@@ -78,12 +84,22 @@ export const PriceForecastChart: React.FC<Props> = ({ path, exitLabel, entryLabe
     const labels = lines.map((l) => ({ ...l, ly: y(l.price) })).sort((a, b) => a.ly - b.ly);
     for (let i = 1; i < labels.length; i++) if (labels[i].ly - labels[i - 1].ly < 16) labels[i].ly = labels[i - 1].ly + 16;
     return { hist, nH, n, x, y, fi, area, labels, lines };
-  }, [path, tokens, green, red]);
+  }, [path, tokens, green, red, W, H, PAD, isMobile]);
 
   const { hist, nH, n, x, y, fi, area, labels, lines } = model;
   const resultsX = x(fi(Math.min(path.results_index, path.bands.length - 1)));
   const exitX = x(fi(Math.min(path.exit_index, path.bands.length - 1)));
-  const tickIdx = [0, Math.floor(nH / 2), nH, n - 1];
+  // phones: fewer date ticks so labels never collide on the narrow canvas
+  const tickIdx = isMobile ? [0, nH, n - 1] : [0, Math.floor(nH / 2), nH, n - 1];
+
+  // Mouse hover on desktop, tap/drag on touch screens: nearest day under the pointer.
+  const pick = (e: React.PointerEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    let best = 0;
+    for (let i = 1; i < n; i++) if (Math.abs(x(i) - px) < Math.abs(x(best) - px)) best = i;
+    setHover(best);
+  };
 
   const point = (i: number) => {
     if (i < nH) return { date: hist[i].date, actual: hist[i].close };
@@ -94,15 +110,10 @@ export const PriceForecastChart: React.FC<Props> = ({ path, exitLabel, entryLabe
 
   return (
     <Box sx={{ position: 'relative', width: '100%' }}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block' }}
-        onMouseLeave={() => setHover(null)}
-        onMouseMove={(e) => {
-          const r = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
-          const px = ((e.clientX - r.left) / r.width) * W;
-          let best = 0;
-          for (let i = 1; i < n; i++) if (Math.abs(x(i) - px) < Math.abs(x(best) - px)) best = i;
-          setHover(best);
-        }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block', touchAction: 'pan-y' }}
+        onPointerLeave={() => setHover(null)}
+        onPointerDown={(e) => pick(e)}
+        onPointerMove={(e) => pick(e)}>
         <style>{`text { paint-order: stroke; stroke: ${tokens.mode === 'dark' ? '#16191D' : '#FFFFFF'}; stroke-width: 4px; stroke-linejoin: round; }`}</style>
         {/* forecast zone background */}
         <rect x={x(nH)} y={PAD.t} width={x(n - 1) - x(nH)} height={H - PAD.t - PAD.b} fill={tokens.background.cardHover} opacity={0.5} />
@@ -117,7 +128,7 @@ export const PriceForecastChart: React.FC<Props> = ({ path, exitLabel, entryLabe
         <polyline points={[...hist.map((h, i) => `${x(i)},${y(h.close)}`), `${x(nH)},${y(path.price)}`].join(' ')} fill="none" stroke={tokens.text.primary} strokeWidth={2.4} />
         {/* results + exit markers */}
         <line x1={resultsX} x2={resultsX} y1={PAD.t} y2={H - PAD.b} stroke={amber} strokeWidth={1.2} strokeDasharray="3 3" />
-        <text x={resultsX + 4} y={PAD.t + 10} fontSize="13" fontWeight={700} fill={amber}>RESULTS</text>
+        <text x={resultsX + 4} y={PAD.t + 10} fontSize="13" fontWeight={700} fill={amber}>{eventLabel}</text>
         {exitLabel && Math.abs(exitX - resultsX) > 2 && (
           <>
             <line x1={exitX} x2={exitX} y1={PAD.t} y2={H - PAD.b} stroke={green} strokeWidth={1.2} strokeDasharray="3 3" />

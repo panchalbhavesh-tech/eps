@@ -57,7 +57,7 @@ export const ExpandableSection: React.FC<ExpandableSectionProps> = ({
           {title}
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Typography sx={{ color: tokens.text.secondary, fontSize: '10px', textTransform: 'uppercase', fontWeight: 600, mr: 1, opacity: expanded ? 0 : 0.5, transition: 'opacity 0.2s' }}>
+          <Typography sx={{ color: tokens.text.secondary, fontSize: { xs: '11px', md: '10px' }, textTransform: 'uppercase', fontWeight: 600, mr: 1, opacity: expanded ? 0 : 0.5, transition: 'opacity 0.2s' }}>
             {expanded ? '' : 'Expand'}
           </Typography>
           <IconButton 

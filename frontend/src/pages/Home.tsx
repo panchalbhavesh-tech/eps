@@ -17,11 +17,14 @@ import { apiUrl } from '../utils/api';
 import { PreReleaseEdgeCell } from '../components/events/PreReleaseEdgeCell';
 import { PreReleaseEdgeDialog } from '../components/events/PreReleaseEdgeDialog';
 import { GET_PRE_RELEASE_EDGES, PreReleaseEdge, isTradeVerdict } from '../components/events/preReleaseTypes';
+import { useNavigate } from 'react-router-dom';
+import { useIsMobile } from '../hooks/useResponsive';
+import type { MobileSortOption } from '../components/common';
 
 // ─── Standalone News Cell ──────────────────────────────────────────────────────
 interface NewsItem { title: string; summary: string; url: string; source: string; published: string; }
 
-const NewsCell: React.FC<{ ticker: string; name: string }> = ({ ticker, name }) => {
+const NewsCell: React.FC<{ ticker: string; name: string; label?: string }> = ({ ticker, name, label = 'VIEW ↗' }) => {
   const { tokens } = useThemeMode();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -68,7 +71,7 @@ const NewsCell: React.FC<{ ticker: string; name: string }> = ({ ticker, name }) 
           }
         }}
       >
-        {loading ? '…' : 'VIEW ↗'}
+        {loading ? '…' : label}
       </Button>
 
       {/* Popup Dialog */}
@@ -223,7 +226,7 @@ const NewsSentimentCell: React.FC<{ ticker: string; name: string }> = ({ ticker,
   if (!data && !error) {
     return (
       <Box ref={containerRef} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
-        <Typography sx={{ fontSize: '10px', color: tokens.text.tertiary, fontStyle: 'italic' }}>
+        <Typography sx={{ fontSize: { xs: '11.5px', sm: '10px' }, color: tokens.text.tertiary, fontStyle: 'italic' }}>
           {loading ? 'Analyzing…' : '—'}
         </Typography>
       </Box>
@@ -233,7 +236,7 @@ const NewsSentimentCell: React.FC<{ ticker: string; name: string }> = ({ ticker,
   if ((error && !data) || (data && data.overallSentiment === 'INSUFFICIENT_DATA')) {
     return (
       <Box ref={containerRef} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
-        <Typography sx={{ fontSize: '10px', color: tokens.text.disabled }}>—</Typography>
+        <Typography sx={{ fontSize: { xs: '11.5px', sm: '10px' }, color: tokens.text.disabled }}>—</Typography>
       </Box>
     );
   }
@@ -261,10 +264,10 @@ const NewsSentimentCell: React.FC<{ ticker: string; name: string }> = ({ ticker,
       >
         {/* Row 1: Sentiment label + score + refresh */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <Typography className="mono-font tabular-nums" sx={{ fontSize: '10px', fontWeight: 700, color: sentColor, letterSpacing: '0.3px' }}>
+          <Typography className="mono-font tabular-nums" sx={{ fontSize: { xs: '11.5px', sm: '10px' }, fontWeight: 700, color: sentColor, letterSpacing: '0.3px' }}>
             {data!.overallSentiment}
           </Typography>
-          <Typography className="mono-font tabular-nums" sx={{ fontSize: '10px', fontWeight: 700, color: sentColor }}>
+          <Typography className="mono-font tabular-nums" sx={{ fontSize: { xs: '11.5px', sm: '10px' }, fontWeight: 700, color: sentColor }}>
             {formatScore(data!.sentimentScore)}
           </Typography>
           <Box
@@ -287,7 +290,7 @@ const NewsSentimentCell: React.FC<{ ticker: string; name: string }> = ({ ticker,
         {/* Row 2: Confidence dot + theme */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
           <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: sentColor, flexShrink: 0 }} />
-          <Typography sx={{ fontSize: '9px', fontWeight: 500, color: loading ? tokens.text.tertiary : tokens.text.secondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '90px' }}>
+          <Typography sx={{ fontSize: { xs: '11px', sm: '9px' }, fontWeight: 500, color: loading ? tokens.text.tertiary : tokens.text.secondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '90px' }}>
             {loading ? 'Analyzing...' : `${data!.confidence} · ${data!.dominantTheme || data!.trend}`}
           </Typography>
         </Box>
@@ -322,7 +325,7 @@ const NewsSentimentCell: React.FC<{ ticker: string; name: string }> = ({ ticker,
               <Typography sx={{ fontSize: '11px', fontWeight: 700, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 N. Sentiment
               </Typography>
-              <Typography sx={{ fontSize: '10px', color: tokens.text.tertiary }}>
+              <Typography sx={{ fontSize: { xs: '11.5px', sm: '10px' }, color: tokens.text.tertiary }}>
                 {data.articleCount} articles
               </Typography>
             </Box>
@@ -335,13 +338,13 @@ const NewsSentimentCell: React.FC<{ ticker: string; name: string }> = ({ ticker,
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: '12px', mt: 1 }}>
-              <Typography sx={{ fontSize: '10px', color: tokens.text.secondary }}>
+              <Typography sx={{ fontSize: { xs: '11.5px', sm: '10px' }, color: tokens.text.secondary }}>
                 <span style={{ fontWeight: 600 }}>Confidence:</span> {data.confidence}
               </Typography>
-              <Typography sx={{ fontSize: '10px', color: tokens.text.secondary }}>
+              <Typography sx={{ fontSize: { xs: '11.5px', sm: '10px' }, color: tokens.text.secondary }}>
                 <span style={{ fontWeight: 600 }}>Impact:</span> {data.impact}
               </Typography>
-              <Typography sx={{ fontSize: '10px', color: tokens.text.secondary }}>
+              <Typography sx={{ fontSize: { xs: '11.5px', sm: '10px' }, color: tokens.text.secondary }}>
                 <span style={{ fontWeight: 600 }}>Trend:</span> {data.trend}
               </Typography>
             </Box>
@@ -349,7 +352,7 @@ const NewsSentimentCell: React.FC<{ ticker: string; name: string }> = ({ ticker,
 
           {/* Article Breakdown */}
           <Box sx={{ p: 2, borderBottom: `1px solid ${tokens.border.main}` }}>
-            <Typography sx={{ fontSize: '10px', fontWeight: 700, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.3px', mb: 1 }}>
+            <Typography sx={{ fontSize: { xs: '11.5px', sm: '10px' }, fontWeight: 700, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.3px', mb: 1 }}>
               Article Breakdown
             </Typography>
             <Box sx={{ display: 'flex', gap: '6px', mb: 1 }}>
@@ -360,7 +363,7 @@ const NewsSentimentCell: React.FC<{ ticker: string; name: string }> = ({ ticker,
                 return (
                   <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                     <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: colorMap[key] }} />
-                    <Typography sx={{ fontSize: '10px', color: tokens.text.secondary, fontWeight: 500 }}>
+                    <Typography sx={{ fontSize: { xs: '11.5px', sm: '10px' }, color: tokens.text.secondary, fontWeight: 500 }}>
                       {key.charAt(0).toUpperCase() + key.slice(1)}: {count}
                     </Typography>
                   </Box>
@@ -388,7 +391,7 @@ const NewsSentimentCell: React.FC<{ ticker: string; name: string }> = ({ ticker,
           <Box sx={{ p: 2, borderBottom: data.contradictions ? `1px solid ${tokens.border.main}` : 'none' }}>
             {data.dominantTheme && (
               <Box sx={{ mb: 1 }}>
-                <Typography sx={{ fontSize: '10px', fontWeight: 700, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.3px', mb: 0.5 }}>
+                <Typography sx={{ fontSize: { xs: '11.5px', sm: '10px' }, fontWeight: 700, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.3px', mb: 0.5 }}>
                   Dominant Theme
                 </Typography>
                 <Typography sx={{ fontSize: '11px', fontWeight: 600, color: tokens.text.primary }}>
@@ -396,7 +399,7 @@ const NewsSentimentCell: React.FC<{ ticker: string; name: string }> = ({ ticker,
                 </Typography>
               </Box>
             )}
-            <Typography sx={{ fontSize: '10px', fontWeight: 700, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.3px', mb: 0.5 }}>
+            <Typography sx={{ fontSize: { xs: '11.5px', sm: '10px' }, fontWeight: 700, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.3px', mb: 0.5 }}>
               Key Drivers
             </Typography>
             <Typography sx={{ fontSize: '11px', color: tokens.text.secondary, lineHeight: 1.5 }}>
@@ -407,7 +410,7 @@ const NewsSentimentCell: React.FC<{ ticker: string; name: string }> = ({ ticker,
           {/* Contradictions */}
           {data.contradictions && (
             <Box sx={{ p: 2, borderBottom: `1px solid ${tokens.border.main}` }}>
-              <Typography sx={{ fontSize: '10px', fontWeight: 700, color: tokens.status.warning.main, textTransform: 'uppercase', letterSpacing: '0.3px', mb: 0.5 }}>
+              <Typography sx={{ fontSize: { xs: '11.5px', sm: '10px' }, fontWeight: 700, color: tokens.status.warning.main, textTransform: 'uppercase', letterSpacing: '0.3px', mb: 0.5 }}>
                 Conflicting Signals
               </Typography>
               <Typography sx={{ fontSize: '11px', color: tokens.text.secondary, lineHeight: 1.5 }}>
@@ -418,10 +421,10 @@ const NewsSentimentCell: React.FC<{ ticker: string; name: string }> = ({ ticker,
 
           {/* Footer */}
           <Box sx={{ px: 2, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography sx={{ fontSize: '9px', color: tokens.text.disabled }}>
+            <Typography sx={{ fontSize: { xs: '11px', sm: '9px' }, color: tokens.text.disabled }}>
               Updated: {data.lastUpdated ? new Date(data.lastUpdated).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
             </Typography>
-            <Typography sx={{ fontSize: '9px', color: tokens.text.disabled }}>
+            <Typography sx={{ fontSize: { xs: '11px', sm: '9px' }, color: tokens.text.disabled }}>
               {data.articleCount} articles analyzed
             </Typography>
           </Box>
@@ -514,9 +517,31 @@ const MASS_CALCULATE_HEALTH = gql`
 `;
 
 
+/** Letter grade used by the HEALTH column and the mobile card (same rules for both). */
+const healthLetter = (scoreVal: any, gradeVal: any): { letter: string; score: number } | null => {
+  const score = scoreVal != null ? Number(scoreVal) : NaN;
+  if (isNaN(score) || score <= 0) return null;
+  const gradeStr = String(gradeVal || '');
+  const byScore = score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 50 ? 'C' : score >= 40 ? 'D' : 'F';
+  if (/[A-F]/.test(gradeStr)) {
+    const match = gradeStr.match(/Grade\s*([A-F])/i) || gradeStr.match(/\b([A-F])\b/);
+    return { letter: match && match[1] ? match[1].toUpperCase() : byScore, score };
+  }
+  return { letter: byScore, score };
+};
+
+/** Sort key for the PRE-RELEASE EDGE column: trade calls first, then AVOID, then the rest; graded last. */
+const edgeSortValue = (e?: PreReleaseEdge) => {
+  if (!e) return -Infinity;
+  if (e.graded) return -1;
+  return isTradeVerdict(e.verdict) ? 1000 + (e.convictionScore || 0) : e.verdict === 'AVOID' ? 500 + (e.convictionScore || 0) : e.convictionScore || 0;
+};
+
 const HomeContent: React.FC = () => {
   const { mode, tokens } = useThemeMode();
   const isDark = mode === 'dark';
+  const isMobile = useIsMobile();
+  const navigate = useNavigate();
 
   const [expandQuarters, setExpandQuarters] = useState<boolean>(false);
   const [selectedRowIds, setSelectedRowIds] = useState<GridRowSelectionModel>([]);
@@ -751,12 +776,7 @@ const HomeContent: React.FC = () => {
       align: 'left',
       sortable: true,
       description: 'Forecast for results due in the next 30 days: probability and expected move vs Nifty for the recommended strategy (run-up before results, or holding through results). Click VIEW for the full plan.',
-      valueGetter: (_v: any, row: any) => {
-        const e = edgeMap.get(row?.id);
-        if (!e) return -Infinity;
-        if (e.graded) return -1;
-        return isTradeVerdict(e.verdict) ? 1000 + (e.convictionScore || 0) : e.verdict === 'AVOID' ? 500 + (e.convictionScore || 0) : e.convictionScore || 0;
-      },
+      valueGetter: (_v: any, row: any) => edgeSortValue(edgeMap.get(row?.id)),
       renderCell: (p) => (
         <PreReleaseEdgeCell
           edge={edgeMap.get(p.row?.id)}
@@ -807,31 +827,15 @@ const HomeContent: React.FC = () => {
       sortable: true,
       valueGetter: (_v: any, row: any) => row?.financialHealthScore != null && !isNaN(row.financialHealthScore) ? Number(row.financialHealthScore) : -Infinity,
       renderCell: (p) => {
-        const score = p.row?.financialHealthScore != null ? Number(p.row.financialHealthScore) : NaN;
-        const gradeStr = String(p.row?.financialHealthGrade || '');
-        if (isNaN(score) || score <= 0) {
+        const hl = healthLetter(p.row?.financialHealthScore, p.row?.financialHealthGrade);
+        if (!hl) {
           return (
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
               <Chip label="—" size="small" sx={{ fontSize: '11px', height: '26px', width: '32px', backgroundColor: tokens.background.cardHover, color: tokens.text.tertiary, borderRadius: '6px' }} />
             </Box>
           );
         }
-        let letter = 'C';
-        if (gradeStr && (gradeStr.includes('A') || gradeStr.includes('B') || gradeStr.includes('C') || gradeStr.includes('D') || gradeStr.includes('E') || gradeStr.includes('F'))) {
-          const match = gradeStr.match(/Grade\s*([A-F])/i) || gradeStr.match(/\b([A-F])\b/);
-          if (match && match[1]) letter = match[1].toUpperCase();
-          else if (score >= 80) letter = 'A';
-          else if (score >= 70) letter = 'B';
-          else if (score >= 50) letter = 'C';
-          else if (score >= 40) letter = 'D';
-          else letter = 'F';
-        } else {
-          if (score >= 80) letter = 'A';
-          else if (score >= 70) letter = 'B';
-          else if (score >= 50) letter = 'C';
-          else if (score >= 40) letter = 'D';
-          else letter = 'F';
-        }
+        const { letter, score } = hl;
 
         let letterColor = tokens.status.warning.main;
         if (letter === 'A' || letter === 'B' || score >= 70) letterColor = tokens.status.success.main;
@@ -1115,6 +1119,63 @@ const HomeContent: React.FC = () => {
     return expandQuarters ? [...columns, ...qtrs] : columns;
   }, [expandQuarters, columns, q1Prefix, q2Prefix, q3Prefix, q4Prefix, renderClubbedQuarterCell]);
 
+  // ── Phone card: identity & price → pre-release verdict → history line → actions ──
+  const mobileSortOptions: MobileSortOption[] = [
+    { key: 'edge', label: 'Pre-release edge', get: (r) => edgeSortValue(edgeMap.get(r.id)) },
+    { key: 'date', label: 'Results date (soonest)', desc: false, get: (r) => { const t = r.upcomingDate ? new Date(r.upcomingDate).getTime() : NaN; return isNaN(t) ? null : t; } },
+    { key: 'health', label: 'Health', get: (r) => (r.financialHealthScore > 0 ? r.financialHealthScore : null) },
+    { key: 'mom', label: 'Momentum probability', get: (r) => r.momentumProbability },
+    { key: 'mcap', label: 'Market cap', get: (r) => r.marketCap || null },
+    { key: 'price', label: 'Price', get: (r) => r.currentPrice || null },
+    { key: 'name', label: 'Name (A–Z)', desc: false, get: (r) => r.name || r.ticker },
+  ];
+
+  const renderEventCard = (row: any) => {
+    const hl = healthLetter(row.financialHealthScore, row.financialHealthGrade);
+    const hlColor = !hl ? tokens.text.tertiary : ['A', 'B'].includes(hl.letter) || hl.score >= 70 ? tokens.status.success.main : ['C', 'D'].includes(hl.letter) ? tokens.status.warning.main : tokens.status.error.main;
+    const prob = row.momentumProbability != null ? Number(row.momentumProbability) : NaN;
+    const avg = row.avgPostEarningsMomentum != null ? Number(row.avgPostEarningsMomentum) : NaN;
+    const pr = row.postReleaseReturn != null ? Number(row.postReleaseReturn) : NaN;
+    const relative = formatRelativeDate(row.upcomingDate);
+    const parsed = row.upcomingDate ? new Date(row.upcomingDate) : null;
+    // "Today"/"In 3 days" stay as-is; far dates read "14 Oct" instead of "14-Oct-2026"
+    const when = relative !== row.upcomingDate || !parsed || isNaN(parsed.getTime()) ? relative
+      : parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    const sub = { fontSize: '12px', color: tokens.text.secondary, lineHeight: '16px' };
+    const btn = { minWidth: 0, height: 36, px: 1.5, fontSize: '12px', fontWeight: 700, textTransform: 'none', color: tokens.text.primary, border: `1px solid ${tokens.border.main}`, borderRadius: '6px' } as const;
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5, alignItems: 'flex-start' }}>
+          <Box onClick={(e) => { e.stopPropagation(); navigate(`/companies/${row.id}`); }} sx={{ minWidth: 0, cursor: 'pointer' }}>
+            <Typography noWrap sx={{ fontSize: '14px', fontWeight: 700, color: tokens.text.primary, lineHeight: '19px' }}>{row.name || row.ticker}</Typography>
+            <Typography noWrap sx={sub}>
+              {row.ticker}{row.upcomingDate ? <> · Results <b style={{ color: tokens.text.primary }}>{when}</b></> : ''}
+            </Typography>
+          </Box>
+          <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+            <Typography className="mono-font tabular-nums" sx={{ fontSize: '14px', fontWeight: 700, color: tokens.text.primary, lineHeight: '19px' }}>{formatPrice(row.currentPrice)}</Typography>
+            <Typography sx={sub}>
+              {formatValCr(row.marketCap) !== '—' ? `${formatValCr(row.marketCap)} · ` : ''}Health <b style={{ color: hlColor }}>{hl ? hl.letter : '—'}</b>
+            </Typography>
+          </Box>
+        </Box>
+        <Box sx={{ minHeight: 40, px: 1, py: 0.5, borderRadius: '8px', backgroundColor: tokens.background.cardHover }}>
+          <PreReleaseEdgeCell edge={edgeMap.get(row.id)} upcomingDate={row.upcomingDate}
+            onOpen={() => setEdgeDialog({ companyId: row.id, name: row.name || row.ticker })} />
+        </Box>
+        <Typography sx={sub}>
+          {isNaN(avg) ? 'Past results: not measured' : <>Past results: <b style={{ color: prob >= 50 ? tokens.status.success.main : tokens.status.error.main }}>{prob.toFixed(0)}% up</b> · avg <b style={{ color: avg >= 0 ? tokens.status.success.main : tokens.status.error.main }}>{avg >= 0 ? '+' : ''}{avg.toFixed(1)}%</b></>}
+          {!isNaN(pr) && <> · Last release <b style={{ color: pr >= 0 ? tokens.status.success.main : tokens.status.error.main }}>{pr >= 0 ? '+' : ''}{pr.toFixed(1)}%</b></>}
+        </Typography>
+        <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ width: 76, height: 36 }}><NewsCell ticker={row.ticker || ''} name={row.name || ''} label="News" /></Box>
+          <Box sx={{ flex: 1, minWidth: 0, height: 40, display: 'flex' }}><NewsSentimentCell ticker={row.ticker || ''} name={row.name || ''} /></Box>
+          <Button onClick={() => setDetailModalRow(row)} sx={btn}>Quarters</Button>
+        </Box>
+      </Box>
+    );
+  };
+
   if (loading && !data) {
     return (
       <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="60vh" gap={2}>
@@ -1135,25 +1196,25 @@ const HomeContent: React.FC = () => {
   }
 
   return (
-    <Box sx={{ height: 'calc(100vh - 56px)', backgroundColor: tokens.background.default, width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <Box sx={{ height: { xs: 'calc(100dvh - 56px)', md: 'calc(100vh - 56px)' }, backgroundColor: tokens.background.default, width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Fixed Filter & Controls Bar */}
       <Box
         sx={{
-          px: '24px',
+          px: { xs: 1.5, md: '24px' },
           minHeight: 48,
           py: 1,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: 2,
+          gap: { xs: 1, md: 2 },
           borderBottom: `1px solid ${tokens.border.main}`,
           backgroundColor: tokens.background.header,
           flexShrink: 0,
         }}
       >
-        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Typography sx={{ fontSize: '11px', color: tokens.text.secondary, fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', width: { xs: '100%', md: 'auto' }, minWidth: 0 }}>
+          <Typography sx={{ display: { xs: 'none', sm: 'block' }, fontSize: '11px', color: tokens.text.secondary, fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
             Universe Filter:
           </Typography>
           <FilterChipGroup
@@ -1168,15 +1229,15 @@ const HomeContent: React.FC = () => {
           />
         </Box>
 
-        <Box display="flex" gap={1.5} alignItems="center">
-          {/* 240px Search Bar */}
-          <Box sx={{ display: 'flex', alignItems: 'center', backgroundColor: tokens.background.card, border: `1px solid ${tokens.border.main}`, borderRadius: '20px', px: '12px', height: '32px', transition: 'border-color 0.15s ease-in-out', '&:focus-within': { borderColor: tokens.border.focus } }}>
+        <Box display="flex" gap={1.5} alignItems="center" sx={{ width: { xs: '100%', md: 'auto' } }}>
+          {/* 240px Search Bar (phones: full width) */}
+          <Box sx={{ display: 'flex', alignItems: 'center', flex: { xs: 1, md: 'none' }, minWidth: 0, backgroundColor: tokens.background.card, border: `1px solid ${tokens.border.main}`, borderRadius: '20px', px: '12px', height: { xs: '40px', md: '32px' }, transition: 'border-color 0.15s ease-in-out', '&:focus-within': { borderColor: tokens.border.focus } }}>
             <SearchIcon sx={{ color: tokens.text.secondary, fontSize: 16, mr: '6px' }} />
             <InputBase
-              placeholder="Search ticker or name..."
+              placeholder={isMobile ? 'Search stocks' : 'Search ticker or name...'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              sx={{ color: tokens.text.primary, fontSize: '12px', width: '200px', fontFamily: tokens.typography.fontFamily }}
+              sx={{ color: tokens.text.primary, fontSize: { xs: '16px', md: '12px' }, width: { xs: '100%', md: '200px' }, fontFamily: tokens.typography.fontFamily }}
             />
           </Box>
 
@@ -1187,7 +1248,7 @@ const HomeContent: React.FC = () => {
       </Box>
 
       {/* Bulk Selection Sticky Action Bar */}
-      <Box sx={{ px: '24px', mt: selectedRowIds.length > 0 ? 1.5 : 0 }}>
+      <Box sx={{ px: { xs: 1.5, md: '24px' }, mt: selectedRowIds.length > 0 ? 1.5 : 0 }}>
         <ErrorBoundary fallbackTitle="Bulk Actions Error">
           <BulkActionBar
             selectedCount={selectedRowIds.length}
@@ -1203,6 +1264,10 @@ const HomeContent: React.FC = () => {
           <RowTintedDataGrid
             rows={rows}
             columns={activeColumns}
+            mobileCard={renderEventCard}
+            mobileSortOptions={mobileSortOptions}
+            mobileDefaultSort="edge"
+            mobileEmptyText="No stocks match this filter."
             checkboxSelection
             onRowSelectionModelChange={(newSelection) => setSelectedRowIds(newSelection)}
             rowSelectionModel={selectedRowIds}
@@ -1247,7 +1312,7 @@ const HomeContent: React.FC = () => {
       </ErrorBoundary>
 
       {/* Detail View Modal Dialog */}
-      <Dialog open={Boolean(detailModalRow)} onClose={() => setDetailModalRow(null)} maxWidth="md" fullWidth PaperProps={{ sx: { backgroundColor: tokens.background.paper, border: `1px solid ${tokens.border.main}`, borderRadius: '12px', boxShadow: tokens.shadows.dropdown } }}>
+      <Dialog open={Boolean(detailModalRow)} onClose={() => setDetailModalRow(null)} maxWidth="md" fullWidth fullScreen={isMobile} PaperProps={{ sx: { backgroundColor: tokens.background.paper, border: `1px solid ${tokens.border.main}`, borderRadius: '12px', boxShadow: tokens.shadows.dropdown } }}>
         <DialogTitle sx={{ borderBottom: `1px solid ${tokens.border.main}`, pb: 2, pt: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box>
             <Typography sx={{ fontSize: '18px', fontWeight: 700, color: tokens.text.primary }}>

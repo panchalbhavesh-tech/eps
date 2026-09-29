@@ -11,6 +11,9 @@ import { formatToIST } from '../utils/dateUtils';
 import { CatalystEvent } from '../types/catalyst';
 import { CatalystDetailDrawer } from '../components/catalyst/CatalystDetailDrawer';
 import { SmartCron } from '../components/common/SmartCron';
+import { MobileCardList } from '../components/common/MobileCardList';
+import type { MobileSortOption } from '../components/common/MobileCardList';
+import { useIsMobile } from '../hooks/useResponsive';
 
 const formatMarketCap = (val: any) => {
   if (val == null || val === '') return '—';
@@ -26,6 +29,7 @@ const formatMarketCap = (val: any) => {
 
 export default function CatalystRadar() {
   const { tokens } = useThemeMode();
+  const isMobile = useIsMobile();
   
   const [tierFilter, setTierFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -240,20 +244,65 @@ export default function CatalystRadar() {
     }
   ];
 
+  // ── Phone card: ticker & time → catalyst → impact/category/size → early/reaction/volume ──
+  const tierRank: Record<string, number> = { 'S-TIER': 4, 'A-TIER': 3, 'B-TIER': 2, 'C-TIER': 1 };
+  const mobileSortOptions: MobileSortOption[] = [
+    { key: 'time', label: 'Newest first', get: (r) => new Date(r.publishedAt || r.detectedAt || 0).getTime() },
+    { key: 'impact', label: 'Impact', get: (r) => tierRank[r.tier] ?? 0 },
+    { key: 'early', label: 'Earliest detection', get: (r) => r.earlyScore },
+    { key: 'reaction', label: 'Biggest reaction', get: (r) => (r.reactionPct == null ? null : Math.abs(r.reactionPct)) },
+  ];
+  const renderCatalystCard = (row: any) => {
+    const t = row.publishedAt || row.detectedAt;
+    const stat = { fontSize: '12px', color: tokens.text.secondary };
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography noWrap sx={{ fontSize: '14px', fontWeight: 700, color: tokens.primary.main }}>{row.ticker}</Typography>
+            {row.companyName && <Typography noWrap sx={{ fontSize: '12px', color: tokens.text.secondary }}>{row.companyName}</Typography>}
+          </Box>
+          <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+            <Chip label={row.status} size="small" sx={{ height: 22, fontSize: '11px', fontWeight: 700, bgcolor: `${getStatusColor(row.status)}15`, color: getStatusColor(row.status), borderRadius: '4px' }} />
+            <Typography sx={{ ...stat, fontFamily: 'monospace', mt: 0.25 }}>{t ? formatToIST(t).timeStr : '-'}</Typography>
+          </Box>
+        </Box>
+        <Typography sx={{ fontSize: '13px', fontWeight: 500, color: tokens.text.primary, lineHeight: '18px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          {row.eventTitle}
+        </Typography>
+        <Typography sx={stat}>
+          Impact <b style={{ color: getTierColor(row.tier) }}>{row.tier?.replace('-TIER', '') || '—'}</b> · {row.category} · {formatMarketCap(row.marketCapAtEvent)}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography className="mono-font" sx={{ ...stat, flex: 1 }}>
+            Early <b style={{ color: row.earlyScore > 80 ? tokens.status.success.main : tokens.text.primary }}>{row.earlyScore ? Math.round(row.earlyScore) : '-'}</b>
+            {' · '}Reaction <b style={{ color: row.reactionPct > 0 ? tokens.status.success.main : row.reactionPct < 0 ? tokens.status.error.main : tokens.text.primary }}>
+              {row.reactionPct == null ? '-' : `${row.reactionPct > 0 ? '+' : ''}${Number(row.reactionPct).toFixed(2)}%`}</b>
+            {' · '}Vol <b style={{ color: tokens.text.primary }}>{row.relativeVolume ? `${Number(row.relativeVolume).toFixed(1)}x` : '-'}</b>
+          </Typography>
+          <OpenInNewIcon sx={{ fontSize: 18, color: tokens.primary.main }} />
+        </Box>
+      </Box>
+    );
+  };
+
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', p: 3, bgcolor: tokens.background.default }}>
-      {/* Header and Controls */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700, color: tokens.text.primary, mb: 0.5 }}>
-            Catalyst Radar
-          </Typography>
-          <Typography sx={{ fontSize: '13px', color: tokens.text.secondary }}>
-            Early-detection and market repricing intelligence engine for the NSE universe.
-          </Typography>
+    <Box sx={{ height: { xs: 'auto', sm: '100%' }, display: 'flex', flexDirection: 'column', p: { xs: 1.5, md: 3 }, bgcolor: tokens.background.default }}>
+      {/* Header and Controls (phones: description + Smart Cron, then search, then filters) */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'stretch', md: 'center' }, flexDirection: { xs: 'column', md: 'row' }, gap: { xs: 1.5, md: 0 }, mb: { xs: 1.5, md: 3 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h5" sx={{ display: { xs: 'none', sm: 'block' }, fontWeight: 700, color: tokens.text.primary, mb: 0.5 }}>
+              Catalyst Radar
+            </Typography>
+            <Typography sx={{ fontSize: '13px', color: tokens.text.secondary }}>
+              Early-detection and market repricing intelligence engine for the NSE universe.
+            </Typography>
+          </Box>
+          {isMobile && <SmartCron page="catalyst" />}
         </Box>
         
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', gap: { xs: 1, md: 2 }, alignItems: 'center', flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
           <TextField
             size="small"
             placeholder="Search Ticker or News..."
@@ -267,8 +316,13 @@ export default function CatalystRadar() {
                 '& .MuiOutlinedInput-notchedOutline': { borderColor: tokens.border.main }
               }
             }}
-            sx={{ width: 220 }}
+            sx={{ width: { xs: 'calc(100% - 48px)', md: 220 }, '& input': { fontSize: { xs: '16px', md: '13px' } } }}
           />
+          {isMobile && (
+            <IconButton aria-label="Refresh" onClick={() => refetch()} sx={{ width: 40, height: 40, border: `1px solid ${tokens.border.main}`, borderRadius: '8px', color: tokens.text.primary }}>
+              <RefreshIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          )}
           
           <Select
             size="small"
@@ -276,7 +330,8 @@ export default function CatalystRadar() {
             onChange={(e) => setTierFilter(e.target.value)}
             sx={{ 
               fontSize: '13px', 
-              width: 130, 
+              width: { xs: 'calc(50% - 4px)', md: 130 }, 
+              height: { xs: 40, md: 'auto' },
               bgcolor: tokens.background.paper,
               '& .MuiOutlinedInput-notchedOutline': { borderColor: tokens.border.main }
             }}
@@ -292,7 +347,8 @@ export default function CatalystRadar() {
             onChange={(e) => setStatusFilter(e.target.value)}
             sx={{ 
               fontSize: '13px', 
-              width: 140, 
+              width: { xs: 'calc(50% - 4px)', md: 140 }, 
+              height: { xs: 40, md: 'auto' },
               bgcolor: tokens.background.paper,
               '& .MuiOutlinedInput-notchedOutline': { borderColor: tokens.border.main }
             }}
@@ -303,7 +359,7 @@ export default function CatalystRadar() {
             <MenuItem value="EXTENDED" sx={{ fontSize: '13px', color: tokens.status.error.main, fontWeight: 600 }}>Late / Priced In</MenuItem>
           </Select>
           
-          <Button 
+          {!isMobile && <Button 
             variant="outlined" 
             onClick={() => refetch()} 
             startIcon={<RefreshIcon />}
@@ -317,13 +373,13 @@ export default function CatalystRadar() {
             }}
           >
             Refresh
-          </Button>
-          <SmartCron page="catalyst" />
+          </Button>}
+          {!isMobile && <SmartCron page="catalyst" />}
         </Box>
       </Box>
 
       {/* Legend */}
-      <Box sx={{ display: 'flex', gap: 3, mb: 1.5, px: 1, py: 0.5, bgcolor: tokens.background.card, borderRadius: '4px', border: `1px solid ${tokens.border.main}`, width: 'fit-content' }}>
+      <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: 3, mb: 1.5, px: 1, py: 0.5, bgcolor: tokens.background.card, borderRadius: '4px', border: `1px solid ${tokens.border.main}`, width: 'fit-content' }}>
         <Typography sx={{ fontSize: '11px', color: tokens.text.secondary }}>
           <strong style={{ color: tokens.text.primary }}>Impact:</strong> S Severe · A High · B Moderate · C Informational
         </Typography>
@@ -340,6 +396,10 @@ export default function CatalystRadar() {
 
       {/* Grid */}
       <Box sx={{ flexGrow: 1, width: '100%', bgcolor: tokens.background.paper, borderRadius: '8px', border: `1px solid ${tokens.border.main}`, overflow: 'hidden' }}>
+        {isMobile ? (
+          <MobileCardList rows={events} renderCard={renderCatalystCard} sortOptions={mobileSortOptions} loading={loading}
+            emptyText="No catalysts match these filters." onRowClick={(p: any) => handleOpenDrawer(p.row as CatalystEvent)} />
+        ) : (
         <DataGrid
           rows={events}
           columns={columns}
@@ -371,6 +431,7 @@ export default function CatalystRadar() {
             }
           }}
         />
+        )}
       </Box>
 
       <CatalystDetailDrawer 

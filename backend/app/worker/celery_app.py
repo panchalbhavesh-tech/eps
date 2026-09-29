@@ -109,6 +109,15 @@ celery_app.conf.update(
             # After calendar (13:00) and OHLCV (14:00) syncs: 15:15 UTC / 20:45 IST
             'schedule': crontab(minute=15, hour=15, day_of_week='mon-fri'),
         },
+        'refresh-impactful-events': {
+            'task': 'app.worker.tasks.refresh_impactful_events_task',
+            # Mon-Fri 07:30-23:30 IST every 30 min: board-meeting notices and declarations mostly land after the close
+            'schedule': crontab(minute='0,30', hour='2-17', day_of_week='mon-fri'),
+        },
+        'build-corporate-action-evidence-weekly': {
+            'task': 'app.worker.tasks.build_corporate_action_evidence_task',
+            'schedule': crontab(minute=0, hour=6, day_of_week='sun'),  # Sunday 11:30 IST (after the catalyst build)
+        },
         'backfill-earnings-history-weekly': {
             'task': 'app.worker.tasks.backfill_earnings_history_task',
             # Sundays 02:00 UTC: refreshes any company whose results history is older than 20 days

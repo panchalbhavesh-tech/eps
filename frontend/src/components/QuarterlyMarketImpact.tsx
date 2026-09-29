@@ -201,7 +201,10 @@ const UnifiedNumberLineTimeline: React.FC<{ items: any[], tokens: any }> = ({ it
       py: 2,
       px: 1,
       position: 'relative',
-      justifyContent: isCompact ? 'center' : 'flex-start',
+      // "safe" centering: auto margins centre the row when it fits, but never push the first days out of scroll reach
+      justifyContent: 'flex-start',
+      ...(isCompact ? { '& > :first-of-type': { ml: 'auto' }, '& > :last-of-type': { mr: 'auto' } } : {}),
+      WebkitOverflowScrolling: 'touch',
       gap: 0,
       '&::-webkit-scrollbar': { height: '4px' },
       '&::-webkit-scrollbar-track': { bgcolor: 'transparent' },
@@ -233,7 +236,7 @@ const UnifiedNumberLineTimeline: React.FC<{ items: any[], tokens: any }> = ({ it
                   <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.primary, fontSize: '0.9rem', fontWeight: 800, lineHeight: 1.2 }}>
                     ₹{safeToFixed(item.price, 2)}
                   </Typography>
-                  <Typography sx={{ color: tokens.primary.main, fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', mt: 0.3 }}>
+                  <Typography sx={{ color: tokens.primary.main, fontSize: { xs: '11px', md: '0.62rem' }, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', mt: 0.3 }}>
                     BASE PRICE
                   </Typography>
                 </>
@@ -246,7 +249,7 @@ const UnifiedNumberLineTimeline: React.FC<{ items: any[], tokens: any }> = ({ it
                     <Typography className="mono-font tabular-nums" sx={{
                       color: safeNum(item.chgPct) >= 0 ? tokens.status.success.main : tokens.status.error.main,
                       fontWeight: 700,
-                      fontSize: '0.68rem',
+                      fontSize: { xs: '11px', md: '0.68rem' },
                       mt: 0.3
                     }}>
                       {safeNum(item.chgPct) >= 0 ? '+' : ''}{safeToFixed(item.chgPct, 1)}%
@@ -304,7 +307,7 @@ const UnifiedNumberLineTimeline: React.FC<{ items: any[], tokens: any }> = ({ it
               </Typography>
               <Typography sx={{ 
                 color: isPivot ? tokens.text.primary : (item.isSurge ? tokens.text.primary : tokens.text.secondary), 
-                fontSize: '0.68rem', 
+                fontSize: { xs: '11px', md: '0.68rem' }, 
                 fontWeight: (isPivot || item.isSurge) ? 700 : 500, 
                 mt: 0.2 
               }}>
@@ -402,7 +405,7 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
       {/* Sleek Header with Refined Window Selectors */}
       {/* Sleek Header with Refined Window Selectors */}
       <Box sx={{ bgcolor: tokens.background.paper, borderTop: `1px solid ${tokens.border.main}`, borderLeft: `1px solid ${tokens.border.main}`, '& > div': { borderRight: `1px solid ${tokens.border.main}` } }}>
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, borderBottom: `1px solid ${tokens.border.main}`, p: 3, gap: 2 }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, borderBottom: `1px solid ${tokens.border.main}`, p: { xs: 1.5, md: 3 }, gap: 2 }}>
           <Box>
             {/* Minimalist Tab Selectors */}
             <Box sx={{ 
@@ -479,7 +482,7 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
             const combinedTimelineItems = [...displayPrior, pivotNode, ...displayPost];
 
             return (
-              <Box key={q.key} sx={{ bgcolor: tokens.background.paper, borderBottom: `1px solid ${tokens.border.main}`, p: 3 }}>
+              <Box key={q.key} sx={{ bgcolor: tokens.background.paper, borderBottom: `1px solid ${tokens.border.main}`, p: { xs: 1.5, md: 3 } }}>
                 {/* Header: Quarter Name, Pivot Date & EPS Trend Badge */}
                 <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, pb: 1.5, mb: 2.5, gap: 1 }}>
                   <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2, flexWrap: 'wrap' }}>
@@ -496,7 +499,7 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
                 {/* Minimalist Financial Statements Summary */}
                 <Box sx={{ display: 'grid', gap: '1px', bgcolor: tokens.border.main, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, border: `1px solid ${tokens.border.main}`, mb: 3 }}>
                   <Box sx={{ p: 2, bgcolor: tokens.background.card, display: 'flex', flexDirection: 'column' }}>
-                    <Typography sx={{ color: tokens.text.secondary, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.04em', mb: 0.5 }}>
+                    <Typography sx={{ color: tokens.text.secondary, fontSize: { xs: '11px', md: '0.68rem' }, fontWeight: 700, letterSpacing: '0.04em', mb: 0.5 }}>
                       TOTAL REVENUE
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.5 }}>
@@ -509,7 +512,7 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
                   </Box>
 
                   <Box sx={{ p: 2, bgcolor: tokens.background.card, display: 'flex', flexDirection: 'column' }}>
-                    <Typography sx={{ color: tokens.text.secondary, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.04em', mb: 0.5 }}>
+                    <Typography sx={{ color: tokens.text.secondary, fontSize: { xs: '11px', md: '0.68rem' }, fontWeight: 700, letterSpacing: '0.04em', mb: 0.5 }}>
                       NET PROFIT
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.5 }}>
@@ -522,7 +525,7 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
                   </Box>
 
                   <Box sx={{ p: 2, bgcolor: tokens.background.card, display: 'flex', flexDirection: 'column' }}>
-                    <Typography sx={{ color: tokens.text.secondary, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.04em', mb: 0.5 }}>
+                    <Typography sx={{ color: tokens.text.secondary, fontSize: { xs: '11px', md: '0.68rem' }, fontWeight: 700, letterSpacing: '0.04em', mb: 0.5 }}>
                       DILUTED EPS
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.5 }}>
@@ -540,7 +543,7 @@ const QuarterlyMarketImpact: React.FC<QuarterlyMarketImpactProps> = ({ company }
                 </Box>
 
                 {/* Unified Single-Line Trading Timeline with Center Earning Release Pivot */}
-                <Box sx={{ bgcolor: tokens.background.card, border: `1px solid ${tokens.border.main}`, p: 2.5 }}>
+                <Box sx={{ bgcolor: tokens.background.card, border: `1px solid ${tokens.border.main}`, p: { xs: 1.25, md: 2.5 } }}>
                   <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, mb: 2, pb: 1.5, borderBottom: `1px solid ${tokens.border.main}`, gap: 2 }}>
                     <Typography sx={{ color: tokens.text.primary, fontWeight: 800, fontSize: '0.75rem', letterSpacing: '0.04em' }}>
                       UNIFIED TRADING TIMELINE ({timeWindow === '7D' ? '7 DAYS BEFORE & AFTER PIVOT' : '30-DAY WINDOW BEFORE & AFTER PIVOT'})

@@ -247,6 +247,8 @@ const CompanyDetail: React.FC = () => {
     '& strong': { color: tokens.text.primary, fontWeight: 700 },
     '& table': {
       width: '100%',
+      display: { xs: 'block', md: 'table' },
+      overflowX: { xs: 'auto', md: 'visible' },
       borderCollapse: 'collapse',
       mt: 2,
       mb: 3,
@@ -290,20 +292,20 @@ const CompanyDetail: React.FC = () => {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', backgroundColor: tokens.background.default, p: { xs: 2, md: 4 }, fontFamily: tokens.typography.fontFamily, color: tokens.text.primary }}>
+    <Box sx={{ minHeight: '100vh', backgroundColor: tokens.background.default, p: { xs: 1.5, sm: 2, md: 4 }, fontFamily: tokens.typography.fontFamily, color: tokens.text.primary }}>
       <Box sx={{ maxWidth: '1200px', mx: 'auto' }}>
       <Button
         startIcon={<ArrowBackIcon />}
         onClick={() => navigate('/')}
-        sx={{ color: tokens.text.secondary, mb: 3, textTransform: 'none', fontWeight: 600, fontSize: '13px', '&:hover': { color: tokens.text.primary } }}
+        sx={{ color: tokens.text.secondary, mb: { xs: 1, md: 3 }, ml: { xs: -1, md: 0 }, minHeight: 44, textTransform: 'none', fontWeight: 600, fontSize: '13px', '&:hover': { color: tokens.text.primary } }}
       >
         Back to Dashboard
       </Button>
 
       {/* Tier 1: Top Company Banner & Current Price Display */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 5, flexWrap: 'wrap', gap: 3, pt: 1 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '28px', color: tokens.text.primary, mb: 0.5, letterSpacing: '-0.5px' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: { xs: 3, md: 5 }, flexWrap: 'wrap', gap: { xs: 2, md: 3 }, pt: 1 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, fontSize: { xs: '22px', md: '28px' }, color: tokens.text.primary, mb: 0.5, letterSpacing: '-0.5px', overflowWrap: 'anywhere' }}>
             {company.name}
           </Typography>
           <Stack direction="row" spacing={1} alignItems="center" mb={1.5} flexWrap="wrap">
@@ -324,8 +326,8 @@ const CompanyDetail: React.FC = () => {
           </Typography>
         </Box>
 
-        <Box display="flex" alignItems="flex-start" gap={3} flexWrap="wrap">
-          <Box textAlign="right">
+        <Box sx={{ display: 'flex', alignItems: { xs: 'center', sm: 'flex-start' }, gap: { xs: 2, sm: 3 }, flexWrap: 'wrap', width: { xs: '100%', sm: 'auto' } }}>
+          <Box sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
             <Typography className="mono-font tabular-nums" sx={{ fontWeight: 800, fontSize: '28px', color: tokens.text.primary, lineHeight: 1 }}>
               {formatIndianCurrency(company.currentPrice)}
             </Typography>
@@ -344,6 +346,8 @@ const CompanyDetail: React.FC = () => {
               fontWeight: 600,
               px: 3,
               py: 1.25,
+              minHeight: 44,
+              flex: { xs: 1, sm: 'none' },
               borderRadius: '4px',
               fontSize: '13px',
               textTransform: 'none',
@@ -362,7 +366,7 @@ const CompanyDetail: React.FC = () => {
       <Typography variant="h6" sx={{ color: tokens.text.primary, mb: 1.5, fontSize: '14px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         Company Overview
       </Typography>
-      <Box sx={{ mb: 4, display: 'inline-grid', gap: '1px', backgroundColor: tokens.border.main, gridTemplateColumns: { xs: '1fr', sm: 'max-content max-content', md: 'repeat(3, max-content)' }, border: `1px solid ${tokens.border.main}`, borderRadius: '4px', overflow: 'hidden' }}>
+      <Box sx={{ mb: 4, display: { xs: 'grid', sm: 'inline-grid' }, gap: '1px', backgroundColor: tokens.border.main, gridTemplateColumns: { xs: '1fr 1fr', sm: 'max-content max-content', md: 'repeat(3, max-content)' }, border: `1px solid ${tokens.border.main}`, borderRadius: '4px', overflow: 'hidden' }}>
         {[
           { label: 'Market Cap', value: formatIndianLakhCr(company.marketCap) },
           { label: 'Enterprise Value', value: formatIndianLakhCr(company.enterpriseValue || company.marketCap) },
@@ -377,11 +381,11 @@ const CompanyDetail: React.FC = () => {
           { label: 'Institutional (FII)', value: formatPct(company.fiiHolding) },
           { label: 'Dividend Yield', value: formatPct(company.dividendYield) }
         ].map((item, idx) => (
-          <Box key={idx} sx={{ p: 0.75, px: 2, backgroundColor: tokens.background.paper, display: 'flex', alignItems: 'center' }}>
-            <Typography sx={{ color: tokens.text.secondary, fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', width: '130px', flexShrink: 0, mr: 2 }}>
+          <Box key={idx} sx={{ p: { xs: 1, sm: 0.75 }, px: { xs: 1.5, sm: 2 }, backgroundColor: tokens.background.paper, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, gap: { xs: 0.25, sm: 0 }, minWidth: 0 }}>
+            <Typography sx={{ color: tokens.text.secondary, fontSize: { xs: '11px', sm: '10px' }, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', width: { xs: 'auto', sm: '130px' }, flexShrink: 0, mr: { xs: 0, sm: 2 } }}>
               {item.label}
             </Typography>
-            <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.primary, fontSize: '12px', fontWeight: 700 }}>
+            <Typography className="mono-font tabular-nums" sx={{ color: tokens.text.primary, fontSize: { xs: '13px', sm: '12px' }, fontWeight: 700 }}>
               {item.value}
             </Typography>
           </Box>
@@ -404,7 +408,7 @@ const CompanyDetail: React.FC = () => {
               { label: 'Imm Support / Resistance', value: `${formatIndianCurrency(tech.immSupport)} / ${formatIndianCurrency(tech.immResistance)}` }
             ].map((item, idx) => (
               <Box key={idx} sx={{ p: 1, px: 1.5, backgroundColor: tokens.background.paper, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <Typography sx={{ color: tokens.text.secondary, fontSize: '9px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', mb: 0.25 }}>
+                <Typography sx={{ color: tokens.text.secondary, fontSize: { xs: '11px', md: '9px' }, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', mb: 0.25 }}>
                   {item.label}
                 </Typography>
                 <Typography className="mono-font tabular-nums" sx={{ color: item.isTrend ? (tech.trend === 'Bullish' ? tokens.status.success.main : tokens.status.error.main) : tokens.text.primary, fontSize: '12px', fontWeight: 700 }}>
@@ -489,7 +493,7 @@ const CompanyDetail: React.FC = () => {
 
         {/* Tier 7: Interactive Quantitative Analyst Report Suite */}
         <Box sx={{ border: `1px solid ${tokens.border.main}`, mb: 4, backgroundColor: tokens.background.paper }}>
-          <Box sx={{ backgroundColor: tokens.background.header, px: 3, pt: 2.5, borderBottom: `1px solid ${tokens.border.main}` }}>
+          <Box sx={{ backgroundColor: tokens.background.header, px: { xs: 1.5, md: 3 }, pt: { xs: 2, md: 2.5 }, borderBottom: `1px solid ${tokens.border.main}` }}>
             <Typography variant="h5" sx={{ color: tokens.text.primary, fontWeight: 800, fontSize: '16px', mb: 0.5 }}>
               Objective Quantitative Research & Risk Assessment Report
             </Typography>
@@ -518,7 +522,7 @@ const CompanyDetail: React.FC = () => {
             </Tabs>
           </Box>
 
-          <Box sx={{ p: { xs: 2, md: 4 } }}>
+          <Box sx={{ p: { xs: 1.5, md: 4 } }}>
             {aiReport ? (
               <Box sx={markdownStyles}>
                 <TabPanel value={tabIndex} index={0}>

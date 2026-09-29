@@ -3,6 +3,7 @@ import { useQuery } from '@apollo/client';
 import { Box, Button, CircularProgress, Collapse, Dialog, DialogContent, DialogTitle, Grid, Tooltip, Typography } from '@mui/material';
 import { useThemeMode } from '../../theme/ThemeContext';
 import { PriceForecastChart, PricePath } from './PriceForecastChart';
+import { useIsMobile } from '../../hooks/useResponsive';
 import {
   GET_PRE_RELEASE_EDGE_DETAIL, GET_PRE_RELEASE_PRICE_PATH, PreReleaseEdge, fmtDate, fmtPct, fmtPrice,
   isTradeVerdict, safeJson, sessionLabel,
@@ -103,6 +104,7 @@ const buildReasons = (d: Dict, edge: PreReleaseEdge): Reason[] => {
 
 export const PreReleaseEdgeDialog: React.FC<Props> = ({ open, onClose, companyId, companyName }) => {
   const { tokens } = useThemeMode();
+  const isMobile = useIsMobile();
   const [showDetails, setShowDetails] = useState(false);
   const { data, loading, error } = useQuery(GET_PRE_RELEASE_EDGE_DETAIL, {
     variables: { companyId },
@@ -141,7 +143,7 @@ export const PreReleaseEdgeDialog: React.FC<Props> = ({ open, onClose, companyId
   const toneColor = (t: Tone) => (t === 'good' ? green : t === 'bad' ? red : muted);
   const verdictColor = (v?: string | null) => (isTradeVerdict(v) ? green : v === 'AVOID' ? red : tokens.text.secondary);
 
-  const card = { p: 2.75, backgroundColor: isDarkMode ? '#16191D' : '#FFFFFF', border: `1px solid ${line}`, borderRadius: '12px', height: '100%' };
+  const card = { p: { xs: 2, md: 2.75 }, backgroundColor: isDarkMode ? '#16191D' : '#FFFFFF', border: `1px solid ${line}`, borderRadius: '12px', height: '100%' };
   const label = { fontSize: '12px', fontWeight: 800, color: tokens.text.primary, textTransform: 'uppercase' as const, letterSpacing: '0.7px', opacity: 0.85 };
   const big = { fontSize: '17px', fontWeight: 800, color: tokens.text.primary };
 
@@ -202,9 +204,9 @@ export const PreReleaseEdgeDialog: React.FC<Props> = ({ open, onClose, companyId
   })();
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth fullScreen={isMobile}
       PaperProps={{ sx: { backgroundColor: isDarkMode ? '#0D0F12' : '#F4F5F7', backgroundImage: 'none', border: `1px solid ${line}`, borderRadius: '14px', boxShadow: tokens.shadows.dropdown } }}>
-      <DialogTitle sx={{ borderBottom: `1px solid ${line}`, py: 2, px: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
+      <DialogTitle sx={{ borderBottom: `1px solid ${line}`, py: 2, px: { xs: 2, md: 3 }, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
         <Box sx={{ minWidth: 0 }}>
           <Typography noWrap sx={{ fontSize: '20px', fontWeight: 800, color: tokens.text.primary }}>
             {companyName || edge?.ticker} {edge && <span style={{ color: muted, fontWeight: 500 }}>({edge.ticker})</span>}
@@ -220,7 +222,7 @@ export const PreReleaseEdgeDialog: React.FC<Props> = ({ open, onClose, companyId
         <Button onClick={onClose} sx={{ color: muted, minWidth: 0 }}>✕</Button>
       </DialogTitle>
 
-      <DialogContent sx={{ p: 3, pt: '20px !important' }}>
+      <DialogContent sx={{ p: { xs: 1.5, md: 3 }, pt: '20px !important' }}>
         {loading && !edge && (
           <Box sx={{ p: 6, display: 'flex', justifyContent: 'center' }}><CircularProgress size={32} sx={{ color: tokens.accent.main }} /></Box>
         )}
