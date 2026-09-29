@@ -191,7 +191,7 @@ const DataLakePage: React.FC = () => {
               value={sortDir}
               exclusive
               size="small"
-              onChange={(e, val) => val && setSortDir(val)}
+              onChange={(_e, val) => val && setSortDir(val)}
               sx={{
                 bgcolor: tokens.background.card,
                 '& .MuiToggleButton-root': {
