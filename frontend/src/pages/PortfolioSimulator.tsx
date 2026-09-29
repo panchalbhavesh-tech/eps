@@ -34,13 +34,13 @@ const PortfolioSimulator: React.FC = () => {
   })) || [];
 
   return (
-    <Box sx={{ p: 4, height: '100%', overflowY: 'auto' }}>
-      <Typography variant="h5" sx={{ color: tokens.text.primary, fontWeight: 700, mb: 3 }}>
+    <Box sx={{ p: { xs: 1.5, sm: 3, md: 4 }, height: '100%', overflowY: 'auto' }}>
+      <Typography variant="h5" sx={{ color: tokens.text.primary, fontWeight: 700, mb: { xs: 2, md: 3 }, fontSize: { xs: '18px', md: undefined } }}>
         Portfolio Simulation Engine
       </Typography>
 
-      <Card sx={{ bgcolor: tokens.background.card, border: `1px solid ${tokens.border.main}`, mb: 4 }}>
-        <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+      <Card sx={{ bgcolor: tokens.background.card, border: `1px solid ${tokens.border.main}`, mb: { xs: 2, md: 4 } }}>
+        <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
           <TextField 
             label="Start Date" 
             type="date" 
@@ -48,7 +48,7 @@ const PortfolioSimulator: React.FC = () => {
             onChange={e => setStartDate(e.target.value)}
             InputLabelProps={{ shrink: true }}
             size="small"
-            sx={{ input: { color: tokens.text.primary } }}
+            sx={{ flex: { xs: '1 1 130px', sm: '0 0 auto' }, input: { color: tokens.text.primary, fontSize: { xs: '16px', sm: undefined } } }}
           />
           <TextField 
             label="End Date" 
@@ -57,13 +57,13 @@ const PortfolioSimulator: React.FC = () => {
             onChange={e => setEndDate(e.target.value)}
             InputLabelProps={{ shrink: true }}
             size="small"
-            sx={{ input: { color: tokens.text.primary } }}
+            sx={{ flex: { xs: '1 1 130px', sm: '0 0 auto' }, input: { color: tokens.text.primary, fontSize: { xs: '16px', sm: undefined } } }}
           />
           <Button 
             variant="contained" 
             onClick={handleRun}
             disabled={loading}
-            sx={{ bgcolor: tokens.primary.main, color: '#fff', '&:hover': { bgcolor: tokens.primary.dark } }}
+            sx={{ width: { xs: '100%', sm: 'auto' }, height: 40, bgcolor: tokens.primary.main, color: '#fff', '&:hover': { bgcolor: tokens.primary.dark } }}
           >
             {loading ? <CircularProgress size={24} color="inherit" /> : 'Run Simulation'}
           </Button>
@@ -75,8 +75,8 @@ const PortfolioSimulator: React.FC = () => {
       )}
 
       {data?.runPortfolioSimulation && (
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={4}>
+        <Grid container spacing={{ xs: 1.5, md: 3 }}>
+          <Grid item xs={6} md={4}>
             <Card sx={{ bgcolor: tokens.background.card, border: `1px solid ${tokens.border.main}` }}>
               <CardContent>
                 <Typography sx={{ color: tokens.text.secondary, fontSize: 14 }}>Sharpe Ratio</Typography>
@@ -86,7 +86,7 @@ const PortfolioSimulator: React.FC = () => {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={6} md={4}>
             <Card sx={{ bgcolor: tokens.background.card, border: `1px solid ${tokens.border.main}` }}>
               <CardContent>
                 <Typography sx={{ color: tokens.text.secondary, fontSize: 14 }}>Max Drawdown</Typography>
@@ -100,12 +100,12 @@ const PortfolioSimulator: React.FC = () => {
           <Grid item xs={12}>
             <Card sx={{ bgcolor: tokens.background.card, border: `1px solid ${tokens.border.main}`, p: 2 }}>
               <Typography sx={{ color: tokens.text.primary, mb: 2, fontWeight: 600 }}>Equity Curve</Typography>
-              <Box sx={{ height: 400, width: '100%' }}>
+              <Box sx={{ height: { xs: 260, md: 400 }, width: '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke={tokens.border.main} />
-                    <XAxis dataKey="day" stroke={tokens.text.secondary} />
-                    <YAxis stroke={tokens.text.secondary} domain={['dataMin', 'dataMax']} />
+                    <XAxis dataKey="day" stroke={tokens.text.secondary} tick={{ fontSize: 12 }} minTickGap={24} />
+                    <YAxis stroke={tokens.text.secondary} domain={['dataMin', 'dataMax']} tick={{ fontSize: 12 }} width={56} />
                     <RechartsTooltip 
                       contentStyle={{ backgroundColor: tokens.background.paper, borderColor: tokens.border.main, color: tokens.text.primary }}
                       itemStyle={{ color: tokens.text.primary }}

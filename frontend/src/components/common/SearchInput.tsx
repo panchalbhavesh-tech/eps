@@ -8,7 +8,7 @@ export interface SearchInputProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  width?: number | string;
+  width?: number | string | Record<string, number | string>;
   sx?: Record<string, any>;
 }
 
@@ -54,7 +54,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         sx={{
           flex: 1,
           color: tokens.text.primary,
-          fontSize: '0.85rem',
+          fontSize: { xs: '16px', sm: '0.85rem' },  // 16px on phones avoids iOS zoom-on-focus
           fontVariantNumeric: 'tabular-nums',
           '& ::placeholder': {
             color: tokens.text.secondary,

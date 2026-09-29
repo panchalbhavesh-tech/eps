@@ -4,7 +4,8 @@ import { Box, Typography, IconButton, Tooltip } from '@mui/material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
-import { FilterChipGroup, SearchInput } from '../components/common';
+import { FilterChipGroup, SearchInput, MobileCardList } from '../components/common';
+import { useIsMobile } from '../hooks/useResponsive';
 import { useThemeMode } from '../theme/ThemeContext';
 import AdminLogDetailDrawer from '../components/admin/AdminLogDetailDrawer';
 import { formatToIST } from '../utils';
@@ -44,6 +45,7 @@ export interface AdminActivityLog {
 
 const AdminLogs: React.FC = () => {
   const { mode, tokens } = useThemeMode();
+  const isMobile = useIsMobile();
   const isDark = mode === 'dark';
 
   const { loading, data } = useQuery(GET_ADMIN_LOGS, {
@@ -146,6 +148,19 @@ const AdminLogs: React.FC = () => {
     }
   ];
 
+  const renderLogCard = (row: any) => {
+    const { dateStr, timeStr } = formatToIST(row.createdAt as string | number);
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography sx={{ fontSize: '13px', fontWeight: 600, color: tokens.text.primary, lineHeight: '18px' }}>{row.eventName}</Typography>
+          <Typography noWrap sx={{ fontSize: '12px', color: tokens.text.secondary }}>{dateStr} · {timeStr} · {row.userEmail}</Typography>
+        </Box>
+        <OpenInNewIcon sx={{ fontSize: 18, color: tokens.text.secondary }} />
+      </Box>
+    );
+  };
+
   return (
     <Box sx={{ minHeight: '100vh', width: '100%', bgcolor: tokens.background.default, overflowX: 'hidden' }}>
       
@@ -153,12 +168,12 @@ const AdminLogs: React.FC = () => {
 
       {/* Filters & Grid */}
       <Box sx={{ bgcolor: tokens.background.paper, overflow: 'hidden', width: '100%', borderBottom: `1px solid ${tokens.border.main}` }}>
-        <Box sx={{ p: 2, borderBottom: `1px solid ${tokens.border.light}`, display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+        <Box sx={{ p: { xs: 1.5, md: 2 }, borderBottom: `1px solid ${tokens.border.light}`, display: 'flex', flexWrap: 'wrap', gap: { xs: 1, md: 2 }, alignItems: 'center' }}>
           <SearchInput 
             placeholder="Search activity..." 
             value={searchQuery} 
             onChange={setSearchQuery}
-            sx={{ width: 250 }}
+            width={{ xs: '100%', sm: 250 }}
           />
           <FilterChipGroup 
             options={['All Users', 'dt@gmail.com', 'vg@gmail.com', 'SYSTEM'].map(o => ({label: o, value: o}))}
@@ -167,7 +182,12 @@ const AdminLogs: React.FC = () => {
           />
         </Box>
 
-        <Box sx={{ height: 'calc(100vh - 130px)', width: '100%' }}>
+        <Box sx={{ height: { xs: 'auto', sm: 'calc(100vh - 130px)' }, width: '100%' }}>
+          {isMobile ? (
+            <MobileCardList rows={filteredRows} renderCard={renderLogCard} loading={loading} emptyText="No activity found."
+              sortOptions={[{ key: 'time', label: 'Newest first', get: (r) => new Date(r.createdAt).getTime() }]}
+              onRowClick={(p: any) => handleOpenDetails(p.row as AdminActivityLog)} />
+          ) : (
           <DataGrid
             rows={filteredRows}
             columns={columns}
@@ -197,6 +217,7 @@ const AdminLogs: React.FC = () => {
               }
             }}
           />
+          )}
         </Box>
       </Box>
 

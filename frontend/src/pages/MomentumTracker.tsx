@@ -15,6 +15,8 @@ import SearchIcon from '@mui/icons-material/Search';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useNavigate } from 'react-router-dom';
 import { FilterChipGroup, StatusBadge, FactorChart, MomentumGauge, BulkActionBar, ErrorBoundary, RowTintedDataGrid, MetricCard } from '../components/common';
+import type { MobileSortOption } from '../components/common';
+import { useIsMobile } from '../hooks/useResponsive';
 import { SmartCron } from '../components/common/SmartCron';
 import { useThemeMode } from '../theme/ThemeContext';
 
@@ -98,6 +100,7 @@ const formatRelativeTimestamp = (dateStr?: string | null) => {
 
 const MomentumTrackerContent: React.FC = () => {
   const { mode, tokens } = useThemeMode();
+  const isMobile = useIsMobile();
   const isDark = mode === 'dark';
   const navigate = useNavigate();
 
@@ -400,6 +403,65 @@ const MomentumTrackerContent: React.FC = () => {
     }
   ], [navigate, tokens, setBacktestTicker]);
 
+  // ── Phone card: ticker & price → signal + score → attention reason → factors → risk & actions ──
+  const signalBadge = (mom: any) => {
+    const sig = mom?.signal;
+    if (sig === 'BUY') return <StatusBadge status={`BUY (${mom?.confidence || 85}%)`} variant="success" iconType="check" />;
+    if (sig === 'WATCHLIST') return <StatusBadge status="WATCHLIST" variant="warning" iconType="warning" />;
+    if (sig === 'EXIT') return <StatusBadge status="EXIT / WEAK" variant="error" iconType="close" />;
+    return <StatusBadge status={mom ? 'NEUTRAL' : 'Not Scanned'} variant="neutral" iconType="none" />;
+  };
+  const mobileSortOptions: MobileSortOption[] = [
+    { key: 'score', label: 'Momentum score', get: (r) => r.latestMomentum?.compositeScore },
+    { key: 'attention', label: 'Needs attention first', get: (r) => (r.latestMomentum?.requiresAttention ? 1 : 0) * 1000 + (r.latestMomentum?.compositeScore ?? 0) },
+    { key: 'price', label: 'Price', get: (r) => r.currentPrice },
+    { key: 'ticker', label: 'Ticker (A–Z)', desc: false, get: (r) => r.ticker },
+  ];
+  const renderMomentumCard = (row: any) => {
+    const mom = row.latestMomentum;
+    const reasons: string[] = mom?.attentionReasons && mom?.requiresAttention ? mom.attentionReasons.split(' | ') : [];
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
+          <Box onClick={() => navigate(`/companies/${row.id}`)} sx={{ minWidth: 0, cursor: 'pointer' }}>
+            <Typography noWrap sx={{ fontSize: '14px', fontWeight: 700, color: tokens.text.primary }}>{row.ticker}</Typography>
+            <Typography noWrap sx={{ fontSize: '12px', color: tokens.text.secondary }}>{row.name || '—'}</Typography>
+          </Box>
+          <Typography className="mono-font tabular-nums" sx={{ fontSize: '14px', fontWeight: 700, color: tokens.text.primary, flexShrink: 0 }}>
+            {row.currentPrice != null ? `₹${Number(row.currentPrice).toFixed(2)}` : '—'}
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          {mom?.compositeScore != null && <MomentumGauge value={Number(mom.compositeScore)} size={32} />}
+          {mom?.compositeScore != null && (
+            <Typography className="mono-font" sx={{ fontSize: '13px', fontWeight: 700, color: tokens.text.primary }}>{Number(mom.compositeScore).toFixed(0)}<span style={{ color: tokens.text.secondary, fontWeight: 500 }}>/100</span></Typography>
+          )}
+          <Box sx={{ ml: 'auto' }}>{signalBadge(mom)}</Box>
+        </Box>
+        {reasons.length > 0 && (
+          <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'flex-start' }}>
+            <WarningAmberIcon sx={{ fontSize: 16, color: tokens.status.warning.main, mt: '1px', flexShrink: 0 }} />
+            <Typography sx={{ fontSize: '12px', color: tokens.text.primary, lineHeight: '17px' }}>{reasons.slice(0, 2).join(' · ')}</Typography>
+          </Box>
+        )}
+        {mom && (
+          <FactorChart technical={mom.technicalScore ?? 50} fundamental={mom.fundamentalScore ?? 50} smartMoney={mom.smartMoneyScore ?? 50}
+            derivatives={mom.derivativesScore ?? 50} regime={mom.regimeScore ?? 50} width={180} />
+        )}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography className="mono-font tabular-nums" sx={{ fontSize: '12px', color: tokens.text.secondary, flex: 1, minWidth: 0 }} noWrap>
+            {mom?.stopLossPrice ? <>Stop <b style={{ color: tokens.status.error.main }}>₹{mom.stopLossPrice}</b> · size {mom.positionSizePct ?? 5}% · </> : ''}
+            {formatRelativeTimestamp(mom?.dateCalculated)}
+          </Typography>
+          <Button onClick={(e) => { e.stopPropagation(); setBacktestTicker(row.ticker); }} startIcon={<AssessmentIcon sx={{ fontSize: '15px !important' }} />}
+            sx={{ height: 36, fontSize: '12px', fontWeight: 700, textTransform: 'none', color: tokens.text.primary, border: `1px solid ${tokens.border.main}`, borderRadius: '6px', px: 1.5, flexShrink: 0 }}>
+            3Y Test
+          </Button>
+        </Box>
+      </Box>
+    );
+  };
+
   if (loading && !data) {
     return (
       <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="60vh" gap={2}>
@@ -422,14 +484,14 @@ const MomentumTrackerContent: React.FC = () => {
   return (
     <Box sx={{ pb: 6, width: '100%', overflowX: 'hidden', backgroundColor: tokens.background.default }}>
       {/* Top Header Section */}
-      <Box sx={{ px: '24px', pt: '24px', mb: 3 }}>
+      <Box sx={{ px: { xs: 1.5, md: '24px' }, pt: { xs: 2, md: '24px' }, mb: { xs: 2, md: 3 } }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 700, fontSize: '24px', color: tokens.text.primary, letterSpacing: '-0.5px', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h4" sx={{ fontWeight: 700, fontSize: '24px', color: tokens.text.primary, letterSpacing: '-0.5px', display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1.5 }}>
               <TrendingUpIcon sx={{ color: tokens.accent.main, fontSize: 28 }} />
               NSE Multi-Factor Momentum & Attention Scanner
             </Typography>
-            <Typography sx={{ color: tokens.text.secondary, mt: 0.5, fontSize: '13px' }}>
+            <Typography sx={{ color: tokens.text.secondary, mt: { xs: 0, sm: 0.5 }, fontSize: '13px' }}>
               Real-time cross-sectional percentile rankings and anomaly attention tracker across NSE equities.
             </Typography>
           </Box>
@@ -444,10 +506,10 @@ const MomentumTrackerContent: React.FC = () => {
       </Box>
 
       {/* Sleek Top Summary Card Bar (Replaced chaotic hybrid cards) */}
-      <Box sx={{ px: '24px', mb: 3 }}>
+      <Box sx={{ px: { xs: 1.5, md: '24px' }, mb: { xs: 2, md: 3 } }}>
         <ErrorBoundary fallbackTitle="Metrics Unavailable">
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}>
+          <Grid container spacing={{ xs: 1.25, md: 2 }}>
+            <Grid item xs={6} sm={6} md={3}>
               <MetricCard 
                 label="Total Universe Monitored" 
                 value={`${stocks.length} Stocks`} 
@@ -455,7 +517,7 @@ const MomentumTrackerContent: React.FC = () => {
                 trend="up" 
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={6} sm={6} md={3}>
               <MetricCard 
                 label="Strong Momentum (>70%)" 
                 value={`${strongMomentumCount} Stocks`} 
@@ -463,7 +525,7 @@ const MomentumTrackerContent: React.FC = () => {
                 trend="up" 
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={6} sm={6} md={3}>
               <MetricCard 
                 label="Requires Attention Flags" 
                 value={`${attentionStocks.length} Anomalies`} 
@@ -471,8 +533,8 @@ const MomentumTrackerContent: React.FC = () => {
                 trend="down" 
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Box sx={{ p: 2, backgroundColor: regimeStyle.bg, border: `1px solid ${regimeStyle.border}`, borderRadius: '12px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <Grid item xs={6} sm={6} md={3}>
+              <Box sx={{ p: { xs: 1.5, md: 2 }, backgroundColor: regimeStyle.bg, border: `1px solid ${regimeStyle.border}`, borderRadius: '12px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: '4px' }}>
                   <Typography sx={{ fontSize: '11px', fontWeight: 600, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     Nifty Market Regime
@@ -497,21 +559,21 @@ const MomentumTrackerContent: React.FC = () => {
           position: 'sticky',
           top: 56,
           zIndex: 1000,
-          px: '24px',
+          px: { xs: 1.5, md: '24px' },
           minHeight: 48,
           py: 1, 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center', 
           flexWrap: 'wrap', 
-          gap: 2, 
+          gap: { xs: 1, md: 2 }, 
           borderBottom: `1px solid ${tokens.border.main}`, 
           backgroundColor: tokens.background.header,
           backdropFilter: 'blur(8px)',
         }}
       >
-        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Typography sx={{ fontSize: '11px', color: tokens.text.secondary, fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', width: { xs: '100%', md: 'auto' }, minWidth: 0 }}>
+          <Typography sx={{ display: { xs: 'none', sm: 'block' }, fontSize: '11px', color: tokens.text.secondary, fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
             Momentum Filter:
           </Typography>
           <FilterChipGroup
@@ -527,19 +589,19 @@ const MomentumTrackerContent: React.FC = () => {
           />
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', backgroundColor: tokens.background.card, border: `1px solid ${tokens.border.main}`, borderRadius: '20px', px: '12px', height: '32px', minWidth: '240px', transition: 'border-color 0.15s ease-in-out', '&:focus-within': { borderColor: tokens.border.focus } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', backgroundColor: tokens.background.card, border: `1px solid ${tokens.border.main}`, borderRadius: '20px', px: '12px', height: { xs: '40px', md: '32px' }, minWidth: { xs: 0, md: '240px' }, width: { xs: '100%', md: 'auto' }, transition: 'border-color 0.15s ease-in-out', '&:focus-within': { borderColor: tokens.border.focus } }}>
           <SearchIcon sx={{ color: tokens.text.secondary, fontSize: 16, mr: '6px' }} />
           <InputBase
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search ticker or name..."
-            sx={{ color: tokens.text.primary, fontSize: '12px', width: '100%', fontFamily: tokens.typography.fontFamily }}
+            sx={{ color: tokens.text.primary, fontSize: { xs: '16px', md: '12px' }, width: '100%', fontFamily: tokens.typography.fontFamily }}
           />
         </Box>
       </Box>
 
       {/* Bulk Selection Action Bar */}
-      <Box sx={{ px: '24px', mt: selectedRowIds.length > 0 ? 1.5 : 0 }}>
+      <Box sx={{ px: { xs: 1.5, md: '24px' }, mt: selectedRowIds.length > 0 ? 1.5 : 0 }}>
         <BulkActionBar
           selectedCount={selectedRowIds.length}
           onClearSelection={() => setSelectedRowIds([])}
@@ -548,11 +610,14 @@ const MomentumTrackerContent: React.FC = () => {
       </Box>
 
       {/* Unified Full-Page Terminal DataGrid with Semantic Row Tinting */}
-      <Box sx={{ height: 'calc(100vh - 180px)', minHeight: 600, width: '100%', backgroundColor: tokens.background.paper, borderBottom: `1px solid ${tokens.border.main}`, overflow: 'hidden' }}>
+      <Box sx={{ height: { xs: 'auto', sm: 'calc(100vh - 180px)' }, minHeight: { xs: 0, sm: 600 }, width: '100%', backgroundColor: tokens.background.paper, borderBottom: `1px solid ${tokens.border.main}`, overflow: 'hidden' }}>
         <ErrorBoundary fallbackTitle="Momentum Table Error">
           <RowTintedDataGrid
             rows={filteredStocks}
             columns={columns}
+            mobileCard={renderMomentumCard}
+            mobileSortOptions={mobileSortOptions}
+            mobileEmptyText="No stocks match this filter."
             checkboxSelection
             onRowSelectionModelChange={(newSelection) => setSelectedRowIds(newSelection)}
             rowSelectionModel={selectedRowIds}
@@ -578,6 +643,7 @@ const MomentumTrackerContent: React.FC = () => {
       <Dialog 
         open={Boolean(backtestTicker)} 
         onClose={() => setBacktestTicker(null)}
+        fullScreen={isMobile}
         maxWidth="lg" 
         fullWidth
         PaperProps={{

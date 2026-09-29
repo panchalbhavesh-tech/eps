@@ -272,10 +272,14 @@ class Query:
         from app.graphql.types import PredictionType, EarningsReportType, EventStudyResultType, StrategyBacktestType, TechnicalSnapshotType, AIAnalysisReportType
         predictions = [PredictionType(id=str(p.id), target_quarter=p.target_quarter, predicted_eps=p.predicted_eps, confidence_score=p.confidence_score or 0, created_at=str(p.created_at)) for p in c.predictions]
         earnings = [EarningsReportType(id=str(e.id), fiscal_quarter=e.fiscal_quarter, report_date=str(e.report_date)) for e in c.earnings_reports]
-        event_studies = [EventStudyResultType(**{k: v for k, v in e.__dict__.items() if not k.startswith('_') and k not in ('company_id', 'company', 'earnings_report_id')}) for e in c.event_studies]
-        backtests = [StrategyBacktestType(**{k: v for k, v in b.__dict__.items() if not k.startswith('_') and k not in ('company_id', 'company')}) for b in c.backtests]
-        techs = [TechnicalSnapshotType(**{k: v for k, v in t.__dict__.items() if not k.startswith('_') and k not in ('company_id', 'company')}) for t in c.technical_snapshots]
-        ai_reports = [AIAnalysisReportType(**{k: v for k, v in a.__dict__.items() if not k.startswith('_') and k not in ('company_id', 'company')}) for a in c.ai_reports]
+        def as_type(type_cls, row):
+            # Copy only the fields the GraphQL type declares, so new DB columns can't break this page.
+            fields = getattr(type_cls, "__annotations__", {})
+            return type_cls(**{k: v for k, v in row.__dict__.items() if k in fields})
+        event_studies = [as_type(EventStudyResultType, e) for e in c.event_studies]
+        backtests = [as_type(StrategyBacktestType, b) for b in c.backtests]
+        techs = [as_type(TechnicalSnapshotType, t) for t in c.technical_snapshots]
+        ai_reports = [as_type(AIAnalysisReportType, a) for a in c.ai_reports]
         prob, avg_mom = get_company_momentum_stats(c)
         
         return CompanyType(

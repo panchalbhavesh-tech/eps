@@ -14,7 +14,9 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import ShieldIcon from '@mui/icons-material/Shield';
 
-import { StatusBadge, SearchInput } from '../components/common';
+import { StatusBadge, SearchInput, MobileCardList } from '../components/common';
+import type { MobileSortOption } from '../components/common';
+import { useIsMobile } from '../hooks/useResponsive';
 import { SmartCron } from '../components/common/SmartCron';
 import { useThemeMode } from '../theme/ThemeContext';
 
@@ -125,6 +127,7 @@ interface ResearchHypothesis {
 
 const HypothesisLaboratory: React.FC = () => {
   const { mode, tokens } = useThemeMode();
+  const isMobile = useIsMobile();
   const isDark = mode === 'dark';
 
   const { loading, data, refetch } = useQuery(GET_RESEARCH_HYPOTHESES, {
@@ -403,8 +406,49 @@ const HypothesisLaboratory: React.FC = () => {
     }
   ];
 
+  // ── Phone card: factor & author → mechanism + lifecycle stage → DSR & IC → expression; tap = Deep Inspect ──
+  const stageBadge = (stage: string) => {
+    let badgeType: "SUCCESS" | "FAILURE" | "WARNING" | "NEUTRAL" | "INFO" = "NEUTRAL";
+    let label = stage;
+    if (stage === 'LIVE_ALPHA_STREAM') { badgeType = 'SUCCESS'; label = 'LIVE ALPHA'; }
+    else if (stage === 'OUT_OF_SAMPLE_SHADOW') { badgeType = 'INFO'; label = 'SHADOW PROBATION'; }
+    else if (stage === 'ARCHIVE_FAILED' || stage === 'ALPHA_DECAY_ARCHIVE') { badgeType = 'FAILURE'; label = stage === 'ARCHIVE_FAILED' ? 'REJECTED' : 'DECAY RETIRED'; }
+    else if (stage === 'IN_SAMPLE_AUDIT') { badgeType = 'WARNING'; label = 'STATISTICAL AUDIT'; }
+    return <StatusBadge status={badgeType} label={label} size="small" />;
+  };
+  const mobileSortOptions: MobileSortOption[] = [
+    { key: 'dsr', label: 'Deflated Sharpe', get: (r) => r.experiments?.[0]?.deflatedSharpe },
+    { key: 'ic', label: 'Spearman IC', get: (r) => r.experiments?.[0]?.spearmanIcMean },
+    { key: 'name', label: 'Name (A–Z)', desc: false, get: (r) => r.name },
+  ];
+  const renderHypothesisCard = (row: any) => {
+    const last = row.experiments?.[0];
+    const dsr = last?.deflatedSharpe;
+    const ic = last?.spearmanIcMean, t = last?.spearmanIcTstat ?? 0;
+    const good = isDark ? '#4ade80' : '#16a34a', bad = isDark ? '#f87171' : '#dc2626';
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+        <Typography sx={{ fontWeight: 700, fontSize: '14px', color: tokens.text.primary, lineHeight: '19px' }}>{row.name}</Typography>
+        <Typography sx={{ fontSize: '12px', color: tokens.text.secondary }}>{row.author} · {row.targetUniverse} ({row.holdingHorizonDays}d) · {row.economicMechanism}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          {stageBadge(String(row.currentStage || 'DRAFT'))}
+          {last ? (
+            <Typography sx={{ fontSize: '12px', color: tokens.text.secondary }}>
+              DSR <b style={{ color: (dsr ?? 0) >= 0.85 ? good : bad }}>{(dsr ?? 0).toFixed(3)}</b>
+              {ic !== undefined && <> · IC <b style={{ color: tokens.text.primary }}>{ic > 0 ? '+' : ''}{Number(ic).toFixed(3)}</b> <span style={{ color: Math.abs(t) >= 1.96 ? tokens.text.secondary : bad }}>(t {t.toFixed(1)})</span></>}
+            </Typography>
+          ) : <Typography sx={{ fontSize: '12px', color: tokens.text.tertiary, fontStyle: 'italic' }}>Pending audit</Typography>}
+        </Box>
+        <Box sx={{ fontFamily: 'Consolas, monospace', fontSize: '12px', color: isDark ? '#e2e8f0' : '#334155', bgcolor: isDark ? '#0f172a' : '#f8fafc',
+          px: 1, py: 0.5, borderRadius: '4px', border: `1px solid ${tokens.border.main}`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {String(row.alphaExpression || '')}
+        </Box>
+      </Box>
+    );
+  };
+
   return (
-    <Box sx={{ p: 3, maxWidth: 1600, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box sx={{ p: { xs: 1.5, md: 3 }, maxWidth: 1600, mx: 'auto', display: 'flex', flexDirection: 'column', gap: { xs: 2, md: 3 } }}>
       {/* Top Header Banner */}
       <Box sx={{ 
         display: 'flex', 
@@ -412,7 +456,7 @@ const HypothesisLaboratory: React.FC = () => {
         justifyContent: 'space-between', 
         flexWrap: 'wrap', 
         gap: 2,
-        p: 2.5, 
+        p: { xs: 1.5, md: 2.5 }, 
         borderRadius: 3, 
         background: isDark ? 'linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.8) 100%)' : 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
         border: `1px solid ${tokens.border.main}`,
@@ -424,24 +468,25 @@ const HypothesisLaboratory: React.FC = () => {
               <BiotechIcon sx={{ fontSize: 26 }} />
             </Box>
             <Box>
-              <Typography variant="h5" sx={{ fontWeight: 800, color: tokens.text.primary, letterSpacing: '-0.02em' }}>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: tokens.text.primary, letterSpacing: '-0.02em', fontSize: { xs: '17px', md: undefined } }}>
                 Quantitative Hypothesis Laboratory (QHLM)
               </Typography>
-              <Typography variant="caption" sx={{ color: tokens.text.secondary, fontSize: '12px' }}>
+              <Typography variant="caption" sx={{ display: { xs: 'none', sm: 'block' }, color: tokens.text.secondary, fontSize: '12px' }}>
                 Bailey & Lopez de Prado Deflated Sharpe Verification • Multiple Testing Variance Shield
               </Typography>
             </Box>
           </Box>
         </Box>
         
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, md: 1.5 }, flexWrap: { xs: 'wrap', md: 'nowrap' }, width: { xs: '100%', md: 'auto' } }}>
           <Button
             variant="outlined"
             onClick={() => refetch()}
+            aria-label="Refresh lab"
             startIcon={<RefreshIcon />}
-            sx={{ textTransform: 'none', borderColor: tokens.border.main, color: tokens.text.primary, height: 40 }}
+            sx={{ textTransform: 'none', borderColor: tokens.border.main, color: tokens.text.primary, height: 40, minWidth: { xs: 44, md: 64 }, '& .MuiButton-startIcon': { mr: { xs: 0, md: 1 } } }}
           >
-            Refresh Lab
+            {isMobile ? '' : 'Refresh Lab'}
           </Button>
           <SmartCron page="hypothesis" />
           
@@ -454,6 +499,7 @@ const HypothesisLaboratory: React.FC = () => {
               color: '#ffffff', 
               fontWeight: 700,
               height: 40,
+              flex: { xs: '1 1 40%', md: 'none' },
               '&:hover': { background: isDark ? '#065f46' : '#047857' }
             }}
           >
@@ -469,27 +515,28 @@ const HypothesisLaboratory: React.FC = () => {
               color: '#ffffff', 
               fontWeight: 700,
               height: 40,
+              flex: { xs: '1 1 40%', md: 'none' },
               boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
               '&:hover': { background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)' }
             }}
           >
-            Formulate Candidate Alpha
+            {isMobile ? 'New Alpha' : 'Formulate Candidate Alpha'}
           </Button>
         </Box>
       </Box>
 
       {/* Executive Quant KPI Cards */}
-      <Grid container spacing={2.5}>
-        <Grid item xs={12} sm={6} md={3}>
+      <Grid container spacing={{ xs: 1.25, md: 2.5 }}>
+        <Grid item xs={6} sm={6} md={3}>
           <Paper sx={{ 
-            p: 2.5, borderRadius: 3, border: `1px solid ${tokens.border.main}`, 
+            p: { xs: 1.5, md: 2.5 }, borderRadius: 3, border: `1px solid ${tokens.border.main}`, 
             bgcolor: tokens.background.card, boxShadow: tokens.shadows.card,
             position: 'relative', overflow: 'hidden', transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-2px)' }
           }}>
-            <Typography sx={{ fontSize: '12px', fontWeight: 600, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <Typography sx={{ fontSize: { xs: '11px', md: '12px' }, fontWeight: 600, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Total Research Hypotheses
             </Typography>
-            <Typography sx={{ fontSize: '28px', fontWeight: 800, color: tokens.text.primary, mt: 1 }}>
+            <Typography sx={{ fontSize: { xs: '22px', md: '28px' }, fontWeight: 800, color: tokens.text.primary, mt: 1 }}>
               {kpis.total}
             </Typography>
             <Typography sx={{ fontSize: '11px', color: tokens.text.tertiary, mt: 0.5 }}>
@@ -498,21 +545,21 @@ const HypothesisLaboratory: React.FC = () => {
           </Paper>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <Paper sx={{ 
-            p: 2.5, borderRadius: 3, border: `1px solid ${tokens.border.main}`, 
+            p: { xs: 1.5, md: 2.5 }, borderRadius: 3, border: `1px solid ${tokens.border.main}`, 
             bgcolor: tokens.background.card, boxShadow: tokens.shadows.card,
             position: 'relative', overflow: 'hidden', transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-2px)' }
           }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography sx={{ fontSize: '12px', fontWeight: 600, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <Typography sx={{ fontSize: { xs: '11px', md: '12px' }, fontWeight: 600, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Mean Deflated Sharpe (DSR)
               </Typography>
               <Tooltip title="DSR measures probability that expected Sharpe ratio exceeds zero after penalizing for family trial variance and non-normal kurtosis.">
                 <InfoOutlinedIcon sx={{ fontSize: 16, color: tokens.text.tertiary }} />
               </Tooltip>
             </Box>
-            <Typography sx={{ fontSize: '28px', fontWeight: 800, color: kpis.avgDsr >= 0.85 ? (isDark ? '#4ade80' : '#16a34a') : (isDark ? '#e879f9' : '#a21caf'), mt: 1 }}>
+            <Typography sx={{ fontSize: { xs: '22px', md: '28px' }, fontWeight: 800, color: kpis.avgDsr >= 0.85 ? (isDark ? '#4ade80' : '#16a34a') : (isDark ? '#e879f9' : '#a21caf'), mt: 1 }}>
               {kpis.avgDsr.toFixed(4)}
             </Typography>
             <Typography sx={{ fontSize: '11px', color: tokens.text.tertiary, mt: 0.5 }}>
@@ -521,16 +568,16 @@ const HypothesisLaboratory: React.FC = () => {
           </Paper>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <Paper sx={{ 
-            p: 2.5, borderRadius: 3, border: `1px solid ${tokens.border.main}`, 
+            p: { xs: 1.5, md: 2.5 }, borderRadius: 3, border: `1px solid ${tokens.border.main}`, 
             bgcolor: tokens.background.card, boxShadow: tokens.shadows.card,
             position: 'relative', overflow: 'hidden', transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-2px)' }
           }}>
-            <Typography sx={{ fontSize: '12px', fontWeight: 600, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <Typography sx={{ fontSize: { xs: '11px', md: '12px' }, fontWeight: 600, color: tokens.text.secondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Live & Shadow Alpha Streams
             </Typography>
-            <Typography sx={{ fontSize: '28px', fontWeight: 800, color: isDark ? '#38bdf8' : '#0284c7', mt: 1 }}>
+            <Typography sx={{ fontSize: { xs: '22px', md: '28px' }, fontWeight: 800, color: isDark ? '#38bdf8' : '#0284c7', mt: 1 }}>
               {kpis.activeStream}
             </Typography>
             <Typography sx={{ fontSize: '11px', color: tokens.text.tertiary, mt: 0.5 }}>
@@ -539,9 +586,9 @@ const HypothesisLaboratory: React.FC = () => {
           </Paper>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <Paper sx={{ 
-            p: 2.5, borderRadius: 3, border: `1px solid ${isDark ? 'rgba(248, 113, 113, 0.3)' : '#fca5a5'}`, 
+            p: { xs: 1.5, md: 2.5 }, borderRadius: 3, border: `1px solid ${isDark ? 'rgba(248, 113, 113, 0.3)' : '#fca5a5'}`, 
             bgcolor: isDark ? 'rgba(239, 68, 68, 0.04)' : '#fef2f2', boxShadow: tokens.shadows.card,
             position: 'relative', overflow: 'hidden', transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-2px)' }
           }}>
@@ -551,7 +598,7 @@ const HypothesisLaboratory: React.FC = () => {
               </Typography>
               <ShieldIcon sx={{ fontSize: 18, color: isDark ? '#f87171' : '#dc2626' }} />
             </Box>
-            <Typography sx={{ fontSize: '28px', fontWeight: 800, color: isDark ? '#f87171' : '#dc2626', mt: 1 }}>
+            <Typography sx={{ fontSize: { xs: '22px', md: '28px' }, fontWeight: 800, color: isDark ? '#f87171' : '#dc2626', mt: 1 }}>
               {kpis.falseDiscoveriesAvoided}
             </Typography>
             <Typography sx={{ fontSize: '11px', color: isDark ? '#fca5a5' : '#b91c1c', mt: 0.5 }}>
@@ -563,7 +610,8 @@ const HypothesisLaboratory: React.FC = () => {
 
       {/* Filter and Search Section */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: { xs: 'nowrap', sm: 'wrap' }, overflowX: { xs: 'auto', sm: 'visible' }, maxWidth: '100%',
+          scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
           {stageOptions.map((opt) => (
             <Chip
               key={opt.value}
@@ -571,6 +619,7 @@ const HypothesisLaboratory: React.FC = () => {
               onClick={() => setStageFilter(opt.value)}
               sx={{
                 height: 32,
+                flexShrink: 0,
                 fontSize: '12px',
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -582,7 +631,7 @@ const HypothesisLaboratory: React.FC = () => {
             />
           ))}
         </Box>
-        <Box sx={{ width: 320 }}>
+        <Box sx={{ width: { xs: '100%', md: 320 } }}>
           <SearchInput 
             value={searchQuery} 
             onChange={(val) => setSearchQuery(val)} 
@@ -593,9 +642,13 @@ const HypothesisLaboratory: React.FC = () => {
 
       {/* Main Table View */}
       <Paper sx={{ 
-        height: 620, width: '100%', borderRadius: 3, border: `1px solid ${tokens.border.main}`, 
+        height: { xs: 'auto', sm: 620 }, width: '100%', borderRadius: 3, border: `1px solid ${tokens.border.main}`, 
         bgcolor: tokens.background.card, overflow: 'hidden', boxShadow: tokens.shadows.card
       }}>
+        {isMobile ? (
+          <MobileCardList rows={filteredRows} renderCard={renderHypothesisCard} sortOptions={mobileSortOptions} loading={loading}
+            emptyText="No hypotheses in this stage." onRowClick={(p: any) => setSelectedHypothesis(p.row)} />
+        ) : (
         <DataGrid
           rows={filteredRows}
           columns={columns}
@@ -629,16 +682,32 @@ const HypothesisLaboratory: React.FC = () => {
             }
           }}
         />
+        )}
       </Paper>
 
       {/* Live Signals Modal */}
-      <Dialog open={openSignalsModal} onClose={() => setOpenSignalsModal(false)} maxWidth="lg" fullWidth PaperProps={{
+      <Dialog open={openSignalsModal} onClose={() => setOpenSignalsModal(false)} maxWidth="lg" fullWidth fullScreen={isMobile} PaperProps={{
         sx: { bgcolor: tokens.background.paper, border: `1px solid ${tokens.border.main}`, borderRadius: 3, height: '80vh' }
       }}>
         <DialogTitle sx={{ fontWeight: 800, fontSize: '18px', color: tokens.text.primary, borderBottom: `1px solid ${tokens.border.main}` }}>
           Live Alpha Stream Signals
         </DialogTitle>
         <DialogContent sx={{ p: 0 }}>
+          {isMobile ? (
+            <MobileCardList rows={liveSignals} emptyText="No live signals."
+              sortOptions={[{ key: 'rank', label: 'Rank', get: (r) => r.rankPercentile }, { key: 'date', label: 'Newest', get: (r) => new Date(r.tradeDate).getTime() }]}
+              renderCard={(r: any) => (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontSize: '14px', fontWeight: 700, color: tokens.text.primary }}>{r.ticker}</Typography>
+                    <Typography sx={{ fontSize: '12px', color: tokens.text.secondary }}>
+                      Rank {r.rankPercentile?.toFixed(3)} · score {r.factorScore?.toFixed(4)} · {new Date(r.tradeDate).toLocaleDateString()}
+                    </Typography>
+                  </Box>
+                  <Chip size="small" label={r.direction} sx={{ bgcolor: r.direction === 'LONG' ? '#22c55e' : '#ef4444', color: '#fff', fontWeight: 'bold' }} />
+                </Box>
+              )} />
+          ) : (
           <DataGrid
             rows={liveSignals}
             columns={[
@@ -655,6 +724,7 @@ const HypothesisLaboratory: React.FC = () => {
             disableRowSelectionOnClick
             sx={{ border: 0, color: tokens.text.primary }}
           />
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2, borderTop: `1px solid ${tokens.border.main}` }}>
           <Button onClick={() => setOpenSignalsModal(false)} variant="contained" sx={{ textTransform: 'none' }}>
@@ -664,7 +734,7 @@ const HypothesisLaboratory: React.FC = () => {
       </Dialog>
 
       {/* Create New Hypothesis Modal */}
-      <Dialog open={openCreateModal} onClose={() => setOpenCreateModal(false)} maxWidth="md" fullWidth PaperProps={{
+      <Dialog open={openCreateModal} onClose={() => setOpenCreateModal(false)} maxWidth="md" fullWidth fullScreen={isMobile} PaperProps={{
         sx: { bgcolor: tokens.background.paper, border: `1px solid ${tokens.border.main}`, borderRadius: 3 }
       }}>
         <DialogTitle sx={{ fontWeight: 800, fontSize: '18px', color: tokens.text.primary, borderBottom: `1px solid ${tokens.border.main}` }}>
@@ -751,7 +821,7 @@ const HypothesisLaboratory: React.FC = () => {
       </Dialog>
 
       {/* Hypothesis Deep Inspect Drawer / Dialog */}
-      <Dialog open={!!selectedHypothesis} onClose={() => setSelectedHypothesis(null)} maxWidth="md" fullWidth PaperProps={{
+      <Dialog open={!!selectedHypothesis} onClose={() => setSelectedHypothesis(null)} maxWidth="md" fullWidth fullScreen={isMobile} PaperProps={{
         sx: { bgcolor: tokens.background.paper, border: `1px solid ${tokens.border.main}`, borderRadius: 3 }
       }}>
         {selectedHypothesis && (
@@ -809,19 +879,19 @@ const HypothesisLaboratory: React.FC = () => {
                             <Chip label={ex.isStatisticallyValid ? "STATISTICAL PASS" : `REJECTED: ${ex.failureModeTag}`} size="small" sx={{ fontWeight: 700, fontSize: '10px', bgcolor: ex.isStatisticallyValid ? '#22c55e' : '#ef4444', color: '#fff' }} />
                           </Box>
                           <Grid container spacing={2}>
-                            <Grid item xs={3}>
+                            <Grid item xs={6} sm={3}>
                               <Typography sx={{ fontSize: '11px', color: tokens.text.tertiary }}>Classic Sharpe</Typography>
                               <Typography sx={{ fontSize: '16px', fontWeight: 700, color: tokens.text.primary }}>{ex.classicSharpe?.toFixed(2) ?? 'N/A'}</Typography>
                             </Grid>
-                            <Grid item xs={3}>
+                            <Grid item xs={6} sm={3}>
                               <Typography sx={{ fontSize: '11px', color: tokens.text.tertiary }}>Deflated Sharpe (DSR)</Typography>
                               <Typography sx={{ fontSize: '16px', fontWeight: 800, color: ex.deflatedSharpe && ex.deflatedSharpe >= 0.85 ? '#22c55e' : '#ef4444' }}>{ex.deflatedSharpe?.toFixed(4) ?? 'N/A'}</Typography>
                             </Grid>
-                            <Grid item xs={3}>
+                            <Grid item xs={6} sm={3}>
                               <Typography sx={{ fontSize: '11px', color: tokens.text.tertiary }}>Spearman IC Mean</Typography>
                               <Typography sx={{ fontSize: '16px', fontWeight: 700, color: tokens.text.primary }}>{ex.spearmanIcMean?.toFixed(4) ?? 'N/A'}</Typography>
                             </Grid>
-                            <Grid item xs={3}>
+                            <Grid item xs={6} sm={3}>
                               <Typography sx={{ fontSize: '11px', color: tokens.text.tertiary }}>IC Student t-stat</Typography>
                               <Typography sx={{ fontSize: '16px', fontWeight: 700, color: ex.spearmanIcTstat && Math.abs(ex.spearmanIcTstat) >= 1.96 ? tokens.text.primary : '#ef4444' }}>{ex.spearmanIcTstat?.toFixed(2) ?? 'N/A'}</Typography>
                             </Grid>

@@ -64,7 +64,7 @@ export const PreReleaseEdgeCell: React.FC<Props> = ({ edge, upcomingDate, onOpen
       <Box onClick={(e) => { e.stopPropagation(); onOpen(); }} sx={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0, cursor: 'pointer', opacity: preliminary && !isTradeVerdict(edge.verdict) && edge.verdict !== 'AVOID' ? 0.75 : 1 }}>
         <Typography className="mono-font tabular-nums" noWrap sx={{ fontSize: '13px', fontWeight: 700, color: tokens.text.primary, lineHeight: '16px' }}>
           {line1}
-          <span style={{ color: muted, fontWeight: 500, fontSize: '10px' }}>&nbsp;&nbsp;{when}</span>
+          <Box component="span" sx={{ color: muted, fontWeight: 500, fontSize: { xs: '11.5px', sm: '10px' } }}>&nbsp;&nbsp;{when}</Box>
         </Typography>
         <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 600, color: tokens.text.secondary, whiteSpace: 'nowrap' }}>
           <span style={{ color: accent, fontSize: '14px', lineHeight: 1 }}>•</span>
@@ -76,7 +76,7 @@ export const PreReleaseEdgeCell: React.FC<Props> = ({ edge, upcomingDate, onOpen
         size="small"
         onClick={(e) => { e.stopPropagation(); onOpen(); }}
         sx={{
-          minWidth: 0, px: '10px', py: '3px', fontSize: '10px', fontWeight: 700, lineHeight: '16px', flexShrink: 0,
+          minWidth: 0, px: '10px', py: '3px', fontSize: { xs: '11.5px', sm: '10px' }, fontWeight: 700, lineHeight: '16px', flexShrink: 0,
           color: tokens.text.primary, border: `1px solid ${isTradeVerdict(edge.verdict) && !edge.graded ? green : tokens.text.tertiary}`,
           borderRadius: '4px', textTransform: 'none',
           '&:hover': { borderColor: tokens.border.focus, backgroundColor: tokens.background.cardHover },

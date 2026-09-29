@@ -28,9 +28,15 @@ export const QuickFilterPills: React.FC<QuickFilterPillsProps> = ({
     <Box
       sx={{
         display: 'flex',
-        flexWrap: 'wrap',
+        flexWrap: { xs: 'nowrap', sm: 'wrap' },
         gap: '6px',
         alignItems: 'center',
+        // Phones: one swipeable row instead of chips wrapping into several lines
+        overflowX: { xs: 'auto', sm: 'visible' },
+        maxWidth: '100%',
+        scrollbarWidth: 'none',
+        '&::-webkit-scrollbar': { display: 'none' },
+        WebkitOverflowScrolling: 'touch',
         ...sx,
       }}
     >
@@ -60,6 +66,7 @@ export const QuickFilterPills: React.FC<QuickFilterPillsProps> = ({
             }
             onClick={() => onChange(opt.value)}
             sx={{
+              flexShrink: 0,
               cursor: 'pointer',
               height: '32px',
               px: '4px',

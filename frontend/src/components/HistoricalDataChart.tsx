@@ -4,6 +4,7 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { ResponsiveContainer, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Bar, ComposedChart } from 'recharts';
 import { useThemeMode } from '../theme/ThemeContext';
 import { apiUrl } from '../utils/api';
+import { useIsMobile } from '../hooks/useResponsive';
 
 interface HistoricalDataChartProps {
   ticker: string;
@@ -20,6 +21,7 @@ interface OHLCVRecord {
 
 const HistoricalDataChart: React.FC<HistoricalDataChartProps> = ({ ticker }) => {
   const { tokens } = useThemeMode();
+  const isMobile = useIsMobile();
   const [data, setData] = useState<OHLCVRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,13 +98,13 @@ const HistoricalDataChart: React.FC<HistoricalDataChartProps> = ({ ticker }) => 
 
   return (
     <Box sx={{ width: '100%', mt: 1 }}>
-      <Typography variant="h6" sx={{ mb: 2, color: tokens.text.primary }}>
+      <Typography variant="h6" sx={{ mb: { xs: 1, md: 2 }, color: tokens.text.primary, fontSize: { xs: '16px', md: undefined } }}>
         {ticker} Historical Data
       </Typography>
       
-      <Box sx={{ width: '100%', height: 400, mb: 4, bgcolor: tokens.background.card, p: 2, borderRadius: 3, border: `1px solid ${tokens.border.main}`, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+      <Box sx={{ width: '100%', height: { xs: 300, md: 400 }, mb: { xs: 2, md: 4 }, bgcolor: tokens.background.card, p: { xs: 1, md: 2 }, borderRadius: 3, border: `1px solid ${tokens.border.main}`, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <ComposedChart data={data} margin={isMobile ? { top: 6, right: 4, left: -8, bottom: 0 } : { top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="colorClose" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={tokens.primary.main} stopOpacity={0.4}/>
@@ -117,7 +119,7 @@ const HistoricalDataChart: React.FC<HistoricalDataChartProps> = ({ ticker }) => 
             <XAxis 
                 dataKey="Date" 
                 tick={{ fill: tokens.text.secondary, fontSize: 11 }} 
-                minTickGap={40}
+                minTickGap={isMobile ? 28 : 40}
                 axisLine={false}
                 tickLine={false}
                 dy={10}
@@ -129,11 +131,12 @@ const HistoricalDataChart: React.FC<HistoricalDataChartProps> = ({ ticker }) => 
                 tickFormatter={formatPrice}
                 axisLine={false}
                 tickLine={false}
-                dx={-10}
+                dx={isMobile ? 0 : -10}
             />
             <YAxis 
                 yAxisId="right" 
                 orientation="right" 
+                hide={isMobile}
                 tick={{ fill: tokens.text.secondary, fontSize: 11 }} 
                 tickFormatter={formatVolume}
                 axisLine={false}
@@ -159,7 +162,7 @@ const HistoricalDataChart: React.FC<HistoricalDataChartProps> = ({ ticker }) => 
         </ResponsiveContainer>
       </Box>
 
-      <Box sx={{ height: 400, width: '100%' }}>
+      <Box sx={{ height: { xs: 360, md: 400 }, width: '100%' }}>
         <DataGrid
           rows={data}
           columns={columns}

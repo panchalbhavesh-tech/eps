@@ -1,9 +1,16 @@
 import React from 'react';
 import { DataGrid, DataGridProps } from '@mui/x-data-grid';
 import { useThemeMode } from '../../theme/ThemeContext';
+import { useIsMobile } from '../../hooks/useResponsive';
+import { MobileCardList, MobileSortOption } from './MobileCardList';
 
 export interface RowTintedDataGridProps extends Omit<DataGridProps, 'sx'> {
   sx?: Record<string, any>;
+  /** Phones (< 600px): render each row as a card with this layout instead of the grid. */
+  mobileCard?: (row: any) => React.ReactNode;
+  mobileSortOptions?: MobileSortOption[];
+  mobileDefaultSort?: string;
+  mobileEmptyText?: string;
 }
 
 export const RowTintedDataGrid: React.FC<RowTintedDataGridProps> = ({
@@ -12,9 +19,33 @@ export const RowTintedDataGrid: React.FC<RowTintedDataGridProps> = ({
   pageSizeOptions = [20, 50, 100],
   initialState,
   sx = {},
+  mobileCard,
+  mobileSortOptions,
+  mobileDefaultSort,
+  mobileEmptyText,
   ...props
 }) => {
   const { tokens } = useThemeMode();
+  const isMobile = useIsMobile();
+
+  if (isMobile && mobileCard) {
+    return (
+      <MobileCardList
+        rows={props.rows || []}
+        renderCard={mobileCard}
+        sortOptions={mobileSortOptions}
+        defaultSortKey={mobileDefaultSort}
+        loading={props.loading}
+        emptyText={mobileEmptyText}
+        getRowClassName={props.getRowClassName}
+        onRowClick={props.onRowClick as any}
+        checkboxSelection={props.checkboxSelection}
+        rowSelectionModel={props.rowSelectionModel}
+        onRowSelectionModelChange={props.onRowSelectionModelChange as any}
+        getRowId={props.getRowId as any}
+      />
+    );
+  }
 
   const mergedInitialState = {
     ...initialState,
