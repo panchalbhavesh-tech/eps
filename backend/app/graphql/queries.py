@@ -612,6 +612,46 @@ class Query:
         return out
 
     @strawberry.field
+    def impactful_events(self, info: Info[Context, None]) -> str:
+        """Live Impactful Events snapshot (JSON). Built by a scheduled job; the first request queues a build."""
+        import json
+        from app.services.corporate_actions_service import load_snapshot
+        snap = load_snapshot()
+        if snap:
+            return json.dumps(snap, default=str)
+        try:
+            from app.worker.observability import get_redis_client
+            from app.worker.celery_app import celery_app
+            if get_redis_client().set("impactful_events:build_lock", "1", nx=True, ex=900):
+                celery_app.send_task("app.worker.tasks.refresh_impactful_events_task")
+        except Exception:
+            pass
+        return json.dumps({"built_at": None, "building": True, "items": [], "tabs": {}, "evidence": {}, "evidence_events": 0})
+
+    @strawberry.field
+    def impactful_event_detail(self, info: Info[Context, None], key: str) -> Optional[str]:
+        """Popup data for one Impactful Event: evidence breakdown, this stock's past events and the price cone (cached 5 min)."""
+        import json
+        from app.services.corporate_actions_service import event_detail
+        from app.worker.observability import get_redis_client
+        cache_key = f"impactful:detail:{key}"
+        try:
+            cached = get_redis_client().get(cache_key)
+            if cached:
+                return cached.decode()
+        except Exception:
+            pass
+        out = event_detail(info.context.db, key)
+        if out is None:
+            return None
+        data = json.dumps(out, default=str)
+        try:
+            get_redis_client().setex(cache_key, 300, data)
+        except Exception:
+            pass
+        return data
+
+    @strawberry.field
     def pre_release_edge_detail(self, info: Info[Context, None], company_id: str) -> Optional[PreReleaseEdgeType]:
         from app.infrastructure.models import PreReleasePrediction
         from app.services.pre_release_edge_service import track_record
@@ -743,6 +783,16 @@ class Query:
                 'cron_title': 'EVENT: Backfill Results History',
                 'category': 'EVENT',
                 'description': 'Rebuilds 4 years of results dates, broadcast times and event studies for stale companies.'
+            },
+            'refresh-impactful-events': {
+                'cron_title': 'IMPACTFUL: Refresh Live Events',
+                'category': 'IMPACTFUL EVENTS',
+                'description': 'Pulls board-meeting notices, declarations and ex-dates from NSE and grades each against 5 years of evidence.'
+            },
+            'build-corporate-action-evidence-weekly': {
+                'cron_title': 'IMPACTFUL: Build Evidence',
+                'category': 'IMPACTFUL EVENTS',
+                'description': 'Measures how every past dividend, bonus, split, buyback, rights issue, demerger and fund raise moved the stock vs Nifty.'
             },
             'retrain-pre-release-model-weekly': {
                 'cron_title': 'ML: Retrain Pre-Release Model',

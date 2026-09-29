@@ -152,6 +152,11 @@ class Mutation:
         return str(new_company.id)
 
     @strawberry.mutation
+    def refresh_impactful_events(self, info: Info[Context, None]) -> str:
+        task = celery_app.send_task("app.worker.tasks.refresh_impactful_events_task")
+        return task.id
+
+    @strawberry.mutation
     def trigger_momentum_scan(self, info: Info[Context, None]) -> str:
         task = celery_app.send_task("app.worker.tasks.run_nse_momentum_scan_task")
         _log_queued_task(info.context.db, task.id, "app.worker.tasks.run_nse_momentum_scan_task", info.context.user.email)

@@ -21,6 +21,8 @@ TASK_MAP = {
     "app.worker.tasks.send_momentum_scorecard_task": {"event_name": "Momentum Weekly Scorecard", "event_type": "SCAN"},
     "app.worker.tasks.send_catalyst_digest_task": {"event_name": "Catalyst Pre-Market Digest", "event_type": "CATALYST"},
     "app.worker.tasks.send_catalyst_scorecard_task": {"event_name": "Catalyst Weekly Scorecard", "event_type": "CATALYST"},
+    "app.worker.tasks.refresh_impactful_events_task": {"event_name": "Refresh Impactful Events", "event_type": "SCAN"},
+    "app.worker.tasks.build_corporate_action_evidence_task": {"event_name": "Build Corporate-Action Evidence", "event_type": "DATA_SYNC"},
 }
 
 def get_task_metadata(task_name: str) -> dict:

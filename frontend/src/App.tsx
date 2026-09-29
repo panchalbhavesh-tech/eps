@@ -13,6 +13,7 @@ import AdminLogs from './pages/AdminLogs'
 import CatalystRadar from './pages/CatalystRadar'
 import PortfolioSimulator from './pages/PortfolioSimulator'
 import DataLakePage from './pages/DataLakePage'
+import ImpactfulEvents from './pages/ImpactfulEvents'
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
@@ -31,6 +32,7 @@ function App() {
           </ProtectedRoute>
         }>
           <Route index element={<Home />} />
+          <Route path="impactful-events" element={<ImpactfulEvents />} />
           <Route path="momentum" element={<MomentumTracker />} />
           <Route path="companies/:id" element={<CompanyDetail />} />
           <Route path="tasks" element={<TaskManager />} />

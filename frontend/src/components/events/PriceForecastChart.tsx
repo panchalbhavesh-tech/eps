@@ -34,6 +34,7 @@ interface Props {
   path: PricePath;
   entryLabel?: string;         // "BUY" for trade calls, otherwise a neutral "cheapest price" marker
   exitLabel?: string;
+  eventLabel?: string;         // marker at results_index ("RESULTS" on the Events page)
 }
 
 // Drawing size: phones get a narrower canvas so labels stay readable when scaled to the screen.
@@ -41,7 +42,7 @@ const DESKTOP = { W: 760, H: 360, PAD: { l: 8, r: 150, t: 22, b: 30 } };
 const PHONE = { W: 400, H: 300, PAD: { l: 6, r: 118, t: 22, b: 28 } };
 
 /** Real closes flowing into the simulated forecast cone, with plan levels on top. */
-export const PriceForecastChart: React.FC<Props> = ({ path, exitLabel, entryLabel = 'CHEAPEST' }) => {
+export const PriceForecastChart: React.FC<Props> = ({ path, exitLabel, entryLabel = 'CHEAPEST', eventLabel = 'RESULTS' }) => {
   const { tokens } = useThemeMode();
   const [hover, setHover] = useState<number | null>(null);
   const isMobile = useIsMobile();
@@ -88,7 +89,8 @@ export const PriceForecastChart: React.FC<Props> = ({ path, exitLabel, entryLabe
   const { hist, nH, n, x, y, fi, area, labels, lines } = model;
   const resultsX = x(fi(Math.min(path.results_index, path.bands.length - 1)));
   const exitX = x(fi(Math.min(path.exit_index, path.bands.length - 1)));
-  const tickIdx = [0, Math.floor(nH / 2), nH, n - 1];
+  // phones: fewer date ticks so labels never collide on the narrow canvas
+  const tickIdx = isMobile ? [0, nH, n - 1] : [0, Math.floor(nH / 2), nH, n - 1];
 
   // Mouse hover on desktop, tap/drag on touch screens: nearest day under the pointer.
   const pick = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -126,7 +128,7 @@ export const PriceForecastChart: React.FC<Props> = ({ path, exitLabel, entryLabe
         <polyline points={[...hist.map((h, i) => `${x(i)},${y(h.close)}`), `${x(nH)},${y(path.price)}`].join(' ')} fill="none" stroke={tokens.text.primary} strokeWidth={2.4} />
         {/* results + exit markers */}
         <line x1={resultsX} x2={resultsX} y1={PAD.t} y2={H - PAD.b} stroke={amber} strokeWidth={1.2} strokeDasharray="3 3" />
-        <text x={resultsX + 4} y={PAD.t + 10} fontSize="13" fontWeight={700} fill={amber}>RESULTS</text>
+        <text x={resultsX + 4} y={PAD.t + 10} fontSize="13" fontWeight={700} fill={amber}>{eventLabel}</text>
         {exitLabel && Math.abs(exitX - resultsX) > 2 && (
           <>
             <line x1={exitX} x2={exitX} y1={PAD.t} y2={H - PAD.b} stroke={green} strokeWidth={1.2} strokeDasharray="3 3" />

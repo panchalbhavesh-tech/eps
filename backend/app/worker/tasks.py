@@ -1278,3 +1278,54 @@ def send_momentum_scorecard_task():
         return weekly_scorecard(db)
     finally:
         db.close()
+
+
+
+# ─── Impactful Events (corporate actions) ──────────────────────────────────────
+
+@shared_task(bind=True, name="app.worker.tasks.build_corporate_action_evidence_task", time_limit=8 * 3600)
+def build_corporate_action_evidence_task(self, years: int = 5, limit: int = None):
+    """Measures how every past dividend / bonus / split / buyback / rights / demerger / fund raise moved the stock."""
+    from app.services.corporate_actions_service import CorporateActionsService
+    obs = TaskObserver(self.request.id if self.request and self.request.id else "corporate_actions_local")
+    db = SessionLocal()
+    try:
+        companies = [c for c in db.query(Company).all() if not (c.ticker.endswith((".BO", ".NS")) or c.ticker.isdigit())]
+        companies.sort(key=lambda c: -(c.market_cap or 0))
+        if limit:
+            companies = companies[:limit]
+        svc = CorporateActionsService(db)
+        total, saved, updated, failed = len(companies), 0, 0, 0
+        obs.update(log_msg=f"Building corporate-action evidence for {total} companies ({years}y).",
+                   progress={"total": total, "processed": 0, "saved": 0, "failed": 0, "percentage": 0, "current_step": "Corporate actions"}, force=True)
+        for i, c in enumerate(companies, start=1):
+            try:
+                res = svc.build_company(c, years=years)
+                saved += res.get("saved", 0)
+                updated += res.get("updated", 0)
+            except Exception as e:
+                db.rollback()
+                failed += 1
+                obs.update(log_msg=f"{c.ticker}: {e}", log_level="WARNING")
+            if i % 10 == 0 or i == total:
+                obs.update(progress={"total": total, "processed": i, "saved": saved, "failed": failed,
+                                     "percentage": round(100.0 * i / max(total, 1), 1), "current_step": f"Corporate actions {c.ticker}"})
+        return f"Corporate-action evidence: {total} companies, {saved} new events, {updated} completed, {failed} failed"
+    finally:
+        db.close()
+
+
+@shared_task(bind=True, name="app.worker.tasks.refresh_impactful_events_task", time_limit=3600)
+def refresh_impactful_events_task(self):
+    """Rebuilds the live Impactful Events lists (notices, declarations, ex-dates) and caches them in Redis."""
+    from app.services.corporate_actions_service import SnapshotBuilder, save_snapshot
+    obs = TaskObserver(self.request.id if self.request and self.request.id else "impactful_local")
+    db = SessionLocal()
+    try:
+        obs.update(log_msg="Refreshing Impactful Events from NSE feeds.", force=True)
+        snap = SnapshotBuilder(db).build()
+        save_snapshot(snap)
+        buys = sum(1 for r in snap["items"] if r["action"] == "BUY")
+        return f"Impactful Events: {len(snap['items'])} live events, {buys} BUY, evidence {snap['evidence_events']} past events"
+    finally:
+        db.close()

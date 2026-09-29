@@ -13,6 +13,7 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import RadarIcon from '@mui/icons-material/Radar';
 import StorageIcon from '@mui/icons-material/Storage';
+import EventNoteIcon from '@mui/icons-material/EventNote';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { useThemeMode } from '../theme/ThemeContext';
@@ -52,6 +53,13 @@ const Layout: React.FC = () => {
       path: '/',
       breadcrumb: 'Events / NSE Incoming Earnings Fixtures & Comprehensive Health Grades',
       description: 'NSE Incoming Earnings Fixtures & Comprehensive Health Grades'
+    },
+    {
+      text: 'Impactful Events',
+      icon: <EventNoteIcon sx={{ fontSize: 20 }} />,
+      path: '/impactful-events',
+      breadcrumb: 'Impactful Events / Dividends, Bonus, Splits, Buybacks, Rights & Demergers',
+      description: 'Corporate actions graded against 5 years of NSE evidence'
     },
     {
       text: 'Momentum & Attention',
