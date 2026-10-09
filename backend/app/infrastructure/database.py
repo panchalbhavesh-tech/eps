@@ -18,7 +18,6 @@ def get_db():
 
 import math
 from sqlalchemy import event
-from sqlalchemy.orm import mapper
 
 def sanitize_nans(mapper, connection, target):
     """

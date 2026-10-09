@@ -620,3 +620,171 @@ def get_data_lake_ohlcv(ticker: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ==========================================
+# ETF Matrix API Routes
+# ==========================================
+from fastapi import APIRouter, Body, HTTPException, Depends
+from sqlalchemy.orm import Session
+from app.infrastructure.database import get_db
+from app.services.etf_matrix_service import ETFMatrixService
+from app.infrastructure.models import ETFPosition, ETFTrade, ETFItem, ETFConfig
+
+etf_router = APIRouter(tags=["ETF Matrix"])
+
+@etf_router.get("/summary")
+def get_etf_summary(db: Session = Depends(get_db)):
+    svc = ETFMatrixService(db)
+    return svc.get_portfolio_summary()
+
+@etf_router.get("/universe")
+def get_etf_universe(db: Session = Depends(get_db)):
+    svc = ETFMatrixService(db)
+    svc.seed_universe_if_empty()
+    items = db.query(ETFItem).filter(ETFItem.is_active == True).order_by(ETFItem.day_change_pct.asc()).all()
+    return [{
+        "id": str(i.id),
+        "symbol": i.symbol,
+        "name": i.name,
+        "category": i.category,
+        "underlying_index": i.underlying_index,
+        "current_price": i.current_price,
+        "prev_close": i.prev_close,
+        "day_change_pct": i.day_change_pct,
+        "updated_at": i.updated_at.isoformat() if i.updated_at else None
+    } for i in items]
+
+@etf_router.get("/positions")
+def get_etf_positions(status: str = "OPEN", db: Session = Depends(get_db)):
+    svc = ETFMatrixService(db)
+    svc._sync_position_prices()
+    query = db.query(ETFPosition)
+    if status != "ALL":
+        query = query.filter(ETFPosition.status == status)
+    positions = query.order_by(ETFPosition.unrealized_pnl_pct.asc()).all()
+    return [{
+        "id": str(p.id),
+        "symbol": p.symbol,
+        "name": p.name,
+        "category": p.category,
+        "total_quantity": p.total_quantity,
+        "average_price": p.average_price,
+        "current_price": p.current_price,
+        "invested_amount": p.invested_amount,
+        "current_value": p.current_value,
+        "unrealized_pnl": p.unrealized_pnl,
+        "unrealized_pnl_pct": p.unrealized_pnl_pct,
+        "target_profit_pct": p.target_profit_pct,
+        "target_exit_price": p.target_exit_price,
+        "last_buy_price": p.last_buy_price,
+        "slot_count": p.slot_count,
+        "status": p.status,
+        "first_bought_at": p.first_bought_at.isoformat() if p.first_bought_at else None,
+        "last_bought_at": p.last_bought_at.isoformat() if p.last_bought_at else None,
+    } for p in positions]
+
+@etf_router.get("/trades")
+def get_etf_trades(limit: int = 50, db: Session = Depends(get_db)):
+    trades = db.query(ETFTrade).order_by(ETFTrade.executed_at.desc()).limit(limit).all()
+    return [{
+        "id": str(t.id),
+        "symbol": t.symbol,
+        "action": t.action,
+        "quantity": t.quantity,
+        "price": t.price,
+        "total_amount": t.total_amount,
+        "reason": t.reason,
+        "realized_pnl": t.realized_pnl,
+        "executed_at": t.executed_at.isoformat() if t.executed_at else None,
+        "notes": t.notes
+    } for t in trades]
+
+@etf_router.get("/signals")
+def get_etf_signals(db: Session = Depends(get_db)):
+    svc = ETFMatrixService(db)
+    exits = svc.evaluate_exit_signals()
+    entries = svc.evaluate_entry_signals()
+    return {
+        "exit_signals": exits,
+        "entry_candidate": entries.get("chosen_candidate"),
+        "ranked_universe": entries.get("ranked_universe"),
+        "averaging_dip_pct": entries.get("averaging_dip_pct")
+    }
+
+@etf_router.post("/scan")
+def trigger_etf_scan(auto_execute: bool = False, db: Session = Depends(get_db)):
+    svc = ETFMatrixService(db)
+    result = svc.run_daily_cycle(auto_execute=auto_execute)
+    return result
+
+@etf_router.post("/buy")
+def execute_etf_buy(payload: dict = Body(...), db: Session = Depends(get_db)):
+    symbol = payload.get("symbol")
+    reason = payload.get("reason", "MANUAL")
+    quantity = payload.get("quantity")
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Symbol required")
+    svc = ETFMatrixService(db)
+    trade = svc.execute_buy(symbol=symbol, reason=reason, custom_quantity=quantity)
+    return {
+        "status": "success",
+        "trade_id": str(trade.id),
+        "symbol": trade.symbol,
+        "action": trade.action,
+        "quantity": trade.quantity,
+        "price": trade.price,
+        "total_amount": trade.total_amount
+    }
+
+@etf_router.post("/sell")
+def execute_etf_sell(payload: dict = Body(...), db: Session = Depends(get_db)):
+    symbol = payload.get("symbol")
+    reason = payload.get("reason", "MANUAL")
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Symbol required")
+    svc = ETFMatrixService(db)
+    trade = svc.execute_sell(symbol=symbol, reason=reason)
+    return {
+        "status": "success",
+        "trade_id": str(trade.id),
+        "symbol": trade.symbol,
+        "action": trade.action,
+        "quantity": trade.quantity,
+        "price": trade.price,
+        "total_amount": trade.total_amount,
+        "realized_pnl": trade.realized_pnl
+    }
+
+@etf_router.get("/config")
+def get_etf_config(db: Session = Depends(get_db)):
+    configs = db.query(ETFConfig).all()
+    return {c.key: c.value for c in configs}
+
+@etf_router.post("/config")
+def update_etf_config(payload: dict = Body(...), db: Session = Depends(get_db)):
+    svc = ETFMatrixService(db)
+    for k, v in payload.items():
+        svc.set_config(k, v)
+    configs = db.query(ETFConfig).all()
+    return {c.key: c.value for c in configs}
+
+@etf_router.post("/backtest")
+def run_etf_backtest(payload: dict = Body(...), db: Session = Depends(get_db)):
+    svc = ETFMatrixService(db)
+    lookback = int(payload.get("lookback_years", 2))
+    slot_cap = float(payload.get("slot_capital", 25000))
+    target = float(payload.get("profit_target_pct", 6.0))
+    dip = float(payload.get("averaging_dip_pct", 2.5))
+    max_slots = int(payload.get("max_slots_per_etf", 5))
+    res = svc.backtest_strategy(
+        lookback_years=lookback,
+        slot_capital=slot_cap,
+        profit_target_pct=target,
+        averaging_dip_pct=dip,
+        max_slots_per_etf=max_slots
+    )
+    return res
+
+app.include_router(etf_router, prefix="/etf-matrix")
+app.include_router(etf_router, prefix="/api/etf-matrix")
+

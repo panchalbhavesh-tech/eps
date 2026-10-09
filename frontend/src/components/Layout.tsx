@@ -14,6 +14,7 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import RadarIcon from '@mui/icons-material/Radar';
 import StorageIcon from '@mui/icons-material/Storage';
 import EventNoteIcon from '@mui/icons-material/EventNote';
+import GridViewIcon from '@mui/icons-material/GridView';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { useThemeMode } from '../theme/ThemeContext';
@@ -109,6 +110,13 @@ const Layout: React.FC = () => {
       path: '/data-lake',
       breadcrumb: 'Historical Data / Parquet Data Lake View',
       description: 'Search and visualize OHLCV historical time-series data from the Parquet data lake'
+    },
+    {
+      text: 'ETF Matrix',
+      icon: <GridViewIcon sx={{ fontSize: 20 }} />,
+      path: '/etf-matrix',
+      breadcrumb: 'ETF Matrix / Systematic Indian ETF Mean-Reversion Engine',
+      description: 'Systematic Indian ETF dip accumulation & 6% profit-booking matrix'
     },
   ];
 

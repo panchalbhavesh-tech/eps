@@ -677,3 +677,87 @@ class CorporateActionEvent(Base):
     sessions_notice_to_mtg = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ==========================================
+# ETF Matrix Models
+# ==========================================
+
+class ETFItem(Base):
+    """Liquid Indian ETF universe asset."""
+    __tablename__ = "etf_universe"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    symbol = Column(String, unique=True, index=True, nullable=False)
+    name = Column(String, nullable=False)
+    category = Column(String, nullable=False)
+    underlying_index = Column(String, nullable=True)
+    current_price = Column(Float, default=0.0)
+    prev_close = Column(Float, default=0.0)
+    day_change_pct = Column(Float, default=0.0)
+    is_active = Column(Boolean, default=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ETFPosition(Base):
+    """Active or closed ETF position under systematic accumulation."""
+    __tablename__ = "etf_positions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    symbol = Column(String, index=True, nullable=False)
+    name = Column(String, nullable=True)
+    category = Column(String, nullable=True)
+    total_quantity = Column(Integer, default=0)
+    average_price = Column(Float, default=0.0)
+    current_price = Column(Float, default=0.0)
+    invested_amount = Column(Float, default=0.0)
+    current_value = Column(Float, default=0.0)
+    unrealized_pnl = Column(Float, default=0.0)
+    unrealized_pnl_pct = Column(Float, default=0.0)
+    target_profit_pct = Column(Float, default=6.0)
+    target_exit_price = Column(Float, default=0.0)
+    last_buy_price = Column(Float, default=0.0)
+    slot_count = Column(Integer, default=1)
+    status = Column(String, default="OPEN", index=True)  # OPEN, CLOSED
+    first_bought_at = Column(DateTime, default=datetime.utcnow)
+    last_bought_at = Column(DateTime, default=datetime.utcnow)
+    closed_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ETFTrade(Base):
+    """Historical trade log of entries and profit-taking exits."""
+    __tablename__ = "etf_trades"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    symbol = Column(String, index=True, nullable=False)
+    action = Column(String, nullable=False)  # BUY, SELL
+    quantity = Column(Integer, nullable=False)
+    price = Column(Float, nullable=False)
+    total_amount = Column(Float, nullable=False)
+    reason = Column(String, nullable=False)  # FRESH_BUY, DIP_AVERAGING, PROFIT_BOOKING, MANUAL
+    realized_pnl = Column(Float, default=0.0)
+    executed_at = Column(DateTime, default=datetime.utcnow, index=True)
+    notes = Column(Text, nullable=True)
+
+
+class ETFDailyScan(Base):
+    """Daily 3:15 PM automated scanner evaluation snapshot."""
+    __tablename__ = "etf_daily_scans"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    scanned_at = Column(DateTime, default=datetime.utcnow, index=True)
+    top_dip_symbol = Column(String, nullable=True)
+    top_dip_pct = Column(Float, nullable=True)
+    action_recommended = Column(String, nullable=True)  # BUY, AVERAGE, WAIT, SELL_TRIGGERED
+    action_executed = Column(Boolean, default=False)
+    details = Column(Text, nullable=True)  # JSON details
+
+
+class ETFConfig(Base):
+    """Configurable parameters for ETF Matrix strategy."""
+    __tablename__ = "etf_configs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    key = Column(String, unique=True, index=True, nullable=False)
+    value = Column(String, nullable=False)

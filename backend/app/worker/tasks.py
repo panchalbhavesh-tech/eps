@@ -1084,7 +1084,6 @@ def enrich_external_market_cap_task(tickers: list):
             logger.error(f"[MARKET_CAP] External lookup exception for {ticker}: {e}")
 
 
-
 # ─── Pre-Release Edge ──────────────────────────────────────────────────────────
 
 def _refresh_earnings_history(db, mode: str, obs: TaskObserver, limit: int = None) -> dict:
@@ -1127,6 +1126,29 @@ def backfill_earnings_history_task(self, mode: str = "full", limit: int = None):
         db.close()
 
 
+@shared_task
+def run_etf_matrix_scan_task(auto_execute: bool = False):
+    """
+    Automated ETF Matrix daily cycle (scheduled for 15:20 IST or triggered on demand).
+    Fetches real-time ETF prices, evaluates profit-taking targets, and identifies top dip opportunities.
+    """
+    from app.infrastructure.database import SessionLocal
+    from app.services.etf_matrix_service import ETFMatrixService
+    import logging
+    logger = logging.getLogger(__name__)
+
+    db = SessionLocal()
+    try:
+        service = ETFMatrixService(db)
+        logger.info("[ETF_MATRIX] Starting daily scan cycle...")
+        result = service.run_daily_cycle(auto_execute=auto_execute)
+        logger.info(f"[ETF_MATRIX] Daily scan completed. Recommendation: {result.get('chosen_candidate')}")
+        return result
+    except Exception as e:
+        logger.error(f"[ETF_MATRIX] Error running daily scan: {e}")
+        return {"error": str(e)}
+    finally:
+        db.close()
 @shared_task(bind=True, name="app.worker.tasks.retrain_pre_release_model_task", time_limit=3600)
 def retrain_pre_release_model_task(self):
     from app.services.pre_release_edge_service import train_models
@@ -1329,3 +1351,4 @@ def refresh_impactful_events_task(self):
         return f"Impactful Events: {len(snap['items'])} live events, {buys} BUY, evidence {snap['evidence_events']} past events"
     finally:
         db.close()
+

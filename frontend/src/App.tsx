@@ -14,6 +14,7 @@ import CatalystRadar from './pages/CatalystRadar'
 import PortfolioSimulator from './pages/PortfolioSimulator'
 import DataLakePage from './pages/DataLakePage'
 import ImpactfulEvents from './pages/ImpactfulEvents'
+import ETFMatrix from './pages/ETFMatrix'
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
@@ -42,6 +43,7 @@ function App() {
           <Route path="portfolio" element={<PortfolioSimulator />} />
           <Route path="catalyst" element={<CatalystRadar />} />
           <Route path="data-lake" element={<DataLakePage />} />
+          <Route path="etf-matrix" element={<ETFMatrix />} />
         </Route>
       </Routes>
     </BrowserRouter>
